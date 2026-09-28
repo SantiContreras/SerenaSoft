@@ -4,15 +4,19 @@ import Dao.DepositoDao;
 import Dao.ProductoDao;
 import Dao.StockProductoDao;
 
+import java.math.BigDecimal;
+import java.util.List;
+
 import model.Deposito;
 import model.Producto;
 import model.StockProducto;
-
-import java.math.BigDecimal;
-
-import java.util.List;
+import model.UnidadMedida;
 
 public class StockProductoService {
+
+    // =========================================================
+    // DAO
+    // =========================================================
 
     private final StockProductoDao stockDao;
     private final ProductoDao productoDao;
@@ -25,13 +29,13 @@ public class StockProductoService {
 
     public StockProductoService() {
 
-        stockDao =
+        this.stockDao =
                 new StockProductoDao();
 
-        productoDao =
+        this.productoDao =
                 new ProductoDao();
 
-        depositoDao =
+        this.depositoDao =
                 new DepositoDao();
     }
 
@@ -45,10 +49,9 @@ public class StockProductoService {
             int idDeposito,
             BigDecimal cantidadInicial) {
 
-
-        // =====================================================
+        // -----------------------------------------------------
         // VALIDAR IDs
-        // =====================================================
+        // -----------------------------------------------------
 
         if (idProducto <= 0) {
 
@@ -56,7 +59,6 @@ public class StockProductoService {
                     "El producto no es válido."
             );
         }
-
 
         if (idDeposito <= 0) {
 
@@ -66,36 +68,14 @@ public class StockProductoService {
         }
 
 
-        // =====================================================
-        // VALIDAR CANTIDAD
-        // =====================================================
-
-        if (cantidadInicial == null) {
-
-            return ResultadoOperacion.error(
-                    "La cantidad inicial es obligatoria."
-            );
-        }
-
-
-        if (cantidadInicial.compareTo(
-                BigDecimal.ZERO) < 0) {
-
-            return ResultadoOperacion.error(
-                    "La cantidad inicial no puede ser negativa."
-            );
-        }
-
-
-        // =====================================================
+        // -----------------------------------------------------
         // BUSCAR PRODUCTO
-        // =====================================================
+        // -----------------------------------------------------
 
         Producto producto =
                 productoDao.buscarPorId(
                         idProducto
                 );
-
 
         if (producto == null) {
 
@@ -103,7 +83,6 @@ public class StockProductoService {
                     "El producto no existe."
             );
         }
-
 
         if (!producto.isActivo()) {
 
@@ -113,15 +92,14 @@ public class StockProductoService {
         }
 
 
-        // =====================================================
+        // -----------------------------------------------------
         // BUSCAR DEPÓSITO
-        // =====================================================
+        // -----------------------------------------------------
 
         Deposito deposito =
                 depositoDao.buscarPorId(
                         idDeposito
                 );
-
 
         if (deposito == null) {
 
@@ -129,7 +107,6 @@ public class StockProductoService {
                     "El depósito no existe."
             );
         }
-
 
         if (!deposito.isActivo()) {
 
@@ -139,16 +116,31 @@ public class StockProductoService {
         }
 
 
-        // =====================================================
-        // VERIFICAR SI YA EXISTE
-        // =====================================================
+        // -----------------------------------------------------
+        // VALIDAR CANTIDAD
+        // -----------------------------------------------------
+
+        ResultadoOperacion validacionCantidad =
+                validarCantidad(
+                        producto,
+                        cantidadInicial
+                );
+
+        if (!validacionCantidad.isExitoso()) {
+
+            return validacionCantidad;
+        }
+
+
+        // -----------------------------------------------------
+        // VERIFICAR SI YA EXISTE STOCK
+        // -----------------------------------------------------
 
         StockProducto existente =
                 stockDao.buscarPorProductoDeposito(
                         idProducto,
                         idDeposito
                 );
-
 
         if (existente != null) {
 
@@ -159,24 +151,21 @@ public class StockProductoService {
         }
 
 
-        // =====================================================
+        // -----------------------------------------------------
         // CREAR STOCK
-        // =====================================================
+        // -----------------------------------------------------
 
         StockProducto stock =
                 new StockProducto();
 
         stock.setProducto(producto);
         stock.setDeposito(deposito);
-
-        stock.setCantidad(
-                cantidadInicial
-        );
+        stock.setCantidad(cantidadInicial);
 
 
-        // =====================================================
+        // -----------------------------------------------------
         // GUARDAR
-        // =====================================================
+        // -----------------------------------------------------
 
         if (stockDao.guardar(stock)) {
 
@@ -184,7 +173,6 @@ public class StockProductoService {
                     "Stock inicializado correctamente."
             );
         }
-
 
         return ResultadoOperacion.error(
                 "No se pudo inicializar el stock."
@@ -195,9 +183,10 @@ public class StockProductoService {
     // =========================================================
     // AJUSTAR CANTIDAD
     //
-    // Método técnico temporal.
-    // Más adelante los cambios reales de stock se harán
-    // mediante movimientos de stock.
+    // IMPORTANTE:
+    // Este método es técnico.
+    // Más adelante los cambios normales de stock pasarán por
+    // ingresos, salidas, ventas, compras y ajustes registrados.
     // =========================================================
 
     public ResultadoOperacion ajustarCantidad(
@@ -205,30 +194,67 @@ public class StockProductoService {
             int idDeposito,
             BigDecimal nuevaCantidad) {
 
+        // -----------------------------------------------------
+        // VALIDAR IDs
+        // -----------------------------------------------------
 
-        if (nuevaCantidad == null) {
+        if (idProducto <= 0) {
 
             return ResultadoOperacion.error(
-                    "La cantidad es obligatoria."
+                    "El producto no es válido."
+            );
+        }
+
+        if (idDeposito <= 0) {
+
+            return ResultadoOperacion.error(
+                    "El depósito no es válido."
             );
         }
 
 
-        if (nuevaCantidad.compareTo(
-                BigDecimal.ZERO) < 0) {
+        // -----------------------------------------------------
+        // BUSCAR PRODUCTO
+        // -----------------------------------------------------
+
+        Producto producto =
+                productoDao.buscarPorId(
+                        idProducto
+                );
+
+        if (producto == null) {
 
             return ResultadoOperacion.error(
-                    "El stock no puede ser negativo."
+                    "El producto no existe."
             );
         }
 
+
+        // -----------------------------------------------------
+        // VALIDAR CANTIDAD SEGÚN UNIDAD
+        // -----------------------------------------------------
+
+        ResultadoOperacion validacionCantidad =
+                validarCantidad(
+                        producto,
+                        nuevaCantidad
+                );
+
+        if (!validacionCantidad.isExitoso()) {
+
+            return validacionCantidad;
+        }
+
+
+        // -----------------------------------------------------
+        // BUSCAR STOCK
+        // -----------------------------------------------------
 
         StockProducto stock =
                 stockDao.buscarPorProductoDeposito(
                         idProducto,
                         idDeposito
                 );
-
 
         if (stock == null) {
 
@@ -239,6 +265,10 @@ public class StockProductoService {
         }
 
 
+        // -----------------------------------------------------
+        // ACTUALIZAR
+        // -----------------------------------------------------
+
         if (stockDao.actualizarCantidad(
                 stock.getIdStock(),
                 nuevaCantidad)) {
@@ -247,7 +277,6 @@ public class StockProductoService {
                     "Stock actualizado correctamente."
             );
         }
-
 
         return ResultadoOperacion.error(
                 "No se pudo actualizar el stock."
@@ -273,7 +302,7 @@ public class StockProductoService {
 
 
     // =========================================================
-    // BUSCAR PRODUCTO / DEPÓSITO
+    // BUSCAR POR PRODUCTO Y DEPÓSITO
     // =========================================================
 
     public StockProducto buscar(
@@ -331,6 +360,11 @@ public class StockProductoService {
     public List<StockProducto> listarPorProducto(
             int idProducto) {
 
+        if (idProducto <= 0) {
+
+            return List.of();
+        }
+
         return stockDao.listarPorProducto(
                 idProducto
         );
@@ -344,8 +378,124 @@ public class StockProductoService {
     public List<StockProducto> listarPorDeposito(
             int idDeposito) {
 
+        if (idDeposito <= 0) {
+
+            return List.of();
+        }
+
         return stockDao.listarPorDeposito(
                 idDeposito
+        );
+    }
+
+
+    // =========================================================
+    // VALIDAR CANTIDAD
+    // =========================================================
+
+    private ResultadoOperacion validarCantidad(
+            Producto producto,
+            BigDecimal cantidad) {
+
+        // -----------------------------------------------------
+        // CANTIDAD OBLIGATORIA
+        // -----------------------------------------------------
+
+        if (cantidad == null) {
+
+            return ResultadoOperacion.error(
+                    "La cantidad es obligatoria."
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // NO PERMITIR NEGATIVOS
+        // -----------------------------------------------------
+
+        if (cantidad.compareTo(
+                BigDecimal.ZERO) < 0) {
+
+            return ResultadoOperacion.error(
+                    "La cantidad no puede ser negativa."
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // OBTENER UNIDAD DE VENTA
+        // -----------------------------------------------------
+
+        UnidadMedida unidad =
+                producto.getUnidadVenta();
+
+
+        // Si el producto no tiene unidad configurada,
+        // no podemos aplicar la validación de decimales.
+        // Permitimos continuar.
+        //
+        // Más adelante podemos hacer obligatoria la unidad
+        // para productos que controlan stock.
+
+        if (unidad == null) {
+
+            return ResultadoOperacion.ok(
+                    "Cantidad válida."
+            );
+        }
+
+
+        // -----------------------------------------------------
+        // VALIDAR DECIMALES
+        // -----------------------------------------------------
+
+        if (!unidad.isPermiteDecimales()) {
+
+            BigDecimal cantidadSinCeros =
+                    cantidad.stripTrailingZeros();
+
+
+            /*
+             * Ejemplos:
+             *
+             * 75.000 -> stripTrailingZeros -> 75
+             * scale = 0
+             * VÁLIDO
+             *
+             * 75.500 -> stripTrailingZeros -> 75.5
+             * scale = 1
+             * INVÁLIDO
+             */
+
+            if (cantidadSinCeros.scale() > 0) {
+
+                return ResultadoOperacion.error(
+                        "La unidad "
+                        + unidad.getCodigo()
+                        + " no permite cantidades decimales."
+                );
+            }
+        }
+
+
+        // -----------------------------------------------------
+        // MÁXIMO 3 DECIMALES
+        // -----------------------------------------------------
+
+        BigDecimal cantidadSinCeros =
+                cantidad.stripTrailingZeros();
+
+        if (cantidadSinCeros.scale() > 3) {
+
+            return ResultadoOperacion.error(
+                    "La cantidad no puede tener más "
+                    + "de 3 decimales."
+            );
+        }
+
+
+        return ResultadoOperacion.ok(
+                "Cantidad válida."
         );
     }
 }

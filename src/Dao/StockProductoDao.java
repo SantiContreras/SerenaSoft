@@ -461,6 +461,175 @@ public class StockProductoDao {
 
         return BigDecimal.ZERO;
     }
+    
+    // =========================================================
+// BUSCAR STOCK PARA ACTUALIZACIÓN
+// TRANSACCIONAL - FOR UPDATE
+// =========================================================
+
+/**
+ * Busca el registro de stock de un producto en un depósito
+ * utilizando la misma conexión de una transacción.
+ *
+ * FOR UPDATE bloquea el registro hasta que la transacción
+ * haga COMMIT o ROLLBACK.
+ *
+ * Este método NO abre ni cierra la Connection.
+ */
+public StockProducto buscarParaActualizar(
+        Connection cn,
+        int idProducto,
+        int idDeposito) throws SQLException {
+
+    String sql =
+            "SELECT id_stock, id_producto, id_deposito, "
+            + "cantidad, fecha_actualizacion "
+            + "FROM stock_producto "
+            + "WHERE id_producto = ? "
+            + "AND id_deposito = ? "
+            + "FOR UPDATE";
+
+    try (PreparedStatement ps =
+                 cn.prepareStatement(sql)) {
+
+        ps.setInt(
+                1,
+                idProducto
+        );
+
+        ps.setInt(
+                2,
+                idDeposito
+        );
+
+        try (ResultSet rs =
+                     ps.executeQuery()) {
+
+            if (rs.next()) {
+
+                StockProducto stock =
+                        new StockProducto();
+
+                stock.setIdStock(
+                        rs.getLong(
+                                "id_stock"
+                        )
+                );
+
+                stock.setCantidad(
+                        rs.getBigDecimal(
+                                "cantidad"
+                        )
+                );
+
+                Timestamp timestamp =
+                        rs.getTimestamp(
+                                "fecha_actualizacion"
+                        );
+
+                if (timestamp != null) {
+
+                    stock.setFechaActualizacion(
+                            timestamp.toLocalDateTime()
+                    );
+                }
+
+                return stock;
+            }
+        }
+    }
+
+    return null;
+}
+
+
+// =========================================================
+// ACTUALIZAR CANTIDAD
+// TRANSACCIONAL
+// =========================================================
+
+/**
+ * Actualiza el stock utilizando una Connection existente.
+ *
+ * Este método NO hace COMMIT.
+ * Este método NO hace ROLLBACK.
+ * Este método NO cierra la Connection.
+ *
+ * El Service controla la transacción.
+ */
+public boolean actualizarCantidad(
+        Connection cn,
+        long idStock,
+        BigDecimal cantidad) throws SQLException {
+
+    String sql =
+            "UPDATE stock_producto "
+            + "SET cantidad = ? "
+            + "WHERE id_stock = ?";
+
+    try (PreparedStatement ps =
+                 cn.prepareStatement(sql)) {
+
+        ps.setBigDecimal(
+                1,
+                cantidad
+        );
+
+        ps.setLong(
+                2,
+                idStock
+        );
+
+        return ps.executeUpdate() > 0;
+    }
+}
+
+
+// =========================================================
+// DESCONTAR STOCK
+// TRANSACCIONAL
+// =========================================================
+
+/**
+ * Descuenta una cantidad del stock.
+ *
+ * La condición cantidad >= ? agrega una segunda protección
+ * para impedir que el stock quede negativo.
+ *
+ * Debe ejecutarse dentro de una transacción.
+ */
+public boolean descontarStock(
+        Connection cn,
+        long idStock,
+        BigDecimal cantidad) throws SQLException {
+
+    String sql =
+            "UPDATE stock_producto "
+            + "SET cantidad = cantidad - ? "
+            + "WHERE id_stock = ? "
+            + "AND cantidad >= ?";
+
+    try (PreparedStatement ps =
+                 cn.prepareStatement(sql)) {
+
+        ps.setBigDecimal(
+                1,
+                cantidad
+        );
+
+        ps.setLong(
+                2,
+                idStock
+        );
+
+        ps.setBigDecimal(
+                3,
+                cantidad
+        );
+
+        return ps.executeUpdate() > 0;
+    }
+}
 
 
     // =========================================================
