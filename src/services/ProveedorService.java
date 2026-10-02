@@ -1,6 +1,7 @@
 package services;
 
 import Dao.ProveedorDao;
+import Dao.ProveedorDao;
 import model.Proveedor;
 
 import java.sql.SQLException;
