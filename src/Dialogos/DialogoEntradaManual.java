@@ -11,12 +11,19 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Window;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
@@ -27,6 +34,8 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import model.Producto;
+import model.UnidadMedida;
 
 public class DialogoEntradaManual extends JDialog {
 
@@ -49,6 +58,17 @@ public class DialogoEntradaManual extends JDialog {
     private JLabel lblCodigoProducto;
     private JLabel lblProductoSeleccionado;
     private JLabel lblStockActual;
+
+    // Información comercial de compra / conversión
+    private JLabel lblUnidadCompra;
+    private JLabel lblUnidadVenta;
+    private JLabel lblFactorConversion;
+    private JLabel lblIngresoStock;
+    private JLabel lblUnidadCantidad;
+    private JLabel lblCostoUnidad;
+
+    private Producto productoSeleccionado;
+    private final List<DetalleEntradaTemporal> detalles = new ArrayList<>();
 
     private JSpinner spnCantidad;
     private JTextField txtCosto;
@@ -118,10 +138,10 @@ public class DialogoEntradaManual extends JDialog {
         cargarDatosPrueba();
 
         configurarEventos();
-        
-         EstiloBotones.corregirBotones(
-            getContentPane()
-    );
+
+        EstiloBotones.corregirBotones(
+                getContentPane()
+        );
 
         setModal(true);
 
@@ -182,6 +202,13 @@ public class DialogoEntradaManual extends JDialog {
 
         lblStockActual
                 = new JLabel("0");
+
+        lblUnidadCompra = crearValorInformativo("-");
+        lblUnidadVenta = crearValorInformativo("-");
+        lblFactorConversion = crearValorInformativo("-");
+        lblIngresoStock = crearValorInformativo("-");
+        lblUnidadCantidad = crearValorInformativo("-");
+        lblCostoUnidad = crearValorInformativo("Costo");
 
         spnCantidad
                 = new JSpinner(
@@ -276,7 +303,9 @@ public class DialogoEntradaManual extends JDialog {
                 new Object[]{
                     "Código",
                     "Producto",
-                    "Cantidad",
+                    "Cant. Compra",
+                    "Unidad",
+                    "Ingresa Stock",
                     "Costo",
                     "Subtotal"
                 },
@@ -452,30 +481,13 @@ public class DialogoEntradaManual extends JDialog {
         //==========================================================
         // ANCHOS
         //==========================================================
-        tablaDetalle
-                .getColumnModel()
-                .getColumn(0)
-                .setPreferredWidth(110);
-
-        tablaDetalle
-                .getColumnModel()
-                .getColumn(1)
-                .setPreferredWidth(280);
-
-        tablaDetalle
-                .getColumnModel()
-                .getColumn(2)
-                .setPreferredWidth(100);
-
-        tablaDetalle
-                .getColumnModel()
-                .getColumn(3)
-                .setPreferredWidth(130);
-
-        tablaDetalle
-                .getColumnModel()
-                .getColumn(4)
-                .setPreferredWidth(150);
+        tablaDetalle.getColumnModel().getColumn(0).setPreferredWidth(95);
+        tablaDetalle.getColumnModel().getColumn(1).setPreferredWidth(235);
+        tablaDetalle.getColumnModel().getColumn(2).setPreferredWidth(95);
+        tablaDetalle.getColumnModel().getColumn(3).setPreferredWidth(80);
+        tablaDetalle.getColumnModel().getColumn(4).setPreferredWidth(125);
+        tablaDetalle.getColumnModel().getColumn(5).setPreferredWidth(115);
+        tablaDetalle.getColumnModel().getColumn(6).setPreferredWidth(125);
     }
 
     //==========================================================
@@ -638,7 +650,7 @@ public class DialogoEntradaManual extends JDialog {
         panelProducto.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        190
+                        275
                 )
         );
 
@@ -704,147 +716,10 @@ public class DialogoEntradaManual extends JDialog {
     //==========================================================
     // DATOS DE COMPRA
     //==========================================================
-   //==========================================================
+    //==========================================================
 // DATOS DE COMPRA
 //==========================================================
-private JPanel crearPanelDatosCompra() {
-
-    JPanel panel =
-            new JPanel(
-                    new GridBagLayout()
-            );
-
-    panel.setBackground(
-            Color.WHITE
-    );
-
-    panel.setBorder(
-            BorderFactory.createTitledBorder(
-                    BorderFactory.createLineBorder(
-                            BORDE
-                    ),
-                    "Datos de la Compra",
-                    0,
-                    0,
-                    new Font(
-                            "Segoe UI",
-                            Font.BOLD,
-                            15
-                    ),
-                    AZUL_OSCURO
-            )
-    );
-
-    GridBagConstraints c =
-            crearConstraints();
-
-
-    //======================================================
-    // PROVEEDOR
-    //======================================================
-    c.gridx = 0;
-    c.gridy = 0;
-    c.weightx = 0;
-    c.fill = GridBagConstraints.NONE;
-
-    panel.add(
-            crearLabel("Proveedor"),
-            c
-    );
-
-
-    //======================================================
-    // CAMPO PROVEEDOR
-    //======================================================
-    c.gridx = 1;
-    c.weightx = 1;
-    c.fill = GridBagConstraints.HORIZONTAL;
-
-    txtProveedor.setPreferredSize(
-            new Dimension(
-                    280,
-                    32
-            )
-    );
-
-    panel.add(
-            txtProveedor,
-            c
-    );
-
-
-    //======================================================
-    // BUSCAR PROVEEDOR
-    //======================================================
-    c.gridx = 2;
-    c.weightx = 0;
-    c.fill = GridBagConstraints.NONE;
-
-    panel.add(
-            btnBuscarProveedor,
-            c
-    );
-
-
-    //======================================================
-    // FACTURA
-    //======================================================
-    c.gridx = 3;
-
-    panel.add(
-            crearLabel("Factura N°"),
-            c
-    );
-
-
-    c.gridx = 4;
-
-    txtNumeroFactura.setPreferredSize(
-            new Dimension(
-                    160,
-                    32
-            )
-    );
-
-    panel.add(
-            txtNumeroFactura,
-            c
-    );
-
-
-    //======================================================
-    // FECHA
-    //======================================================
-    c.gridx = 5;
-
-    panel.add(
-            crearLabel("Fecha"),
-            c
-    );
-
-
-    c.gridx = 6;
-
-    txtFecha.setPreferredSize(
-            new Dimension(
-                    120,
-                    32
-            )
-    );
-
-    panel.add(
-            txtFecha,
-            c
-    );
-
-
-    return panel;
-}
-
-    //==========================================================
-    // PRODUCTO
-    //==========================================================
-    private JPanel crearPanelProducto() {
+    private JPanel crearPanelDatosCompra() {
 
         JPanel panel
                 = new JPanel(
@@ -860,7 +735,7 @@ private JPanel crearPanelDatosCompra() {
                         BorderFactory.createLineBorder(
                                 BORDE
                         ),
-                        "Agregar Producto",
+                        "Datos de la Compra",
                         0,
                         0,
                         new Font(
@@ -876,203 +751,187 @@ private JPanel crearPanelDatosCompra() {
                 = crearConstraints();
 
         //======================================================
-        // BUSCAR
+        // PROVEEDOR
         //======================================================
         c.gridx = 0;
         c.gridy = 0;
-
-        panel.add(
-                crearLabel(
-                        "Producto / Código"
-                ),
-                c
-        );
-
-        c.gridx = 1;
-        c.gridwidth = 3;
-        c.weightx = 1;
-        c.fill
-                = GridBagConstraints.HORIZONTAL;
-
-        txtBuscarProducto.setPreferredSize(
-                new Dimension(
-                        450,
-                        32
-                )
-        );
-
-        panel.add(
-                txtBuscarProducto,
-                c
-        );
-
-        c.gridx = 4;
-        c.gridwidth = 1;
         c.weightx = 0;
-        c.fill
-                = GridBagConstraints.NONE;
+        c.fill = GridBagConstraints.NONE;
 
         panel.add(
-                btnBuscarProducto,
+                crearLabel("Proveedor"),
                 c
         );
 
         //======================================================
-        // CODIGO
+        // CAMPO PROVEEDOR
         //======================================================
-        c.gridx = 0;
-        c.gridy = 1;
-
-        panel.add(
-                crearLabel("Código"),
-                c
-        );
-
         c.gridx = 1;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
 
-        panel.add(
-                lblCodigoProducto,
-                c
-        );
-
-        //======================================================
-        // PRODUCTO
-        //======================================================
-        c.gridx = 2;
-
-        panel.add(
-                crearLabel("Producto"),
-                c
-        );
-
-        c.gridx = 3;
-
-        lblProductoSeleccionado.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        panel.add(
-                lblProductoSeleccionado,
-                c
-        );
-
-        //======================================================
-        // STOCK
-        //======================================================
-        c.gridx = 4;
-
-        panel.add(
-                crearLabel(
-                        "Stock actual"
-                ),
-                c
-        );
-
-        c.gridx = 5;
-
-        lblStockActual.setForeground(
-                AZUL
-        );
-
-        lblStockActual.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        14
-                )
-        );
-
-        panel.add(
-                lblStockActual,
-                c
-        );
-
-        //======================================================
-        // CANTIDAD
-        //======================================================
-        c.gridx = 0;
-        c.gridy = 2;
-
-        panel.add(
-                crearLabel(
-                        "Cantidad"
-                ),
-                c
-        );
-
-        c.gridx = 1;
-
-        spnCantidad.setPreferredSize(
+        txtProveedor.setPreferredSize(
                 new Dimension(
-                        110,
+                        280,
                         32
                 )
         );
 
         panel.add(
-                spnCantidad,
+                txtProveedor,
                 c
         );
 
         //======================================================
-        // COSTO
+        // BUSCAR PROVEEDOR
         //======================================================
         c.gridx = 2;
+        c.weightx = 0;
+        c.fill = GridBagConstraints.NONE;
 
         panel.add(
-                crearLabel(
-                        "Costo Unitario"
-                ),
+                btnBuscarProveedor,
                 c
         );
 
+        //======================================================
+        // FACTURA
+        //======================================================
         c.gridx = 3;
 
-        txtCosto.setPreferredSize(
+        panel.add(
+                crearLabel("Factura N°"),
+                c
+        );
+
+        c.gridx = 4;
+
+        txtNumeroFactura.setPreferredSize(
                 new Dimension(
-                        140,
+                        160,
                         32
                 )
         );
 
         panel.add(
-                txtCosto,
+                txtNumeroFactura,
                 c
         );
 
         //======================================================
-        // SUBTOTAL
-        //======================================================
-        c.gridx = 4;
-
-        panel.add(
-                crearLabel(
-                        "Subtotal"
-                ),
-                c
-        );
-
-        c.gridx = 5;
-
-        panel.add(
-                lblSubtotalItem,
-                c
-        );
-
-        //======================================================
-        // AGREGAR
+        // FECHA
         //======================================================
         c.gridx = 5;
-        c.gridy = 3;
 
         panel.add(
-                btnAgregarProducto,
+                crearLabel("Fecha"),
                 c
         );
+
+        c.gridx = 6;
+
+        txtFecha.setPreferredSize(
+                new Dimension(
+                        120,
+                        32
+                )
+        );
+
+        panel.add(
+                txtFecha,
+                c
+        );
+
+        return panel;
+    }
+
+    //==========================================================
+    // PRODUCTO
+    //==========================================================
+    private JPanel crearPanelProducto() {
+
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(
+                BorderFactory.createTitledBorder(
+                        BorderFactory.createLineBorder(BORDE),
+                        "Agregar Producto",
+                        0, 0,
+                        new Font("Segoe UI", Font.BOLD, 15),
+                        AZUL_OSCURO
+                )
+        );
+
+        GridBagConstraints c = crearConstraints();
+
+        // FILA 0 - BUSCADOR
+        c.gridx = 0; c.gridy = 0; c.gridwidth = 1; c.weightx = 0;
+        c.fill = GridBagConstraints.NONE;
+        panel.add(crearLabel("Producto / Código"), c);
+
+        c.gridx = 1; c.gridwidth = 4; c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        txtBuscarProducto.setPreferredSize(new Dimension(500, 32));
+        panel.add(txtBuscarProducto, c);
+
+        c.gridx = 5; c.gridwidth = 1; c.weightx = 0;
+        c.fill = GridBagConstraints.NONE;
+        panel.add(btnBuscarProducto, c);
+
+        // FILA 1 - PRODUCTO
+        c.gridx = 0; c.gridy = 1;
+        panel.add(crearLabel("Código"), c);
+        c.gridx = 1; panel.add(lblCodigoProducto, c);
+        c.gridx = 2; panel.add(crearLabel("Producto"), c);
+        c.gridx = 3; c.gridwidth = 2;
+        lblProductoSeleccionado.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        panel.add(lblProductoSeleccionado, c);
+
+        c.gridx = 5; c.gridwidth = 1;
+        JPanel stockPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        stockPanel.setOpaque(false);
+        stockPanel.add(crearLabel("Stock actual"));
+        lblStockActual.setForeground(AZUL);
+        lblStockActual.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        stockPanel.add(lblStockActual);
+        panel.add(stockPanel, c);
+
+        // FILA 2 - UNIDADES Y FACTOR
+        c.gridx = 0; c.gridy = 2;
+        panel.add(crearLabel("Unidad compra"), c);
+        c.gridx = 1; panel.add(lblUnidadCompra, c);
+        c.gridx = 2; panel.add(crearLabel("Unidad stock/venta"), c);
+        c.gridx = 3; panel.add(lblUnidadVenta, c);
+        c.gridx = 4; panel.add(crearLabel("Conversión"), c);
+        c.gridx = 5; panel.add(lblFactorConversion, c);
+
+        // FILA 3 - CANTIDAD / COSTO / SUBTOTAL
+        c.gridx = 0; c.gridy = 3;
+        panel.add(crearLabel("Cantidad compra"), c);
+        c.gridx = 1;
+        JPanel cantidadPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        cantidadPanel.setOpaque(false);
+        spnCantidad.setPreferredSize(new Dimension(105, 32));
+        cantidadPanel.add(spnCantidad);
+        cantidadPanel.add(lblUnidadCantidad);
+        panel.add(cantidadPanel, c);
+
+        c.gridx = 2; panel.add(lblCostoUnidad, c);
+        c.gridx = 3;
+        txtCosto.setPreferredSize(new Dimension(140, 32));
+        panel.add(txtCosto, c);
+        c.gridx = 4; panel.add(crearLabel("Subtotal"), c);
+        c.gridx = 5; panel.add(lblSubtotalItem, c);
+
+        // FILA 4 - RESULTADO DE CONVERSIÓN
+        c.gridx = 0; c.gridy = 4;
+        panel.add(crearLabel("Ingreso a stock"), c);
+        c.gridx = 1; c.gridwidth = 3;
+        lblIngresoStock.setForeground(VERDE);
+        lblIngresoStock.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        panel.add(lblIngresoStock, c);
+        c.gridx = 5; c.gridwidth = 1;
+        panel.add(btnAgregarProducto, c);
 
         return panel;
     }
@@ -1262,62 +1121,26 @@ private JPanel crearPanelDatosCompra() {
     //==========================================================
     // DATOS PRUEBA
     //==========================================================
-   //==========================================================
+    //==========================================================
 // DATOS PRUEBA
 //==========================================================
-private void cargarDatosPrueba() {
+    private void cargarDatosPrueba() {
+        // Se conserva el nombre del método para no alterar el constructor,
+        // pero ya NO carga datos ficticios.
+        idProveedorSeleccionado = -1;
+        txtProveedor.setText("");
+        txtNumeroFactura.setText("");
+        txtFecha.setText(
+                LocalDate.now().format(
+                        DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                )
+        );
 
-    //======================================================
-    // PROVEEDOR
-    //======================================================
-    // No seleccionamos proveedor automáticamente.
-    // El usuario deberá buscarlo con btnBuscarProveedor.
-
-    idProveedorSeleccionado = -1;
-
-    txtProveedor.setText("");
-
-    //======================================================
-    // DATOS DE LA COMPRA
-    //======================================================
-    txtNumeroFactura.setText("");
-
-    txtFecha.setText(
-            "24/08/2026"
-    );
-
-    //======================================================
-    // PRODUCTO TEMPORAL
-    //======================================================
-    lblCodigoProducto.setText(
-            "A0001"
-    );
-
-    lblProductoSeleccionado.setText(
-            "Coca Cola 2.25L"
-    );
-
-    lblStockActual.setText(
-            "120"
-    );
-
-    txtCosto.setText(
-            "2300"
-    );
-
-    spnCantidad.setValue(
-            1.0
-    );
-
-    //======================================================
-    // TOTALES
-    //======================================================
-    lblTotalCompra.setText(
-            "$ 0,00"
-    );
-
-    actualizarSubtotalItem();
-}
+        detalles.clear();
+        modeloTabla.setRowCount(0);
+        limpiarProductoSeleccionado();
+        lblTotalCompra.setText("$ 0,00");
+    }
 
     //==========================================================
     // EVENTOS
@@ -1352,31 +1175,44 @@ private void cargarDatosPrueba() {
         //======================================================
         // BUSCAR PRODUCTO
         //======================================================
-        btnBuscarProducto
-                .addActionListener(e -> {
+        //======================================================
+// BUSCAR PRODUCTO
+//======================================================
+        btnBuscarProducto.addActionListener(e -> {
 
-                    // Más adelante:
-                    // buscar producto real en la BD.
-                    lblCodigoProducto.setText(
-                            "A0001"
-                    );
+            // -------------------------------------------------
+            // ABRIR DIÁLOGO DE BÚSQUEDA
+            // -------------------------------------------------
+            DialogoBuscarProducto dialogo
+                    = new DialogoBuscarProducto(this);
 
-                    lblProductoSeleccionado.setText(
-                            "Coca Cola 2.25L"
-                    );
+            dialogo.setVisible(true);
 
-                    lblStockActual.setText(
-                            "120"
-                    );
+            // -------------------------------------------------
+            // SI CANCELÓ, NO HACEMOS NADA
+            // -------------------------------------------------
+            if (!dialogo.isSeleccionado()) {
+                return;
+            }
 
-                    txtCosto.setText(
-                            "2300"
-                    );
+            // -------------------------------------------------
+            // OBTENER PRODUCTO SELECCIONADO
+            // -------------------------------------------------
+            Producto producto
+                    = dialogo.getObjetoProductoSeleccionado();
 
-                    actualizarSubtotalItem();
+            if (producto == null) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "No se pudo recuperar el producto seleccionado.",
+                        "Producto",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
 
-                });
-
+            cargarProductoSeleccionado(producto);
+        });
         //======================================================
         // CAMBIO CANTIDAD
         //======================================================
@@ -1437,10 +1273,8 @@ private void cargarDatosPrueba() {
 
                     if (fila != -1) {
 
-                        modeloTabla.removeRow(
-                                fila
-                        );
-
+                        modeloTabla.removeRow(fila);
+                        detalles.remove(fila);
                         actualizarTotalCompra();
                     }
 
@@ -1452,8 +1286,9 @@ private void cargarDatosPrueba() {
         btnLimpiar.addActionListener(e -> {
 
             modeloTabla.setRowCount(0);
-
+            detalles.clear();
             actualizarTotalCompra();
+            limpiarProductoSeleccionado();
 
         });
 
@@ -1499,170 +1334,326 @@ private void cargarDatosPrueba() {
     //==========================================================
     // AGREGAR PRODUCTO
     //==========================================================
+    private void cargarProductoSeleccionado(Producto producto) {
+        productoSeleccionado = producto;
+
+        lblCodigoProducto.setText(valorTexto(producto.getCodigo()));
+        lblProductoSeleccionado.setText(valorTexto(producto.getNombre()));
+
+        UnidadMedida unidadCompra = producto.getUnidadCompra();
+        UnidadMedida unidadVenta = producto.getUnidadVenta();
+
+        String codigoCompra = codigoUnidad(unidadCompra);
+        String codigoVenta = codigoUnidad(unidadVenta);
+
+        lblStockActual.setText("0 " + codigoVenta);
+        lblUnidadCompra.setText(descripcionUnidad(unidadCompra));
+        lblUnidadVenta.setText(descripcionUnidad(unidadVenta));
+        lblUnidadCantidad.setText(codigoCompra);
+
+        BigDecimal factor = obtenerFactor(producto);
+        lblFactorConversion.setText(
+                "1 " + codigoCompra + " = "
+                + formatearCantidad(factor) + " " + codigoVenta
+        );
+
+        lblCostoUnidad.setText("Costo por " + codigoCompra);
+
+        if (producto.getPrecioCompra() != null) {
+            txtCosto.setText(
+                    producto.getPrecioCompra()
+                            .stripTrailingZeros()
+                            .toPlainString()
+            );
+        } else {
+            txtCosto.setText("0");
+        }
+
+        configurarSpinnerSegunUnidad(unidadCompra);
+        actualizarIngresoStock();
+        actualizarSubtotalItem();
+    }
+
+    //==========================================================
+    // CONFIGURAR CANTIDAD SEGÚN UNIDAD DE COMPRA
+    //==========================================================
+    private void configurarSpinnerSegunUnidad(UnidadMedida unidadCompra) {
+        boolean permiteDecimales
+                = unidadCompra != null
+                && unidadCompra.isPermiteDecimales();
+
+        if (permiteDecimales) {
+            spnCantidad.setModel(
+                    new SpinnerNumberModel(1.000, 0.001, 999999.000, 0.001)
+            );
+            spnCantidad.setEditor(
+                    new JSpinner.NumberEditor(spnCantidad, "0.000")
+            );
+        } else {
+            spnCantidad.setModel(
+                    new SpinnerNumberModel(1, 1, 999999, 1)
+            );
+            spnCantidad.setEditor(
+                    new JSpinner.NumberEditor(spnCantidad, "0")
+            );
+        }
+    }
+
+    //==========================================================
+    // AGREGAR PRODUCTO
+    //==========================================================
     private void agregarProductoTabla() {
-
-        String codigo
-                = lblCodigoProducto.getText();
-
-        String producto
-                = lblProductoSeleccionado.getText();
-
-        double cantidad
-                = ((Number) spnCantidad.getValue())
-                        .doubleValue();
-
-        double costo;
-
-        try {
-
-            costo
-                    = Double.parseDouble(
-                            txtCosto
-                                    .getText()
-                                    .trim()
-                                    .replace(",", ".")
-                    );
-
-        } catch (NumberFormatException ex) {
-
-            javax.swing.JOptionPane
-                    .showMessageDialog(
-                            this,
-                            "Ingrese un costo válido.",
-                            "Costo inválido",
-                            javax.swing.JOptionPane.WARNING_MESSAGE
-                    );
-
+        if (productoSeleccionado == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Primero seleccione un producto.",
+                    "Producto",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
-        if (cantidad <= 0) {
+        BigDecimal cantidadCompra = obtenerCantidadSpinner();
 
-            javax.swing.JOptionPane
-                    .showMessageDialog(
-                            this,
-                            "La cantidad debe ser mayor a cero.",
-                            "Cantidad inválida",
-                            javax.swing.JOptionPane.WARNING_MESSAGE
-                    );
-
+        if (cantidadCompra.compareTo(BigDecimal.ZERO) <= 0) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "La cantidad debe ser mayor a cero.",
+                    "Cantidad inválida",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
-        if (costo < 0) {
+        UnidadMedida unidadCompra = productoSeleccionado.getUnidadCompra();
 
-            javax.swing.JOptionPane
-                    .showMessageDialog(
-                            this,
-                            "El costo no puede ser negativo.",
-                            "Costo inválido",
-                            javax.swing.JOptionPane.WARNING_MESSAGE
-                    );
-
+        if (unidadCompra != null
+                && !unidadCompra.isPermiteDecimales()
+                && cantidadCompra.stripTrailingZeros().scale() > 0) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "La unidad " + unidadCompra.getCodigo()
+                    + " no permite cantidades decimales.",
+                    "Cantidad inválida",
+                    JOptionPane.WARNING_MESSAGE
+            );
             return;
         }
 
-        double subtotal
-                = cantidad * costo;
+        BigDecimal costo = obtenerCosto();
+
+        if (costo == null) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ingrese un costo válido.",
+                    "Costo inválido",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (costo.compareTo(BigDecimal.ZERO) < 0) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "El costo no puede ser negativo.",
+                    "Costo inválido",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        BigDecimal factor = obtenerFactor(productoSeleccionado);
+        BigDecimal cantidadStock = cantidadCompra.multiply(factor);
+        BigDecimal subtotal = cantidadCompra.multiply(costo)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        String unidadCompraCodigo
+                = codigoUnidad(productoSeleccionado.getUnidadCompra());
+        String unidadVentaCodigo
+                = codigoUnidad(productoSeleccionado.getUnidadVenta());
+
+        DetalleEntradaTemporal detalle = new DetalleEntradaTemporal(
+                productoSeleccionado,
+                cantidadCompra,
+                cantidadStock,
+                costo,
+                subtotal
+        );
+        detalles.add(detalle);
 
         modeloTabla.addRow(
                 new Object[]{
-                    codigo,
-                    producto,
-                    cantidad,
+                    productoSeleccionado.getCodigo(),
+                    productoSeleccionado.getNombre(),
+                    formatearCantidad(cantidadCompra),
+                    unidadCompraCodigo,
+                    formatearCantidad(cantidadStock) + " " + unidadVentaCodigo,
                     costo,
                     subtotal
                 }
         );
 
         actualizarTotalCompra();
-
-        // Dejamos preparado el siguiente ingreso.
-        spnCantidad.setValue(
-                1.0
-        );
-
-        txtBuscarProducto.setText(
-                ""
-        );
-
+        limpiarProductoSeleccionado();
         txtBuscarProducto.requestFocusInWindow();
+    }
+
+    //==========================================================
+    // INGRESO A STOCK - INFORMATIVO
+    //==========================================================
+    private void actualizarIngresoStock() {
+        if (productoSeleccionado == null) {
+            lblIngresoStock.setText("-");
+            return;
+        }
+
+        BigDecimal cantidadCompra = obtenerCantidadSpinner();
+        BigDecimal factor = obtenerFactor(productoSeleccionado);
+        BigDecimal cantidadStock = cantidadCompra.multiply(factor);
+
+        lblIngresoStock.setText(
+                formatearCantidad(cantidadStock) + " "
+                + codigoUnidad(productoSeleccionado.getUnidadVenta())
+        );
     }
 
     //==========================================================
     // SUBTOTAL ITEM
     //==========================================================
     private void actualizarSubtotalItem() {
+        BigDecimal cantidad = obtenerCantidadSpinner();
+        BigDecimal costo = obtenerCosto();
 
-        double cantidad
-                = ((Number) spnCantidad.getValue())
-                        .doubleValue();
-
-        double costo = 0;
-
-        try {
-
-            String texto
-                    = txtCosto
-                            .getText()
-                            .trim()
-                            .replace(",", ".");
-
-            if (!texto.isEmpty()) {
-
-                costo
-                        = Double.parseDouble(
-                                texto
-                        );
-            }
-
-        } catch (NumberFormatException ex) {
-
-            costo = 0;
+        if (costo == null) {
+            costo = BigDecimal.ZERO;
         }
 
-        double subtotal
-                = cantidad * costo;
+        BigDecimal subtotal = cantidad.multiply(costo)
+                .setScale(2, RoundingMode.HALF_UP);
 
-        lblSubtotalItem.setText(
-                String.format(
-                        "$ %,.2f",
-                        subtotal
-                )
-        );
+        lblSubtotalItem.setText(formatearMoneda(subtotal));
     }
 
     //==========================================================
     // TOTAL COMPRA
     //==========================================================
     private void actualizarTotalCompra() {
+        BigDecimal total = BigDecimal.ZERO;
 
-        double total = 0;
-
-        for (int i = 0;
-                i < modeloTabla.getRowCount();
-                i++) {
-
-            Object valor
-                    = modeloTabla.getValueAt(
-                            i,
-                            4
-                    );
-
-            if (valor instanceof Number) {
-
-                total
-                        += ((Number) valor)
-                                .doubleValue();
-            }
+        for (DetalleEntradaTemporal detalle : detalles) {
+            total = total.add(detalle.getSubtotal());
         }
 
-        lblTotalCompra.setText(
-                String.format(
-                        "$ %,.2f",
-                        total
-                )
-        );
+        lblTotalCompra.setText(formatearMoneda(total));
+    }
+
+    //==========================================================
+    // LIMPIAR PRODUCTO
+    //==========================================================
+    private void limpiarProductoSeleccionado() {
+        productoSeleccionado = null;
+        txtBuscarProducto.setText("");
+        lblCodigoProducto.setText("-");
+        lblProductoSeleccionado.setText("Seleccione un producto");
+        lblStockActual.setText("0");
+        lblUnidadCompra.setText("-");
+        lblUnidadVenta.setText("-");
+        lblFactorConversion.setText("-");
+        lblIngresoStock.setText("-");
+        lblUnidadCantidad.setText("-");
+        lblCostoUnidad.setText("Costo");
+        txtCosto.setText("");
+
+        spnCantidad.setModel(new SpinnerNumberModel(1, 1, 999999, 1));
+        spnCantidad.setEditor(new JSpinner.NumberEditor(spnCantidad, "0"));
+        lblSubtotalItem.setText("$ 0,00");
+    }
+
+    private BigDecimal obtenerCantidadSpinner() {
+        Object valor = spnCantidad.getValue();
+        if (valor == null) {
+            return BigDecimal.ZERO;
+        }
+        return new BigDecimal(valor.toString().replace(",", "."));
+    }
+
+    private BigDecimal obtenerCosto() {
+        try {
+            String texto = txtCosto.getText().trim().replace(" ", "");
+            if (texto.isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+            if (texto.contains(",") && !texto.contains(".")) {
+                texto = texto.replace(",", ".");
+            }
+            return new BigDecimal(texto);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private BigDecimal obtenerFactor(Producto producto) {
+        if (producto == null
+                || producto.getFactorConversion() == null
+                || producto.getFactorConversion().compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ONE;
+        }
+        return producto.getFactorConversion();
+    }
+
+    private String codigoUnidad(UnidadMedida unidad) {
+        if (unidad == null
+                || unidad.getCodigo() == null
+                || unidad.getCodigo().isBlank()) {
+            return "-";
+        }
+        return unidad.getCodigo();
+    }
+
+    private String descripcionUnidad(UnidadMedida unidad) {
+        if (unidad == null) {
+            return "-";
+        }
+        String codigo = valorTexto(unidad.getCodigo());
+        String nombre = valorTexto(unidad.getNombre());
+        if (codigo.equals("-")) {
+            return nombre;
+        }
+        if (nombre.equals("-") || nombre.equalsIgnoreCase(codigo)) {
+            return codigo;
+        }
+        return codigo + " - " + nombre;
+    }
+
+    private String formatearCantidad(BigDecimal valor) {
+        if (valor == null) {
+            return "0";
+        }
+        return valor.stripTrailingZeros().toPlainString();
+    }
+
+    private String formatearMoneda(BigDecimal valor) {
+        if (valor == null) {
+            valor = BigDecimal.ZERO;
+        }
+        java.text.DecimalFormatSymbols simbolos
+                = new java.text.DecimalFormatSymbols(new java.util.Locale("es", "AR"));
+        simbolos.setGroupingSeparator('.');
+        simbolos.setDecimalSeparator(',');
+        java.text.DecimalFormat formato
+                = new java.text.DecimalFormat("$ #,##0.00", simbolos);
+        return formato.format(valor);
+    }
+
+    private String valorTexto(String texto) {
+        if (texto == null || texto.isBlank()) {
+            return "-";
+        }
+        return texto;
+    }
+
+    public List<DetalleEntradaTemporal> getDetalles() {
+        return new ArrayList<>(detalles);
     }
 
     //==========================================================
@@ -1715,6 +1706,13 @@ private void cargarDatosPrueba() {
         return label;
     }
 
+    private JLabel crearValorInformativo(String texto) {
+        JLabel label = new JLabel(texto);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        label.setForeground(AZUL);
+        return label;
+    }
+
     //==========================================================
     // BOTON
     //==========================================================
@@ -1751,4 +1749,51 @@ private void cargarDatosPrueba() {
 
         return boton;
     }
+
+    //==========================================================
+    // DETALLE TEMPORAL DE LA ENTRADA
+    //==========================================================
+    public static class DetalleEntradaTemporal {
+
+        private final Producto producto;
+        private final BigDecimal cantidadCompra;
+        private final BigDecimal cantidadStock;
+        private final BigDecimal costoUnitario;
+        private final BigDecimal subtotal;
+
+        public DetalleEntradaTemporal(
+                Producto producto,
+                BigDecimal cantidadCompra,
+                BigDecimal cantidadStock,
+                BigDecimal costoUnitario,
+                BigDecimal subtotal) {
+
+            this.producto = producto;
+            this.cantidadCompra = cantidadCompra;
+            this.cantidadStock = cantidadStock;
+            this.costoUnitario = costoUnitario;
+            this.subtotal = subtotal;
+        }
+
+        public Producto getProducto() {
+            return producto;
+        }
+
+        public BigDecimal getCantidadCompra() {
+            return cantidadCompra;
+        }
+
+        public BigDecimal getCantidadStock() {
+            return cantidadStock;
+        }
+
+        public BigDecimal getCostoUnitario() {
+            return costoUnitario;
+        }
+
+        public BigDecimal getSubtotal() {
+            return subtotal;
+        }
+    }
+
 }

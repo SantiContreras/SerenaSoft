@@ -6,6 +6,13 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import model.Producto;
+import services.ProductoService;
+
+import java.math.BigDecimal;
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DialogoBuscarProducto extends JDialog {
 
@@ -24,23 +31,34 @@ public class DialogoBuscarProducto extends JDialog {
     private double precioSeleccionado;
     private double stockSeleccionado;
 
-    private final Color AZUL_OSCURO =
-            new Color(15, 50, 110);
+    private final Color AZUL_OSCURO
+            = new Color(15, 50, 110);
 
-    private final Color AZUL =
-            new Color(25, 70, 145);
+    private final Color AZUL
+            = new Color(25, 70, 145);
 
-    private final Color VERDE =
-            new Color(25, 135, 84);
+    private final Color VERDE
+            = new Color(25, 135, 84);
 
-    private final Color GRIS =
-            new Color(110, 120, 135);
+    private final Color GRIS
+            = new Color(110, 120, 135);
 
-    private final Color FONDO =
-            new Color(245, 247, 250);
+    private final Color FONDO
+            = new Color(245, 247, 250);
 
-    private final Color BORDE =
-            new Color(215, 222, 232);
+    private final Color BORDE
+            = new Color(215, 222, 232);
+
+    //==========================================================
+// SERVICIOS Y DATOS
+//==========================================================
+    private final ProductoService productoService
+            = new ProductoService();
+
+    private List<Producto> productosActivos
+            = new ArrayList<>();
+
+    private Producto objetoProductoSeleccionado;
 
     public DialogoBuscarProducto(Window parent) {
 
@@ -48,7 +66,7 @@ public class DialogoBuscarProducto extends JDialog {
 
         inicializarComponentes();
         construirDialogo();
-        cargarDatosPrueba();
+        cargarProductos();
         configurarEventos();
 
         setTitle("Buscar Producto");
@@ -67,47 +85,123 @@ public class DialogoBuscarProducto extends JDialog {
                         500
                 )
         );
-        
-         EstiloBotones.corregirBotones(
+
+        EstiloBotones.corregirBotones(
                 getContentPane()
-    );
+        );
         setLocationRelativeTo(parent);
         setResizable(true);
     }
 
     private void inicializarComponentes() {
 
-        txtBuscar =
-                new JTextField();
+        txtBuscar
+                = new JTextField();
 
-        btnBuscar =
-                crearBoton(
+        btnBuscar
+                = crearBoton(
                         "Buscar",
                         AZUL,
                         100
                 );
 
-        btnCancelar =
-                crearBoton(
+        btnCancelar
+                = crearBoton(
                         "Cancelar",
                         GRIS,
                         120
                 );
 
-        btnAgregar =
-                crearBoton(
-                        "Agregar a Venta",
+        btnAgregar
+                = crearBoton(
+                        "Seleccionar",
                         VERDE,
-                        160
+                        140
                 );
 
         inicializarTabla();
     }
 
+    //==========================================================
+// CARGAR PRODUCTOS ACTIVOS
+//==========================================================
+    private void cargarProductos() {
+
+        productosActivos
+                = productoService.listarActivos();
+
+        mostrarProductos(
+                productosActivos
+        );
+    }
+
+//==========================================================
+// MOSTRAR PRODUCTOS
+//==========================================================
+    private void mostrarProductos(
+            List<Producto> productos) {
+
+        modeloTabla.setRowCount(0);
+
+        for (Producto producto : productos) {
+
+            agregarProductoTabla(
+                    producto
+            );
+        }
+    }
+
+//==========================================================
+// AGREGAR PRODUCTO A TABLA
+//==========================================================
+    private void agregarProductoTabla(
+            Producto producto) {
+
+        String marca = "";
+
+        if (producto.getMarca() != null
+                && producto.getMarca().getNombre() != null) {
+
+            marca = producto
+                    .getMarca()
+                    .getNombre();
+        }
+
+        BigDecimal precio
+                = producto.getPrecioVenta();
+
+        if (precio == null) {
+            precio = BigDecimal.ZERO;
+        }
+
+
+        /*
+     * Por ahora dejamos el stock en cero.
+     *
+     * El stock real depende del depósito.
+     * Cuando conectemos este buscador específicamente
+     * con Entrada Manual, vamos a obtener el stock
+     * del depósito de destino.
+         */
+        BigDecimal stock
+                = BigDecimal.ZERO;
+
+        modeloTabla.addRow(
+                new Object[]{
+                    producto.getCodigo(),
+                    producto.getNombre(),
+                    marca,
+                    stock,
+                    precio,
+                    "Disponible"
+                }
+        );
+    }
+
     private void inicializarTabla() {
 
-        modeloTabla =
-                new DefaultTableModel(
+        modeloTabla
+                = new DefaultTableModel(
                         new Object[]{
                             "Código",
                             "Producto",
@@ -128,8 +222,8 @@ public class DialogoBuscarProducto extends JDialog {
             }
         };
 
-        tablaProductos =
-                new JTable(
+        tablaProductos
+                = new JTable(
                         modeloTabla
                 );
 
@@ -183,8 +277,8 @@ public class DialogoBuscarProducto extends JDialog {
 
     private void aplicarHeaderAzul() {
 
-        DefaultTableCellRenderer renderer =
-                new DefaultTableCellRenderer() {
+        DefaultTableCellRenderer renderer
+                = new DefaultTableCellRenderer() {
 
             @Override
             public Component getTableCellRendererComponent(
@@ -195,16 +289,15 @@ public class DialogoBuscarProducto extends JDialog {
                     int row,
                     int column) {
 
-                JLabel label =
-                        (JLabel)
-                                super.getTableCellRendererComponent(
-                                        table,
-                                        value,
-                                        isSelected,
-                                        hasFocus,
-                                        row,
-                                        column
-                                );
+                JLabel label
+                        = (JLabel) super.getTableCellRendererComponent(
+                                table,
+                                value,
+                                isSelected,
+                                hasFocus,
+                                row,
+                                column
+                        );
 
                 label.setBackground(
                         AZUL_OSCURO
@@ -233,8 +326,8 @@ public class DialogoBuscarProducto extends JDialog {
         };
 
         for (int i = 0;
-             i < tablaProductos.getColumnCount();
-             i++) {
+                i < tablaProductos.getColumnCount();
+                i++) {
 
             tablaProductos
                     .getColumnModel()
@@ -255,8 +348,8 @@ public class DialogoBuscarProducto extends JDialog {
                 FONDO
         );
 
-        JPanel header =
-                new JPanel();
+        JPanel header
+                = new JPanel();
 
         header.setLayout(
                 new BoxLayout(
@@ -278,8 +371,8 @@ public class DialogoBuscarProducto extends JDialog {
                 )
         );
 
-        JLabel titulo =
-                new JLabel(
+        JLabel titulo
+                = new JLabel(
                         "BUSCAR PRODUCTO"
                 );
 
@@ -295,8 +388,8 @@ public class DialogoBuscarProducto extends JDialog {
                 AZUL_OSCURO
         );
 
-        JLabel subtitulo =
-                new JLabel(
+        JLabel subtitulo
+                = new JLabel(
                         "Busque por código, descripción, marca o categoría"
                 );
 
@@ -323,8 +416,8 @@ public class DialogoBuscarProducto extends JDialog {
                 BorderLayout.NORTH
         );
 
-        JPanel centro =
-                new JPanel(
+        JPanel centro
+                = new JPanel(
                         new BorderLayout(
                                 0,
                                 15
@@ -344,8 +437,8 @@ public class DialogoBuscarProducto extends JDialog {
                 )
         );
 
-        JPanel buscador =
-                new JPanel(
+        JPanel buscador
+                = new JPanel(
                         new BorderLayout(
                                 10,
                                 0
@@ -370,8 +463,8 @@ public class DialogoBuscarProducto extends JDialog {
                 )
         );
 
-        JLabel lblBuscar =
-                new JLabel(
+        JLabel lblBuscar
+                = new JLabel(
                         "Buscar:"
                 );
 
@@ -403,8 +496,8 @@ public class DialogoBuscarProducto extends JDialog {
                 BorderLayout.NORTH
         );
 
-        JScrollPane scroll =
-                new JScrollPane(
+        JScrollPane scroll
+                = new JScrollPane(
                         tablaProductos
                 );
 
@@ -418,8 +511,8 @@ public class DialogoBuscarProducto extends JDialog {
                 BorderLayout.CENTER
         );
 
-        JPanel footer =
-                new JPanel(
+        JPanel footer
+                = new JPanel(
                         new FlowLayout(
                                 FlowLayout.RIGHT,
                                 10,
@@ -445,57 +538,6 @@ public class DialogoBuscarProducto extends JDialog {
         );
     }
 
-    private void cargarDatosPrueba() {
-
-        modeloTabla.setRowCount(
-                0
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    "A0001",
-                    "Coca Cola 2.25 L",
-                    "Coca Cola",
-                    120,
-                    2600,
-                    "Disponible"
-                }
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    "A0002",
-                    "Aceite Natura 900 ml",
-                    "Natura",
-                    18,
-                    3200,
-                    "Disponible"
-                }
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    "A0003",
-                    "Yerba Playadito 1 Kg",
-                    "Playadito",
-                    55,
-                    4900,
-                    "Disponible"
-                }
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    "A0004",
-                    "Azúcar Ledesma",
-                    "Ledesma",
-                    7,
-                    1450,
-                    "Bajo Stock"
-                }
-        );
-    }
-
     private void configurarEventos() {
 
         btnCancelar.addActionListener(e -> {
@@ -504,6 +546,35 @@ public class DialogoBuscarProducto extends JDialog {
 
             dispose();
         });
+
+        //======================================================
+// FILTRO EN TIEMPO REAL
+//======================================================
+        txtBuscar.getDocument()
+                .addDocumentListener(
+                        new javax.swing.event.DocumentListener() {
+
+                    @Override
+                    public void insertUpdate(
+                            javax.swing.event.DocumentEvent e) {
+
+                        filtrar();
+                    }
+
+                    @Override
+                    public void removeUpdate(
+                            javax.swing.event.DocumentEvent e) {
+
+                        filtrar();
+                    }
+
+                    @Override
+                    public void changedUpdate(
+                            javax.swing.event.DocumentEvent e) {
+
+                        filtrar();
+                    }
+                });
 
         btnAgregar.addActionListener(e -> {
 
@@ -519,6 +590,7 @@ public class DialogoBuscarProducto extends JDialog {
 
             filtrar();
         });
+        
 
         tablaProductos.addMouseListener(
                 new java.awt.event.MouseAdapter() {
@@ -533,12 +605,17 @@ public class DialogoBuscarProducto extends JDialog {
                 }
             }
         });
+        
+        
     }
 
+    //==========================================================
+// SELECCIONAR PRODUCTO
+//==========================================================
     private void seleccionarProducto() {
 
-        int fila =
-                tablaProductos.getSelectedRow();
+        int fila
+                = tablaProductos.getSelectedRow();
 
         if (fila == -1) {
 
@@ -552,100 +629,198 @@ public class DialogoBuscarProducto extends JDialog {
             return;
         }
 
-        codigoSeleccionado =
-                modeloTabla
+        //======================================================
+        // OBTENER CÓDIGO
+        //======================================================
+        String codigo
+                = modeloTabla
                         .getValueAt(
                                 fila,
                                 0
                         )
                         .toString();
 
-        productoSeleccionado =
-                modeloTabla
-                        .getValueAt(
-                                fila,
-                                1
-                        )
-                        .toString();
-
-        stockSeleccionado =
-                Double.parseDouble(
-                        modeloTabla
-                                .getValueAt(
-                                        fila,
-                                        3
-                                )
-                                .toString()
+        //======================================================
+        // RECUPERAR PRODUCTO REAL
+        //======================================================
+        Producto producto
+                = productoService.buscarPorCodigo(
+                        codigo
                 );
 
-        precioSeleccionado =
-                Double.parseDouble(
-                        modeloTabla
-                                .getValueAt(
-                                        fila,
-                                        4
-                                )
-                                .toString()
-                );
+        if (producto == null) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se pudo recuperar el producto seleccionado.",
+                    "Producto",
+                    JOptionPane.ERROR_MESSAGE
+            );
+
+            return;
+        }
+
+        //======================================================
+        // GUARDAR PRODUCTO SELECCIONADO
+        //======================================================
+        objetoProductoSeleccionado
+                = producto;
+
+        codigoSeleccionado
+                = producto.getCodigo();
+
+        productoSeleccionado
+                = producto.getNombre();
+
+        //======================================================
+        // PRECIO
+        //======================================================
+        if (producto.getPrecioVenta() != null) {
+
+            precioSeleccionado
+                    = producto
+                            .getPrecioVenta()
+                            .doubleValue();
+
+        } else {
+
+            precioSeleccionado = 0;
+        }
+
+        // El stock real lo resolveremos según depósito.
+        stockSeleccionado = 0;
 
         seleccionado = true;
 
         dispose();
     }
 
+    //==========================================================
+// FILTRAR PRODUCTOS
+//==========================================================
     private void filtrar() {
 
-        String texto =
-                txtBuscar
-                        .getText()
-                        .trim()
-                        .toLowerCase();
+        String texto
+                = normalizar(
+                        txtBuscar
+                                .getText()
+                                .trim()
+                );
 
-        cargarDatosPrueba();
-
+        //======================================================
+        // SIN TEXTO -> MOSTRAR TODOS
+        //======================================================
         if (texto.isEmpty()) {
+
+            mostrarProductos(
+                    productosActivos
+            );
+
             return;
         }
 
-        for (int i =
-                modeloTabla.getRowCount() - 1;
-             i >= 0;
-             i--) {
+        //======================================================
+        // FILTRAR
+        //======================================================
+        List<Producto> filtrados
+                = new ArrayList<>();
 
-            String codigo =
-                    modeloTabla
-                            .getValueAt(
-                                    i,
-                                    0
-                            )
-                            .toString()
-                            .toLowerCase();
+        for (Producto producto : productosActivos) {
 
-            String producto =
-                    modeloTabla
-                            .getValueAt(
-                                    i,
-                                    1
-                            )
-                            .toString()
-                            .toLowerCase();
+            String codigo
+                    = normalizar(
+                            producto.getCodigo()
+                    );
 
-            String marca =
-                    modeloTabla
-                            .getValueAt(
-                                    i,
-                                    2
-                            )
-                            .toString()
-                            .toLowerCase();
+            String codigoInterno
+                    = normalizar(
+                            producto.getCodigoInterno()
+                    );
 
-            if (!codigo.contains(texto)
-                    && !producto.contains(texto)
-                    && !marca.contains(texto)) {
+            String codigoBarra
+                    = normalizar(
+                            producto.getCodigoBarra()
+                    );
 
-                modeloTabla.removeRow(i);
+            String nombre
+                    = normalizar(
+                            producto.getNombre()
+                    );
+
+            //==================================================
+            // MARCA
+            //==================================================
+            String marca = "";
+
+            if (producto.getMarca() != null) {
+
+                marca = normalizar(
+                        producto
+                                .getMarca()
+                                .getNombre()
+                );
+            }
+
+            //==================================================
+            // CATEGORÍA
+            //==================================================
+            String categoria = "";
+
+            if (producto.getCategoria() != null) {
+
+                categoria = normalizar(
+                        producto
+                                .getCategoria()
+                                .getNombre()
+                );
+            }
+
+            //==================================================
+            // COINCIDENCIA
+            //==================================================
+            if (codigo.contains(texto)
+                    || codigoInterno.contains(texto)
+                    || codigoBarra.contains(texto)
+                    || nombre.contains(texto)
+                    || marca.contains(texto)
+                    || categoria.contains(texto)) {
+
+                filtrados.add(
+                        producto
+                );
             }
         }
+
+        mostrarProductos(
+                filtrados
+        );
+    }
+
+//==========================================================
+// NORMALIZAR TEXTO PARA BÚSQUEDA
+//==========================================================
+    private String normalizar(
+            String texto) {
+
+        if (texto == null) {
+            return "";
+        }
+
+        String normalizado
+                = Normalizer.normalize(
+                        texto,
+                        Normalizer.Form.NFD
+                );
+
+        normalizado
+                = normalizado.replaceAll(
+                        "\\p{M}",
+                        ""
+                );
+
+        return normalizado
+                .toLowerCase()
+                .trim();
     }
 
     public boolean isSeleccionado() {
@@ -654,6 +829,11 @@ public class DialogoBuscarProducto extends JDialog {
 
     public String getCodigoSeleccionado() {
         return codigoSeleccionado;
+    }
+
+    public Producto getObjetoProductoSeleccionado() {
+
+        return objetoProductoSeleccionado;
     }
 
     public String getProductoSeleccionado() {
@@ -673,8 +853,8 @@ public class DialogoBuscarProducto extends JDialog {
             Color color,
             int ancho) {
 
-        JButton boton =
-                new JButton(
+        JButton boton
+                = new JButton(
                         texto
                 );
 

@@ -6,6 +6,10 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import model.Proveedor;
+import services.ProveedorService;
+
+import java.util.List;
 
 public class DialogoBuscarProveedor extends JDialog {
 
@@ -37,28 +41,34 @@ public class DialogoBuscarProveedor extends JDialog {
     private boolean seleccionado = false;
 
     //==========================================================
+// SERVICIOS
+//==========================================================
+    private final ProveedorService proveedorService
+            = new ProveedorService();
+
+    //==========================================================
     // COLORES
     //==========================================================
-    private final Color AZUL_OSCURO =
-            new Color(15, 50, 110);
+    private final Color AZUL_OSCURO
+            = new Color(15, 50, 110);
 
-    private final Color AZUL =
-            new Color(25, 70, 145);
+    private final Color AZUL
+            = new Color(25, 70, 145);
 
-    private final Color VERDE =
-            new Color(25, 135, 84);
+    private final Color VERDE
+            = new Color(25, 135, 84);
 
-    private final Color GRIS =
-            new Color(110, 120, 135);
+    private final Color GRIS
+            = new Color(110, 120, 135);
 
-    private final Color FONDO =
-            new Color(245, 247, 250);
+    private final Color FONDO
+            = new Color(245, 247, 250);
 
-    private final Color BORDE =
-            new Color(215, 222, 232);
+    private final Color BORDE
+            = new Color(215, 222, 232);
 
-    private final Color TEXTO_SECUNDARIO =
-            new Color(100, 110, 125);
+    private final Color TEXTO_SECUNDARIO
+            = new Color(100, 110, 125);
 
     //==========================================================
     // CONSTRUCTOR
@@ -69,7 +79,7 @@ public class DialogoBuscarProveedor extends JDialog {
 
         inicializarComponentes();
         construirDialogo();
-        cargarDatosPrueba();
+        cargarProveedores();
         configurarEventos();
 
         setModal(true);
@@ -89,10 +99,10 @@ public class DialogoBuscarProveedor extends JDialog {
                         470
                 )
         );
-        
-         EstiloBotones.corregirBotones(
+
+        EstiloBotones.corregirBotones(
                 getContentPane()
-    );
+        );
         setLocationRelativeTo(parent);
 
         setResizable(true);
@@ -105,22 +115,22 @@ public class DialogoBuscarProveedor extends JDialog {
 
         txtBuscar = new JTextField();
 
-        btnBuscar =
-                crearBoton(
+        btnBuscar
+                = crearBoton(
                         "Buscar",
                         AZUL,
                         100
                 );
 
-        btnCancelar =
-                crearBoton(
+        btnCancelar
+                = crearBoton(
                         "Cancelar",
                         GRIS,
                         120
                 );
 
-        btnSeleccionar =
-                crearBoton(
+        btnSeleccionar
+                = crearBoton(
                         "Seleccionar",
                         VERDE,
                         140
@@ -134,8 +144,8 @@ public class DialogoBuscarProveedor extends JDialog {
     //==========================================================
     private void inicializarTabla() {
 
-        modeloTabla =
-                new DefaultTableModel(
+        modeloTabla
+                = new DefaultTableModel(
                         new Object[]{
                             "ID",
                             "CUIT",
@@ -156,8 +166,8 @@ public class DialogoBuscarProveedor extends JDialog {
             }
         };
 
-        tablaProveedores =
-                new JTable(modeloTabla);
+        tablaProveedores
+                = new JTable(modeloTabla);
 
         tablaProveedores.setSelectionMode(
                 ListSelectionModel.SINGLE_SELECTION
@@ -220,8 +230,8 @@ public class DialogoBuscarProveedor extends JDialog {
     //==========================================================
     private void aplicarHeaderAzul() {
 
-        DefaultTableCellRenderer renderer =
-                new DefaultTableCellRenderer() {
+        DefaultTableCellRenderer renderer
+                = new DefaultTableCellRenderer() {
 
             @Override
             public Component getTableCellRendererComponent(
@@ -232,17 +242,16 @@ public class DialogoBuscarProveedor extends JDialog {
                     int row,
                     int column) {
 
-                JLabel label =
-                        (JLabel)
-                                super
-                                        .getTableCellRendererComponent(
-                                                table,
-                                                value,
-                                                isSelected,
-                                                hasFocus,
-                                                row,
-                                                column
-                                        );
+                JLabel label
+                        = (JLabel) super
+                                .getTableCellRendererComponent(
+                                        table,
+                                        value,
+                                        isSelected,
+                                        hasFocus,
+                                        row,
+                                        column
+                                );
 
                 label.setBackground(
                         AZUL_OSCURO
@@ -271,8 +280,8 @@ public class DialogoBuscarProveedor extends JDialog {
         };
 
         for (int i = 0;
-             i < tablaProveedores.getColumnCount();
-             i++) {
+                i < tablaProveedores.getColumnCount();
+                i++) {
 
             tablaProveedores
                     .getColumnModel()
@@ -300,8 +309,8 @@ public class DialogoBuscarProveedor extends JDialog {
         //======================================================
         // HEADER
         //======================================================
-        JPanel header =
-                new JPanel();
+        JPanel header
+                = new JPanel();
 
         header.setLayout(
                 new BoxLayout(
@@ -323,8 +332,8 @@ public class DialogoBuscarProveedor extends JDialog {
                 )
         );
 
-        JLabel lblTitulo =
-                new JLabel(
+        JLabel lblTitulo
+                = new JLabel(
                         "BUSCAR PROVEEDOR"
                 );
 
@@ -340,8 +349,8 @@ public class DialogoBuscarProveedor extends JDialog {
                 AZUL_OSCURO
         );
 
-        JLabel lblSubtitulo =
-                new JLabel(
+        JLabel lblSubtitulo
+                = new JLabel(
                         "Busque por razón social, nombre comercial o CUIT"
                 );
 
@@ -373,8 +382,8 @@ public class DialogoBuscarProveedor extends JDialog {
         //======================================================
         // CENTRO
         //======================================================
-        JPanel centro =
-                new JPanel(
+        JPanel centro
+                = new JPanel(
                         new BorderLayout(
                                 0,
                                 15
@@ -397,8 +406,8 @@ public class DialogoBuscarProveedor extends JDialog {
         //======================================================
         // BUSCADOR
         //======================================================
-        JPanel panelBuscar =
-                new JPanel(
+        JPanel panelBuscar
+                = new JPanel(
                         new BorderLayout(
                                 10,
                                 0
@@ -423,8 +432,8 @@ public class DialogoBuscarProveedor extends JDialog {
                 )
         );
 
-        JLabel lblBuscar =
-                new JLabel(
+        JLabel lblBuscar
+                = new JLabel(
                         "Buscar:"
                 );
 
@@ -466,8 +475,8 @@ public class DialogoBuscarProveedor extends JDialog {
         //======================================================
         // TABLA
         //======================================================
-        JScrollPane scroll =
-                new JScrollPane(
+        JScrollPane scroll
+                = new JScrollPane(
                         tablaProveedores
                 );
 
@@ -490,8 +499,8 @@ public class DialogoBuscarProveedor extends JDialog {
         //======================================================
         // FOOTER
         //======================================================
-        JPanel footer =
-                new JPanel(
+        JPanel footer
+                = new JPanel(
                         new FlowLayout(
                                 FlowLayout.RIGHT,
                                 10,
@@ -530,51 +539,67 @@ public class DialogoBuscarProveedor extends JDialog {
     //==========================================================
     // DATOS PRUEBA
     //==========================================================
-    private void cargarDatosPrueba() {
+    //==========================================================
+// CARGAR PROVEEDORES ACTIVOS
+//==========================================================
+    private void cargarProveedores() {
 
         modeloTabla.setRowCount(0);
 
-        modeloTabla.addRow(
-                new Object[]{
-                    1,
-                    "30-12345678-9",
-                    "Distribuidora Norte",
-                    "Juan Pérez",
-                    "3624-123456",
-                    "Activo"
-                }
-        );
+        List<Proveedor> proveedores
+                = proveedorService.listarActivos();
+
+        for (Proveedor proveedor : proveedores) {
+
+            agregarProveedorTabla(proveedor);
+        }
+    }
+
+//==========================================================
+// AGREGAR PROVEEDOR A LA TABLA
+//==========================================================
+    private void agregarProveedorTabla(
+            Proveedor proveedor) {
+
+        String contacto
+                = proveedor.getPersonaContacto();
+
+        String telefono
+                = proveedor.getTelefono();
+
+        if (contacto == null) {
+            contacto = "";
+        }
+
+        if (telefono == null) {
+            telefono = "";
+        }
+
+        String razonSocial
+                = proveedor.getRazonSocial();
+
+        // Si tiene nombre comercial, también lo mostramos.
+        if (proveedor.getNombreComercial() != null
+                && !proveedor.getNombreComercial()
+                        .trim()
+                        .isEmpty()) {
+
+            razonSocial
+                    = proveedor.getNombreComercial()
+                    + " - "
+                    + proveedor.getRazonSocial();
+        }
 
         modeloTabla.addRow(
                 new Object[]{
-                    2,
-                    "30-87654321-0",
-                    "Coca Cola FEMSA",
-                    "María Gómez",
-                    "3624-555555",
+                    proveedor.getIdProveedor(),
+                    proveedor.getCuit() == null
+                    ? ""
+                    : proveedor.getCuit(),
+                    razonSocial,
+                    contacto,
+                    telefono,
                     "Activo"
-                }
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    3,
-                    "30-45678912-3",
-                    "Mayorista Central",
-                    "Carlos López",
-                    "3624-777777",
-                    "Activo"
-                }
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    4,
-                    "30-11223344-5",
-                    "Distribuciones NEA",
-                    "Ana Romero",
-                    "3624-999999",
-                    "Inactivo"
                 }
         );
     }
@@ -590,6 +615,34 @@ public class DialogoBuscarProveedor extends JDialog {
 
             dispose();
 
+        });
+
+        //======================================================
+// FILTRO EN TIEMPO REAL
+//======================================================
+        txtBuscar.getDocument().addDocumentListener(
+                new javax.swing.event.DocumentListener() {
+
+            @Override
+            public void insertUpdate(
+                    javax.swing.event.DocumentEvent e) {
+
+                filtrarProveedor();
+            }
+
+            @Override
+            public void removeUpdate(
+                    javax.swing.event.DocumentEvent e) {
+
+                filtrarProveedor();
+            }
+
+            @Override
+            public void changedUpdate(
+                    javax.swing.event.DocumentEvent e) {
+
+                filtrarProveedor();
+            }
         });
 
         btnSeleccionar.addActionListener(e -> {
@@ -628,107 +681,129 @@ public class DialogoBuscarProveedor extends JDialog {
     //==========================================================
     // SELECCIONAR
     //==========================================================
-    private void seleccionarProveedor() {
+   //==========================================================
+// SELECCIONAR PROVEEDOR
+//==========================================================
 
-        int fila =
-                tablaProveedores
-                        .getSelectedRow();
+private void seleccionarProveedor() {
 
-        if (fila == -1) {
+    int fila
+            = tablaProveedores.getSelectedRow();
 
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Seleccione un proveedor.",
-                    "Proveedor",
-                    JOptionPane.WARNING_MESSAGE
-            );
+    if (fila == -1) {
 
-            return;
-        }
+        JOptionPane.showMessageDialog(
+                this,
+                "Seleccione un proveedor.",
+                "Proveedor",
+                JOptionPane.WARNING_MESSAGE
+        );
 
-        idSeleccionado =
-                Integer.parseInt(
-                        modeloTabla
-                                .getValueAt(
-                                        fila,
-                                        0
-                                )
-                                .toString()
-                );
-
-        cuitSeleccionado =
-                modeloTabla
-                        .getValueAt(
-                                fila,
-                                1
-                        )
-                        .toString();
-
-        razonSocialSeleccionada =
-                modeloTabla
-                        .getValueAt(
-                                fila,
-                                2
-                        )
-                        .toString();
-
-        seleccionado = true;
-
-        dispose();
+        return;
     }
 
+
+    //======================================================
+    // OBTENER ID
+    //======================================================
+
+    int idProveedor
+            = Integer.parseInt(
+                    modeloTabla
+                            .getValueAt(
+                                    fila,
+                                    0
+                            )
+                            .toString()
+            );
+
+
+    //======================================================
+    // RECUPERAR OBJETO REAL
+    //======================================================
+
+    Proveedor proveedor
+            = proveedorService.buscarPorId(
+                    idProveedor
+            );
+
+
+    if (proveedor == null) {
+
+        JOptionPane.showMessageDialog(
+                this,
+                "No se pudo recuperar el proveedor seleccionado.",
+                "Proveedor",
+                JOptionPane.ERROR_MESSAGE
+        );
+
+        return;
+    }
+
+
+    //======================================================
+    // GUARDAR RESULTADO
+    //======================================================
+
+    idSeleccionado
+            = proveedor.getIdProveedor();
+
+    razonSocialSeleccionada
+            = proveedor.getRazonSocial();
+
+    cuitSeleccionado
+            = proveedor.getCuit();
+
+    seleccionado = true;
+
+
+    //======================================================
+    // CERRAR
+    //======================================================
+
+    dispose();
+}
     //==========================================================
     // FILTRO VISUAL TEMPORAL
     //==========================================================
+    //==========================================================
+// FILTRAR PROVEEDORES
+//==========================================================
     private void filtrarProveedor() {
 
-        String texto =
-                txtBuscar
+        String texto
+                = txtBuscar
                         .getText()
-                        .trim()
-                        .toLowerCase();
+                        .trim();
 
-        /*
-         * Por ahora recargamos datos de prueba.
-         * Cuando tengamos MySQL esto será:
-         *
-         * proveedorDao.buscar(texto)
-         */
+        modeloTabla.setRowCount(0);
 
-        cargarDatosPrueba();
+        //======================================================
+        // SIN BÚSQUEDA -> MOSTRAR TODOS LOS ACTIVOS
+        //======================================================
+        List<Proveedor> proveedores;
 
         if (texto.isEmpty()) {
-            return;
+
+            proveedores
+                    = proveedorService.listarActivos();
+
+        } else {
+
+            proveedores
+                    = proveedorService.buscarActivos(
+                            texto
+                    );
         }
 
-        for (int i =
-                modeloTabla.getRowCount() - 1;
-             i >= 0;
-             i--) {
+        //======================================================
+        // MOSTRAR RESULTADOS
+        //======================================================
+        for (Proveedor proveedor : proveedores) {
 
-            String cuit =
-                    modeloTabla
-                            .getValueAt(
-                                    i,
-                                    1
-                            )
-                            .toString()
-                            .toLowerCase();
-
-            String razonSocial =
-                    modeloTabla
-                            .getValueAt(
-                                    i,
-                                    2
-                            )
-                            .toString()
-                            .toLowerCase();
-
-            if (!cuit.contains(texto)
-                    && !razonSocial.contains(texto)) {
-
-                modeloTabla.removeRow(i);
-            }
+            agregarProveedorTabla(
+                    proveedor
+            );
         }
     }
 
@@ -763,8 +838,8 @@ public class DialogoBuscarProveedor extends JDialog {
             Color color,
             int ancho) {
 
-        JButton boton =
-                new JButton(texto);
+        JButton boton
+                = new JButton(texto);
 
         boton.setPreferredSize(
                 new Dimension(

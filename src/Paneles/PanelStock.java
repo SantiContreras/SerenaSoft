@@ -49,6 +49,17 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import rojeru_san.rsbutton.RSButtonMetro;
 
+import Dao.StockProductoDao;
+
+import model.StockProducto;
+import model.Producto;
+import model.Deposito;
+
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.util.List;
+import java.util.Locale;
+
 /**
  *
  * @author santi
@@ -151,6 +162,14 @@ public class PanelStock extends javax.swing.JPanel {
     private DefaultTableModel modeloHistorial;
 
     //==========================================================
+// DATOS STOCK
+//==========================================================
+    private final StockProductoDao stockProductoDao
+            = new StockProductoDao();
+
+    private List<StockProducto> stockCargado;
+
+    //==========================================================
     // CONSTRUCTOR
     //==========================================================
     public PanelStock() {
@@ -167,7 +186,7 @@ public class PanelStock extends javax.swing.JPanel {
 
         construirPanel();
 
-        cargarDatosPrueba();
+        cargarStock();
 
         configurarEventos();
     }
@@ -310,6 +329,7 @@ public class PanelStock extends javax.swing.JPanel {
                             "Producto",
                             "Marca",
                             "Categoría",
+                            "Depósito",
                             "Stock",
                             "Mínimo",
                             "Compra",
@@ -1438,125 +1458,206 @@ public class PanelStock extends javax.swing.JPanel {
     //==========================================================
     // DATOS DE PRUEBA
     //==========================================================
-    private void cargarDatosPrueba() {
+    //==========================================================
+// CARGAR STOCK REAL
+//==========================================================
+    private void cargarStock() {
 
-        modeloStock.setRowCount(
-                0
+        modeloStock.setRowCount(0);
+
+        stockCargado
+                = stockProductoDao.listarTodos();
+
+        BigDecimal stockTotal
+                = BigDecimal.ZERO;
+
+        BigDecimal valorInventario
+                = BigDecimal.ZERO;
+
+        int articulos
+                = 0;
+
+        for (StockProducto stock : stockCargado) {
+
+            if (stock == null
+                    || stock.getProducto() == null
+                    || stock.getDeposito() == null) {
+
+                continue;
+            }
+
+            Producto producto
+                    = stock.getProducto();
+
+            Deposito deposito
+                    = stock.getDeposito();
+
+            BigDecimal cantidad
+                    = stock.getCantidad() != null
+                    ? stock.getCantidad()
+                    : BigDecimal.ZERO;
+
+            BigDecimal minimo
+                    = producto.getStockMinimo() != null
+                    ? producto.getStockMinimo()
+                    : BigDecimal.ZERO;
+
+            BigDecimal precioCompra
+                    = producto.getPrecioCompra() != null
+                    ? producto.getPrecioCompra()
+                    : BigDecimal.ZERO;
+
+            BigDecimal precioVenta
+                    = producto.getPrecioVenta() != null
+                    ? producto.getPrecioVenta()
+                    : BigDecimal.ZERO;
+
+            String marca
+                    = producto.getMarca() != null
+                    ? producto.getMarca().getNombre()
+                    : "-";
+
+            String categoria
+                    = producto.getCategoria() != null
+                    ? producto.getCategoria().getNombre()
+                    : "-";
+
+            String estado
+                    = calcularEstadoStock(
+                            cantidad,
+                            minimo
+                    );
+
+            modeloStock.addRow(
+                    new Object[]{
+                        producto.getCodigo(),
+                        producto.getNombre(),
+                        marca,
+                        categoria,
+                        deposito.getNombre(),
+                        formatearCantidad(cantidad),
+                        formatearCantidad(minimo),
+                        formatearDinero(precioCompra),
+                        formatearDinero(precioVenta),
+                        estado
+                    }
+            );
+
+            articulos++;
+
+            stockTotal
+                    = stockTotal.add(
+                            cantidad
+                    );
+
+            valorInventario
+                    = valorInventario.add(
+                            cantidad.multiply(
+                                    precioCompra
+                            )
+                    );
+        }
+
+        //======================================================
+        // KPI
+        //======================================================
+        lblTotalArticulos.setText(
+                String.valueOf(
+                        articulos
+                )
         );
 
-        modeloStock.addRow(
-                new Object[]{
-                    "A0001",
-                    "Coca Cola 2.25L",
-                    "Coca Cola",
-                    "Bebidas",
-                    120,
-                    20,
-                    "$ 1.250",
-                    "$ 1.850",
-                    "Disponible"
-                }
+        lblTotalStock.setText(
+                formatearCantidad(
+                        stockTotal
+                )
         );
 
-        modeloStock.addRow(
-                new Object[]{
-                    "A0002",
-                    "Fanta 2.25L",
-                    "Coca Cola",
-                    "Bebidas",
-                    8,
-                    10,
-                    "$ 1.180",
-                    "$ 1.790",
-                    "Bajo Stock"
-                }
-        );
-
-        modeloStock.addRow(
-                new Object[]{
-                    "A0003",
-                    "Sprite 2.25L",
-                    "Coca Cola",
-                    "Bebidas",
-                    0,
-                    10,
-                    "$ 1.150",
-                    "$ 1.780",
-                    "Sin Stock"
-                }
-        );
-
-        modeloStock.addRow(
-                new Object[]{
-                    "A0004",
-                    "Yerba Playadito 1Kg",
-                    "Playadito",
-                    "Almacén",
-                    55,
-                    15,
-                    "$ 3.800",
-                    "$ 4.900",
-                    "Disponible"
-                }
-        );
-
-        modeloStock.addRow(
-                new Object[]{
-                    "A0005",
-                    "Arroz Gallo Oro",
-                    "Gallo",
-                    "Almacén",
-                    42,
-                    12,
-                    "$ 1.100",
-                    "$ 1.650",
-                    "Disponible"
-                }
-        );
-
-        modeloStock.addRow(
-                new Object[]{
-                    "A0006",
-                    "Azúcar Ledesma",
-                    "Ledesma",
-                    "Almacén",
-                    7,
-                    15,
-                    "$ 980",
-                    "$ 1.450",
-                    "Bajo Stock"
-                }
-        );
-
-        modeloStock.addRow(
-                new Object[]{
-                    "A0007",
-                    "Aceite Natura 900ml",
-                    "Natura",
-                    "Almacén",
-                    18,
-                    10,
-                    "$ 2.400",
-                    "$ 3.200",
-                    "Disponible"
-                }
-        );
-
-        modeloStock.addRow(
-                new Object[]{
-                    "A0008",
-                    "Harina Favorita",
-                    "Favorita",
-                    "Almacén",
-                    90,
-                    20,
-                    "$ 900",
-                    "$ 1.300",
-                    "Disponible"
-                }
+        lblValorInventario.setText(
+                formatearDinero(
+                        valorInventario
+                )
         );
 
         limpiarDetalle();
+    }
+
+//==========================================================
+// FORMATEAR DINERO
+//==========================================================
+    private String formatearDinero(
+            BigDecimal valor) {
+
+        if (valor == null) {
+
+            valor = BigDecimal.ZERO;
+        }
+
+        NumberFormat formato
+                = NumberFormat.getCurrencyInstance(
+                        new Locale(
+                                "es",
+                                "AR"
+                        )
+                );
+
+        formato.setMaximumFractionDigits(
+                2
+        );
+
+        formato.setMinimumFractionDigits(
+                0
+        );
+
+        return formato.format(
+                valor
+        );
+    }
+
+//==========================================================
+// FORMATEAR CANTIDAD
+//==========================================================
+    private String formatearCantidad(
+            BigDecimal cantidad) {
+
+        if (cantidad == null) {
+
+            return "0";
+        }
+
+        BigDecimal normalizada
+                = cantidad.stripTrailingZeros();
+
+        return normalizada.toPlainString();
+    }
+
+//==========================================================
+// CALCULAR ESTADO STOCK
+//==========================================================
+    private String calcularEstadoStock(
+            BigDecimal cantidad,
+            BigDecimal minimo) {
+
+        if (cantidad == null
+                || cantidad.compareTo(
+                        BigDecimal.ZERO
+                ) <= 0) {
+
+            return "Sin Stock";
+        }
+
+        if (minimo != null
+                && minimo.compareTo(
+                        BigDecimal.ZERO
+                ) > 0
+                && cantidad.compareTo(
+                        minimo
+                ) <= 0) {
+
+            return "Bajo Stock";
+        }
+
+        return "Disponible";
     }
 
     //==========================================================
@@ -1594,6 +1695,34 @@ public class PanelStock extends javax.swing.JPanel {
 
                     abrirModificar();
                 }
+            }
+        });
+
+        //======================================================
+// BUSCADOR EN TIEMPO REAL
+//======================================================
+        txtBuscar.getDocument().addDocumentListener(
+                new javax.swing.event.DocumentListener() {
+
+            @Override
+            public void insertUpdate(
+                    javax.swing.event.DocumentEvent e) {
+
+                filtrarTabla();
+            }
+
+            @Override
+            public void removeUpdate(
+                    javax.swing.event.DocumentEvent e) {
+
+                filtrarTabla();
+            }
+
+            @Override
+            public void changedUpdate(
+                    javax.swing.event.DocumentEvent e) {
+
+                filtrarTabla();
             }
         });
 
@@ -1661,7 +1790,7 @@ public class PanelStock extends javax.swing.JPanel {
         //======================================================
         btnActualizar.addActionListener(e -> {
 
-            cargarDatosPrueba();
+            cargarStock();
 
             lblTotalArticulos.setText(
                     "156"
@@ -1984,6 +2113,12 @@ public class PanelStock extends javax.swing.JPanel {
     //==========================================================
     // FILTRO VISUAL DE PRUEBA
     //==========================================================
+    //==========================================================
+// FILTRAR TABLA
+//==========================================================
+    //==========================================================
+// FILTRAR TABLA
+//==========================================================
     private void filtrarTabla() {
 
         String buscar
@@ -1992,55 +2127,114 @@ public class PanelStock extends javax.swing.JPanel {
                         .trim()
                         .toLowerCase();
 
-        // Volvemos a cargar la lista completa.
-        cargarDatosPrueba();
-
+        //======================================================
+        // SI BORRÓ LA BÚSQUEDA, VOLVER A MOSTRAR TODO
+        //======================================================
         if (buscar.isEmpty()) {
+
+            cargarStock();
 
             return;
         }
 
-        for (int i
-                = modeloStock.getRowCount() - 1;
+        //======================================================
+        // RECARGAR DATOS COMPLETOS
+        //======================================================
+        cargarStock();
+
+        //======================================================
+        // SEPARAR PALABRAS
+        // Ejemplo: "jamon crudo"
+        //          -> "jamon" + "crudo"
+        //======================================================
+        String[] palabras
+                = buscar.split("\\s+");
+
+        //======================================================
+        // RECORRER DESDE ABAJO
+        //======================================================
+        for (int i = modeloStock.getRowCount() - 1;
                 i >= 0;
                 i--) {
 
             String codigo
-                    = modeloStock
-                            .getValueAt(
-                                    i,
-                                    0
-                            )
-                            .toString()
-                            .toLowerCase();
+                    = valorModelo(i, 0);
 
             String producto
-                    = modeloStock
-                            .getValueAt(
-                                    i,
-                                    1
-                            )
-                            .toString()
-                            .toLowerCase();
+                    = valorModelo(i, 1);
 
             String marca
-                    = modeloStock
-                            .getValueAt(
-                                    i,
-                                    2
-                            )
-                            .toString()
-                            .toLowerCase();
+                    = valorModelo(i, 2);
 
-            if (!codigo.contains(buscar)
-                    && !producto.contains(buscar)
-                    && !marca.contains(buscar)) {
+            String categoria
+                    = valorModelo(i, 3);
 
-                modeloStock.removeRow(
-                        i
-                );
+            String deposito
+                    = valorModelo(i, 4);
+
+            //==================================================
+            // UNIFICAR INFORMACIÓN DE LA FILA
+            //==================================================
+            String contenidoFila
+                    = codigo
+                    + " "
+                    + producto
+                    + " "
+                    + marca
+                    + " "
+                    + categoria
+                    + " "
+                    + deposito;
+
+            //==================================================
+            // TODAS LAS PALABRAS DEBEN APARECER
+            //==================================================
+            boolean coincide
+                    = true;
+
+            for (String palabra : palabras) {
+
+                if (!contenidoFila.contains(palabra)) {
+
+                    coincide
+                            = false;
+
+                    break;
+                }
+            }
+
+            //==================================================
+            // SI NO COINCIDE, SACARLA DEL MODELO
+            //==================================================
+            if (!coincide) {
+
+                modeloStock.removeRow(i);
             }
         }
+    }
+
+//==========================================================
+// OBTENER VALOR DEL MODELO COMO TEXTO
+//==========================================================
+    private String valorModelo(
+            int fila,
+            int columna) {
+
+        Object valor
+                = modeloStock.getValueAt(
+                        fila,
+                        columna
+                );
+
+        if (valor == null) {
+
+            return "";
+        }
+
+        return valor
+                .toString()
+                .trim()
+                .toLowerCase();
     }
 
     //==========================================================
