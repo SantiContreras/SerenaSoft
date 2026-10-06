@@ -34,8 +34,15 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import Dao.DepositoDao;
+import Dao.ProveedorDao;
+import model.Compra;
+import model.Deposito;
 import model.Producto;
+import model.Proveedor;
 import model.UnidadMedida;
+import services.CompraService;
+import services.ResultadoOperacion;
 
 public class DialogoEntradaManual extends JDialog {
 
@@ -66,6 +73,16 @@ public class DialogoEntradaManual extends JDialog {
     private JLabel lblIngresoStock;
     private JLabel lblUnidadCantidad;
     private JLabel lblCostoUnidad;
+
+    // Presentación utilizada en ESTA compra
+    private JComboBox<String> cmbFormaCompra;
+    private JSpinner spnFactorCompra;
+    private JLabel lblFactorCompraTitulo;
+
+    // Servicios / DAO necesarios para registrar la entrada real
+    private final CompraService compraService = new CompraService();
+    private final ProveedorDao proveedorDao = new ProveedorDao();
+    private final DepositoDao depositoDao = new DepositoDao();
 
     private Producto productoSeleccionado;
     private final List<DetalleEntradaTemporal> detalles = new ArrayList<>();
@@ -210,6 +227,21 @@ public class DialogoEntradaManual extends JDialog {
         lblUnidadCantidad = crearValorInformativo("-");
         lblCostoUnidad = crearValorInformativo("Costo");
 
+        cmbFormaCompra = new JComboBox<>();
+        cmbFormaCompra.setPreferredSize(new Dimension(145, 38));
+        cmbFormaCompra.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        cmbFormaCompra.setBackground(Color.WHITE);
+
+        lblFactorCompraTitulo = crearLabel("Unidades por presentación");
+
+        spnFactorCompra = new JSpinner(
+                new SpinnerNumberModel(1.000, 0.001, 999999.000, 1.000)
+        );
+        spnFactorCompra.setPreferredSize(new Dimension(125, 38));
+        spnFactorCompra.setEditor(
+                new JSpinner.NumberEditor(spnFactorCompra, "0.###")
+        );
+
         spnCantidad
                 = new JSpinner(
                         new SpinnerNumberModel(
@@ -289,6 +321,12 @@ public class DialogoEntradaManual extends JDialog {
         );
 
         inicializarTabla();
+
+        aplicarEstiloCampo(txtProveedor);
+        aplicarEstiloCampo(txtNumeroFactura);
+        aplicarEstiloCampo(txtFecha);
+        aplicarEstiloCampo(txtBuscarProducto);
+        aplicarEstiloCampo(txtCosto);
     }
 
     //==========================================================
@@ -516,7 +554,7 @@ public class DialogoEntradaManual extends JDialog {
                 );
 
         header.setBackground(
-                Color.WHITE
+                AZUL_OSCURO
         );
 
         header.setBorder(
@@ -554,7 +592,7 @@ public class DialogoEntradaManual extends JDialog {
         );
 
         lblTitulo.setForeground(
-                AZUL_OSCURO
+                Color.WHITE
         );
 
         JLabel lblSubtitulo
@@ -571,7 +609,7 @@ public class DialogoEntradaManual extends JDialog {
         );
 
         lblSubtitulo.setForeground(
-                TEXTO_SECUNDARIO
+                new Color(215, 228, 248)
         );
 
         titulos.add(lblTitulo);
@@ -650,7 +688,7 @@ public class DialogoEntradaManual extends JDialog {
         panelProducto.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        275
+                        360
                 )
         );
 
@@ -853,84 +891,201 @@ public class DialogoEntradaManual extends JDialog {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(Color.WHITE);
         panel.setBorder(
-                BorderFactory.createTitledBorder(
+                BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(BORDE),
-                        "Agregar Producto",
-                        0, 0,
-                        new Font("Segoe UI", Font.BOLD, 15),
-                        AZUL_OSCURO
+                        new EmptyBorder(14, 16, 14, 16)
                 )
         );
 
         GridBagConstraints c = crearConstraints();
+        c.insets = new Insets(7, 7, 7, 7);
 
-        // FILA 0 - BUSCADOR
-        c.gridx = 0; c.gridy = 0; c.gridwidth = 1; c.weightx = 0;
-        c.fill = GridBagConstraints.NONE;
-        panel.add(crearLabel("Producto / Código"), c);
+        JLabel titulo = new JLabel("AGREGAR PRODUCTO");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        titulo.setForeground(AZUL_OSCURO);
+
+        JLabel ayuda = new JLabel(
+                "Seleccione el producto y cargue cómo se lo entregó el proveedor"
+        );
+        ayuda.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        ayuda.setForeground(TEXTO_SECUNDARIO);
+
+        JPanel encabezado = new JPanel();
+        encabezado.setOpaque(false);
+        encabezado.setLayout(
+                new javax.swing.BoxLayout(
+                        encabezado,
+                        javax.swing.BoxLayout.Y_AXIS
+                )
+        );
+        encabezado.add(titulo);
+        encabezado.add(javax.swing.Box.createVerticalStrut(2));
+        encabezado.add(ayuda);
+
+        c.gridx = 0; c.gridy = 0; c.gridwidth = 6;
+        c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(encabezado, c);
+
+        // BUSCADOR
+        c.gridy = 1; c.gridx = 0; c.gridwidth = 1;
+        c.weightx = 0; c.fill = GridBagConstraints.NONE;
+        panel.add(crearLabel("Producto"), c);
 
         c.gridx = 1; c.gridwidth = 4; c.weightx = 1;
         c.fill = GridBagConstraints.HORIZONTAL;
-        txtBuscarProducto.setPreferredSize(new Dimension(500, 32));
+        txtBuscarProducto.setPreferredSize(new Dimension(520, 38));
         panel.add(txtBuscarProducto, c);
 
         c.gridx = 5; c.gridwidth = 1; c.weightx = 0;
         c.fill = GridBagConstraints.NONE;
         panel.add(btnBuscarProducto, c);
 
-        // FILA 1 - PRODUCTO
-        c.gridx = 0; c.gridy = 1;
-        panel.add(crearLabel("Código"), c);
-        c.gridx = 1; panel.add(lblCodigoProducto, c);
-        c.gridx = 2; panel.add(crearLabel("Producto"), c);
-        c.gridx = 3; c.gridwidth = 2;
-        lblProductoSeleccionado.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        panel.add(lblProductoSeleccionado, c);
+        // TARJETA DEL PRODUCTO SELECCIONADO
+        JPanel tarjetaProducto = new JPanel(new BorderLayout(12, 0));
+        tarjetaProducto.setBackground(new Color(247, 249, 253));
+        tarjetaProducto.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(new Color(225, 231, 240)),
+                        new EmptyBorder(10, 12, 10, 12)
+                )
+        );
 
-        c.gridx = 5; c.gridwidth = 1;
-        JPanel stockPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        stockPanel.setOpaque(false);
-        stockPanel.add(crearLabel("Stock actual"));
+        JPanel datosProducto = new JPanel();
+        datosProducto.setOpaque(false);
+        datosProducto.setLayout(
+                new javax.swing.BoxLayout(
+                        datosProducto,
+                        javax.swing.BoxLayout.Y_AXIS
+                )
+        );
+
+        lblProductoSeleccionado.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        lblProductoSeleccionado.setForeground(AZUL_OSCURO);
+        lblCodigoProducto.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblCodigoProducto.setForeground(TEXTO_SECUNDARIO);
+
+        datosProducto.add(lblProductoSeleccionado);
+        datosProducto.add(javax.swing.Box.createVerticalStrut(3));
+        datosProducto.add(lblCodigoProducto);
+
+        JPanel stock = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 4));
+        stock.setOpaque(false);
+        stock.add(crearLabel("Stock actual:"));
+
         lblStockActual.setForeground(AZUL);
         lblStockActual.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        stockPanel.add(lblStockActual);
-        panel.add(stockPanel, c);
+        stock.add(lblStockActual);
 
-        // FILA 2 - UNIDADES Y FACTOR
-        c.gridx = 0; c.gridy = 2;
-        panel.add(crearLabel("Unidad compra"), c);
-        c.gridx = 1; panel.add(lblUnidadCompra, c);
-        c.gridx = 2; panel.add(crearLabel("Unidad stock/venta"), c);
-        c.gridx = 3; panel.add(lblUnidadVenta, c);
-        c.gridx = 4; panel.add(crearLabel("Conversión"), c);
-        c.gridx = 5; panel.add(lblFactorConversion, c);
+        tarjetaProducto.add(datosProducto, BorderLayout.CENTER);
+        tarjetaProducto.add(stock, BorderLayout.EAST);
 
-        // FILA 3 - CANTIDAD / COSTO / SUBTOTAL
-        c.gridx = 0; c.gridy = 3;
-        panel.add(crearLabel("Cantidad compra"), c);
+        c.gridx = 0; c.gridy = 2; c.gridwidth = 6;
+        c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(tarjetaProducto, c);
+
+        // CÓMO SE COMPRA
+        JLabel tituloCompra = new JLabel("¿Cómo lo estás comprando?");
+        tituloCompra.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        tituloCompra.setForeground(AZUL_OSCURO);
+
+        c.gridx = 0; c.gridy = 3; c.gridwidth = 6;
+        c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(tituloCompra, c);
+
+        c.gridy = 4; c.gridx = 0; c.gridwidth = 1;
+        c.weightx = 0; c.fill = GridBagConstraints.NONE;
+        panel.add(crearLabel("Presentación"), c);
+
         c.gridx = 1;
-        JPanel cantidadPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        panel.add(cmbFormaCompra, c);
+
+        c.gridx = 2;
+        panel.add(crearLabel("Cantidad"), c);
+
+        c.gridx = 3;
+        JPanel cantidadPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         cantidadPanel.setOpaque(false);
-        spnCantidad.setPreferredSize(new Dimension(105, 32));
+        spnCantidad.setPreferredSize(new Dimension(135, 38));
         cantidadPanel.add(spnCantidad);
+        lblUnidadCantidad.setFont(new Font("Segoe UI", Font.BOLD, 13));
         cantidadPanel.add(lblUnidadCantidad);
         panel.add(cantidadPanel, c);
 
-        c.gridx = 2; panel.add(lblCostoUnidad, c);
-        c.gridx = 3;
-        txtCosto.setPreferredSize(new Dimension(140, 32));
-        panel.add(txtCosto, c);
-        c.gridx = 4; panel.add(crearLabel("Subtotal"), c);
-        c.gridx = 5; panel.add(lblSubtotalItem, c);
+        c.gridx = 4;
+        panel.add(lblFactorCompraTitulo, c);
 
-        // FILA 4 - RESULTADO DE CONVERSIÓN
-        c.gridx = 0; c.gridy = 4;
-        panel.add(crearLabel("Ingreso a stock"), c);
-        c.gridx = 1; c.gridwidth = 3;
+        c.gridx = 5;
+        panel.add(spnFactorCompra, c);
+
+        // RESUMEN GRANDE
+        JPanel resumenIngreso = new JPanel(
+                new FlowLayout(FlowLayout.CENTER, 10, 7)
+        );
+        resumenIngreso.setBackground(new Color(236, 248, 241));
+        resumenIngreso.setBorder(
+                BorderFactory.createLineBorder(new Color(196, 229, 209))
+        );
+
+        JLabel lblIngresan = new JLabel("INGRESAN AL STOCK:");
+        lblIngresan.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        lblIngresan.setForeground(new Color(55, 100, 75));
+
+        lblIngresoStock.setFont(new Font("Segoe UI", Font.BOLD, 20));
         lblIngresoStock.setForeground(VERDE);
-        lblIngresoStock.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        panel.add(lblIngresoStock, c);
-        c.gridx = 5; c.gridwidth = 1;
+
+        resumenIngreso.add(lblIngresan);
+        resumenIngreso.add(lblIngresoStock);
+
+        c.gridx = 0; c.gridy = 5; c.gridwidth = 6;
+        c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(resumenIngreso, c);
+
+        // PRECIO
+        c.gridy = 6; c.gridx = 0; c.gridwidth = 1;
+        c.weightx = 0; c.fill = GridBagConstraints.NONE;
+        panel.add(lblCostoUnidad, c);
+
+        c.gridx = 1;
+
+        JPanel panelCosto = new JPanel(
+                new FlowLayout(
+                        FlowLayout.LEFT,
+                        5,
+                        0
+                )
+        );
+        panelCosto.setOpaque(false);
+
+        JLabel simboloMoneda = new JLabel("$");
+        simboloMoneda.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        16
+                )
+        );
+        simboloMoneda.setForeground(VERDE);
+
+        txtCosto.setPreferredSize(
+                new Dimension(
+                        145,
+                        38
+                )
+        );
+
+        panelCosto.add(simboloMoneda);
+        panelCosto.add(txtCosto);
+
+        panel.add(panelCosto, c);
+
+        c.gridx = 2;
+        panel.add(crearLabel("Subtotal"), c);
+
+        c.gridx = 3;
+        lblSubtotalItem.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        panel.add(lblSubtotalItem, c);
+
+        c.gridx = 5;
         panel.add(btnAgregarProducto, c);
 
         return panel;
@@ -1219,6 +1374,7 @@ public class DialogoEntradaManual extends JDialog {
         spnCantidad.addChangeListener(e -> {
 
             actualizarSubtotalItem();
+            actualizarIngresoStock();
 
         });
 
@@ -1250,6 +1406,26 @@ public class DialogoEntradaManual extends JDialog {
                         actualizarSubtotalItem();
                     }
                 });
+
+        //======================================================
+        // FORMA DE COMPRA
+        //======================================================
+        cmbFormaCompra.addActionListener(e -> {
+
+            if (productoSeleccionado != null) {
+                aplicarFormaCompraSeleccionada();
+            }
+
+        });
+
+        //======================================================
+        // FACTOR DE ESTA COMPRA
+        //======================================================
+        spnFactorCompra.addChangeListener(e -> {
+
+            actualizarIngresoStock();
+
+        });
 
         //======================================================
         // AGREGAR PRODUCTO
@@ -1319,14 +1495,7 @@ public class DialogoEntradaManual extends JDialog {
                 return;
             }
 
-            javax.swing.JOptionPane
-                    .showMessageDialog(
-                            this,
-                            "Entrada preparada para registrar.\n"
-                            + "Más adelante se conectará con la base de datos.",
-                            "Entrada de Mercadería",
-                            javax.swing.JOptionPane.INFORMATION_MESSAGE
-                    );
+            confirmarEntrada();
 
         });
     }
@@ -1335,41 +1504,120 @@ public class DialogoEntradaManual extends JDialog {
     // AGREGAR PRODUCTO
     //==========================================================
     private void cargarProductoSeleccionado(Producto producto) {
+
         productoSeleccionado = producto;
 
-        lblCodigoProducto.setText(valorTexto(producto.getCodigo()));
-        lblProductoSeleccionado.setText(valorTexto(producto.getNombre()));
-
-        UnidadMedida unidadCompra = producto.getUnidadCompra();
-        UnidadMedida unidadVenta = producto.getUnidadVenta();
-
-        String codigoCompra = codigoUnidad(unidadCompra);
-        String codigoVenta = codigoUnidad(unidadVenta);
-
-        lblStockActual.setText("0 " + codigoVenta);
-        lblUnidadCompra.setText(descripcionUnidad(unidadCompra));
-        lblUnidadVenta.setText(descripcionUnidad(unidadVenta));
-        lblUnidadCantidad.setText(codigoCompra);
-
-        BigDecimal factor = obtenerFactor(producto);
-        lblFactorConversion.setText(
-                "1 " + codigoCompra + " = "
-                + formatearCantidad(factor) + " " + codigoVenta
+        lblCodigoProducto.setText(
+                valorTexto(
+                        producto.getCodigo()
+                )
         );
 
-        lblCostoUnidad.setText("Costo por " + codigoCompra);
+        lblProductoSeleccionado.setText(
+                valorTexto(
+                        producto.getNombre()
+                )
+        );
+
+        UnidadMedida unidadCompra
+                = producto.getUnidadCompra();
+
+        UnidadMedida unidadVenta
+                = producto.getUnidadVenta();
+
+        String codigoCompra
+                = codigoUnidad(
+                        unidadCompra
+                );
+
+        String codigoVenta
+                = codigoUnidad(
+                        unidadVenta
+                );
+
+        lblStockActual.setText(
+                "0 " + codigoVenta
+        );
+
+        lblUnidadCompra.setText(
+                descripcionUnidad(
+                        unidadCompra
+                )
+        );
+
+        lblUnidadVenta.setText(
+                descripcionUnidad(
+                        unidadVenta
+                )
+        );
+
+        BigDecimal factorBase
+                = obtenerFactor(
+                        producto
+                );
+
+        lblFactorConversion.setText(
+                "1 "
+                + codigoCompra
+                + " = "
+                + formatearCantidad(
+                        factorBase
+                )
+                + " "
+                + codigoVenta
+        );
+
+        // Mostramos solamente opciones válidas para ESTE producto:
+        // 1) su presentación habitual (CAJA / PACK / BULTO / etc.)
+        // 2) su unidad directa de stock (UN / KG / LT / etc.)
+        // Nunca cargamos aquí todas las unidades del sistema.
+        cmbFormaCompra.removeAllItems();
+
+        if (!"-".equals(
+                codigoCompra
+        )) {
+
+            cmbFormaCompra.addItem(
+                    codigoCompra
+            );
+        }
+
+        if (!"-".equals(
+                codigoVenta
+        )
+                && !codigoVenta.equalsIgnoreCase(
+                        codigoCompra
+                )) {
+
+            cmbFormaCompra.addItem(
+                    codigoVenta
+            );
+        }
+
+        if (cmbFormaCompra.getItemCount() > 0) {
+
+            cmbFormaCompra.setSelectedIndex(
+                    0
+            );
+        }
 
         if (producto.getPrecioCompra() != null) {
+
             txtCosto.setText(
-                    producto.getPrecioCompra()
+                    producto
+                            .getPrecioCompra()
                             .stripTrailingZeros()
                             .toPlainString()
             );
+
         } else {
-            txtCosto.setText("0");
+
+            txtCosto.setText(
+                    "0"
+            );
         }
 
-        configurarSpinnerSegunUnidad(unidadCompra);
+        aplicarFormaCompraSeleccionada();
         actualizarIngresoStock();
         actualizarSubtotalItem();
     }
@@ -1403,83 +1651,156 @@ public class DialogoEntradaManual extends JDialog {
     // AGREGAR PRODUCTO
     //==========================================================
     private void agregarProductoTabla() {
+
         if (productoSeleccionado == null) {
+
             JOptionPane.showMessageDialog(
                     this,
                     "Primero seleccione un producto.",
                     "Producto",
                     JOptionPane.WARNING_MESSAGE
             );
+
             return;
         }
 
-        BigDecimal cantidadCompra = obtenerCantidadSpinner();
+        String unidadCompraCodigo
+                = obtenerFormaCompraSeleccionada();
 
-        if (cantidadCompra.compareTo(BigDecimal.ZERO) <= 0) {
+        if (unidadCompraCodigo == null) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Seleccione una forma de compra.",
+                    "Forma de compra",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            return;
+        }
+
+        BigDecimal cantidadCompra
+                = obtenerCantidadSpinner();
+
+        if (cantidadCompra.compareTo(
+                BigDecimal.ZERO
+        ) <= 0) {
+
             JOptionPane.showMessageDialog(
                     this,
                     "La cantidad debe ser mayor a cero.",
                     "Cantidad inválida",
                     JOptionPane.WARNING_MESSAGE
             );
+
             return;
         }
 
-        UnidadMedida unidadCompra = productoSeleccionado.getUnidadCompra();
+        UnidadMedida unidadUsada
+                = obtenerUnidadSegunForma(
+                        unidadCompraCodigo
+                );
 
-        if (unidadCompra != null
-                && !unidadCompra.isPermiteDecimales()
-                && cantidadCompra.stripTrailingZeros().scale() > 0) {
+        if (unidadUsada != null
+                && !unidadUsada.isPermiteDecimales()
+                && cantidadCompra
+                        .stripTrailingZeros()
+                        .scale() > 0) {
+
             JOptionPane.showMessageDialog(
                     this,
-                    "La unidad " + unidadCompra.getCodigo()
+                    "La unidad "
+                    + unidadCompraCodigo
                     + " no permite cantidades decimales.",
                     "Cantidad inválida",
                     JOptionPane.WARNING_MESSAGE
             );
+
             return;
         }
 
-        BigDecimal costo = obtenerCosto();
+        BigDecimal factor
+                = obtenerFactorCompraActual();
+
+        if (factor == null
+                || factor.compareTo(
+                        BigDecimal.ZERO
+                ) <= 0) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "El factor de conversión debe ser mayor a cero.",
+                    "Factor inválido",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            return;
+        }
+
+        BigDecimal costo
+                = obtenerCosto();
 
         if (costo == null) {
+
             JOptionPane.showMessageDialog(
                     this,
                     "Ingrese un costo válido.",
                     "Costo inválido",
                     JOptionPane.WARNING_MESSAGE
             );
+
             return;
         }
 
-        if (costo.compareTo(BigDecimal.ZERO) < 0) {
+        if (costo.compareTo(
+                BigDecimal.ZERO
+        ) < 0) {
+
             JOptionPane.showMessageDialog(
                     this,
                     "El costo no puede ser negativo.",
                     "Costo inválido",
                     JOptionPane.WARNING_MESSAGE
             );
+
             return;
         }
 
-        BigDecimal factor = obtenerFactor(productoSeleccionado);
-        BigDecimal cantidadStock = cantidadCompra.multiply(factor);
-        BigDecimal subtotal = cantidadCompra.multiply(costo)
-                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cantidadStock
+                = cantidadCompra.multiply(
+                        factor
+                );
 
-        String unidadCompraCodigo
-                = codigoUnidad(productoSeleccionado.getUnidadCompra());
+        BigDecimal subtotal
+                = cantidadCompra
+                        .multiply(
+                                costo
+                        )
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP
+                        );
+
         String unidadVentaCodigo
-                = codigoUnidad(productoSeleccionado.getUnidadVenta());
+                = codigoUnidad(
+                        productoSeleccionado
+                                .getUnidadVenta()
+                );
 
-        DetalleEntradaTemporal detalle = new DetalleEntradaTemporal(
-                productoSeleccionado,
-                cantidadCompra,
-                cantidadStock,
-                costo,
-                subtotal
+        DetalleEntradaTemporal detalle
+                = new DetalleEntradaTemporal(
+                        productoSeleccionado,
+                        unidadCompraCodigo,
+                        factor,
+                        cantidadCompra,
+                        cantidadStock,
+                        costo,
+                        subtotal
+                );
+
+        detalles.add(
+                detalle
         );
-        detalles.add(detalle);
 
         modeloTabla.addRow(
                 new Object[]{
@@ -1487,33 +1808,68 @@ public class DialogoEntradaManual extends JDialog {
                     productoSeleccionado.getNombre(),
                     formatearCantidad(cantidadCompra),
                     unidadCompraCodigo,
-                    formatearCantidad(cantidadStock) + " " + unidadVentaCodigo,
-                    costo,
-                    subtotal
+                    formatearCantidad(cantidadStock)
+                    + " "
+                    + unidadVentaCodigo,
+                    formatearMoneda(costo),
+                    formatearMoneda(subtotal)
                 }
         );
 
         actualizarTotalCompra();
+
         limpiarProductoSeleccionado();
-        txtBuscarProducto.requestFocusInWindow();
+
+        txtBuscarProducto
+                .requestFocusInWindow();
     }
 
     //==========================================================
     // INGRESO A STOCK - INFORMATIVO
     //==========================================================
     private void actualizarIngresoStock() {
+
         if (productoSeleccionado == null) {
-            lblIngresoStock.setText("-");
+
+            lblIngresoStock.setText(
+                    "-"
+            );
+
             return;
         }
 
-        BigDecimal cantidadCompra = obtenerCantidadSpinner();
-        BigDecimal factor = obtenerFactor(productoSeleccionado);
-        BigDecimal cantidadStock = cantidadCompra.multiply(factor);
+        BigDecimal cantidadCompra
+                = obtenerCantidadSpinner();
+
+        BigDecimal factor
+                = obtenerFactorCompraActual();
+
+        if (factor == null
+                || factor.compareTo(
+                        BigDecimal.ZERO
+                ) <= 0) {
+
+            lblIngresoStock.setText(
+                    "-"
+            );
+
+            return;
+        }
+
+        BigDecimal cantidadStock
+                = cantidadCompra.multiply(
+                        factor
+                );
 
         lblIngresoStock.setText(
-                formatearCantidad(cantidadStock) + " "
-                + codigoUnidad(productoSeleccionado.getUnidadVenta())
+                formatearCantidad(
+                        cantidadStock
+                )
+                + " "
+                + codigoUnidad(
+                        productoSeleccionado
+                                .getUnidadVenta()
+                )
         );
     }
 
@@ -1564,9 +1920,415 @@ public class DialogoEntradaManual extends JDialog {
         lblCostoUnidad.setText("Costo");
         txtCosto.setText("");
 
+        cmbFormaCompra.removeAllItems();
+
+        spnFactorCompra.setModel(
+                new SpinnerNumberModel(
+                        1.000,
+                        0.001,
+                        999999.000,
+                        1.000
+                )
+        );
+
+        spnFactorCompra.setEditor(
+                new JSpinner.NumberEditor(
+                        spnFactorCompra,
+                        "0.###"
+                )
+        );
+
+        spnFactorCompra.setEnabled(false);
+        spnFactorCompra.setVisible(false);
+        lblFactorCompraTitulo.setVisible(false);
+
         spnCantidad.setModel(new SpinnerNumberModel(1, 1, 999999, 1));
         spnCantidad.setEditor(new JSpinner.NumberEditor(spnCantidad, "0"));
         lblSubtotalItem.setText("$ 0,00");
+    }
+
+    //==========================================================
+    // FORMA DE COMPRA
+    //==========================================================
+    private void aplicarFormaCompraSeleccionada() {
+
+        if (productoSeleccionado == null) {
+            return;
+        }
+
+        String forma
+                = obtenerFormaCompraSeleccionada();
+
+        if (forma == null) {
+            return;
+        }
+
+        String codigoCompra
+                = codigoUnidad(
+                        productoSeleccionado
+                                .getUnidadCompra()
+                );
+
+        String codigoVenta
+                = codigoUnidad(
+                        productoSeleccionado
+                                .getUnidadVenta()
+                );
+
+        boolean compraDirectaStock
+                = forma.equalsIgnoreCase(
+                        codigoVenta
+                )
+                && !forma.equalsIgnoreCase(
+                        codigoCompra
+                );
+
+        BigDecimal factor
+                = compraDirectaStock
+                ? BigDecimal.ONE
+                : obtenerFactor(
+                        productoSeleccionado
+                );
+
+        spnFactorCompra.setValue(
+                factor.doubleValue()
+        );
+
+        // Si se compra directamente en UN/KG/LT, el factor siempre es 1.
+        // Si se compra CAJA/PACK/BULTO, el operador puede cambiarlo.
+        spnFactorCompra.setEnabled(
+                !compraDirectaStock
+        );
+
+        boolean mostrarContenidoPresentacion
+                = !compraDirectaStock;
+
+        lblFactorCompraTitulo.setVisible(
+                mostrarContenidoPresentacion
+        );
+
+        spnFactorCompra.setVisible(
+                mostrarContenidoPresentacion
+        );
+
+        if (mostrarContenidoPresentacion) {
+
+            lblFactorCompraTitulo.setText(
+                    "Unidades por " + forma
+            );
+        }
+
+        lblUnidadCantidad.setText(
+                forma
+        );
+
+        String textoCosto;
+
+        if ("UN".equalsIgnoreCase(forma)) {
+
+            textoCosto = "Costo por UNIDAD";
+
+        } else if ("KG".equalsIgnoreCase(forma)) {
+
+            textoCosto = "Costo por KG";
+
+        } else {
+
+            textoCosto = "Costo por " + forma;
+        }
+
+        lblCostoUnidad.setText(
+                textoCosto
+        );
+
+        configurarSpinnerSegunUnidad(
+                obtenerUnidadSegunForma(
+                        forma
+                )
+        );
+
+        actualizarIngresoStock();
+        actualizarSubtotalItem();
+    }
+
+    private String obtenerFormaCompraSeleccionada() {
+
+        Object item
+                = cmbFormaCompra
+                        .getSelectedItem();
+
+        if (item == null) {
+            return null;
+        }
+
+        String valor
+                = item
+                        .toString()
+                        .trim();
+
+        return valor.isEmpty()
+                ? null
+                : valor;
+    }
+
+    private UnidadMedida obtenerUnidadSegunForma(
+            String codigo) {
+
+        if (productoSeleccionado == null
+                || codigo == null) {
+
+            return null;
+        }
+
+        UnidadMedida compra
+                = productoSeleccionado
+                        .getUnidadCompra();
+
+        if (compra != null
+                && compra.getCodigo() != null
+                && compra.getCodigo()
+                        .equalsIgnoreCase(
+                                codigo
+                        )) {
+
+            return compra;
+        }
+
+        UnidadMedida venta
+                = productoSeleccionado
+                        .getUnidadVenta();
+
+        if (venta != null
+                && venta.getCodigo() != null
+                && venta.getCodigo()
+                        .equalsIgnoreCase(
+                                codigo
+                        )) {
+
+            return venta;
+        }
+
+        return null;
+    }
+
+    private BigDecimal obtenerFactorCompraActual() {
+
+        Object valor
+                = spnFactorCompra
+                        .getValue();
+
+        if (valor == null) {
+            return BigDecimal.ONE;
+        }
+
+        try {
+
+            return new BigDecimal(
+                    valor
+                            .toString()
+                            .replace(",", ".")
+            ).setScale(
+                    3,
+                    RoundingMode.UNNECESSARY
+            );
+
+        } catch (Exception ex) {
+
+            return null;
+        }
+    }
+
+    //==========================================================
+    // CONFIRMAR ENTRADA REAL
+    //==========================================================
+    private void confirmarEntrada() {
+
+        if (idProveedorSeleccionado <= 0) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Debe seleccionar un proveedor.",
+                    "Entrada de Mercadería",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            return;
+        }
+
+        if (detalles.isEmpty()) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Debe agregar al menos un producto.",
+                    "Entrada de Mercadería",
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            return;
+        }
+
+        try {
+
+            Proveedor proveedor
+                    = proveedorDao.buscarPorId(
+                            idProveedorSeleccionado
+                    );
+
+            if (proveedor == null) {
+
+                mostrarError(
+                        "El proveedor seleccionado ya no existe."
+                );
+
+                return;
+            }
+
+            Deposito deposito
+                    = depositoDao.buscarPrincipal();
+
+            if (deposito == null) {
+
+                mostrarError(
+                        "No existe un depósito principal activo."
+                );
+
+                return;
+            }
+
+            Compra compra
+                    = new Compra();
+
+            compra.setProveedor(
+                    proveedor
+            );
+
+            compra.setDeposito(
+                    deposito
+            );
+
+            String comprobante
+                    = txtNumeroFactura
+                            .getText()
+                            .trim();
+
+            compra.setNumeroComprobante(
+                    comprobante.isEmpty()
+                    ? null
+                    : comprobante
+            );
+
+            compra.setOrigenCarga(
+                    "MANUAL"
+            );
+
+            compra.setObservaciones(
+                    "Entrada manual de mercadería"
+            );
+
+            ResultadoOperacion crear
+                    = compraService.crearCompra(
+                            compra
+                    );
+
+            if (!crear.isExitoso()) {
+
+                mostrarError(
+                        crear.getMensaje()
+                );
+
+                return;
+            }
+
+            long idCompra
+                    = compra.getIdCompra();
+
+            if (idCompra <= 0) {
+
+                mostrarError(
+                        "La compra fue creada, pero no se pudo recuperar su ID."
+                );
+
+                return;
+            }
+
+            for (DetalleEntradaTemporal detalle
+                    : detalles) {
+
+                ResultadoOperacion agregar
+                        = compraService.agregarProducto(
+                                idCompra,
+                                detalle
+                                        .getProducto()
+                                        .getIdProducto(),
+                                detalle
+                                        .getUnidadCompra(),
+                                detalle
+                                        .getFactorConversion(),
+                                detalle
+                                        .getCantidadCompra(),
+                                detalle
+                                        .getCostoUnitario()
+                        );
+
+                if (!agregar.isExitoso()) {
+
+                    mostrarError(
+                            "No se pudo agregar "
+                            + detalle
+                                    .getProducto()
+                                    .getNombre()
+                            + ": "
+                            + agregar.getMensaje()
+                    );
+
+                    return;
+                }
+            }
+
+            ResultadoOperacion confirmar
+                    = compraService.confirmarCompra(
+                            idCompra
+                    );
+
+            if (!confirmar.isExitoso()) {
+
+                mostrarError(
+                        confirmar.getMensaje()
+                );
+
+                return;
+            }
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Entrada registrada correctamente.\n"
+                    + "Compra N.º "
+                    + idCompra
+                    + "\nEl stock fue actualizado.",
+                    "Entrada de Mercadería",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+            dispose();
+
+        } catch (Exception ex) {
+
+            mostrarError(
+                    "No se pudo registrar la entrada: "
+                    + ex.getMessage()
+            );
+        }
+    }
+
+    private void mostrarError(
+            String mensaje) {
+
+        JOptionPane.showMessageDialog(
+                this,
+                mensaje,
+                "Entrada de Mercadería",
+                JOptionPane.ERROR_MESSAGE
+        );
     }
 
     private BigDecimal obtenerCantidadSpinner() {
@@ -1681,6 +2443,27 @@ public class DialogoEntradaManual extends JDialog {
     //==========================================================
     // LABEL
     //==========================================================
+    //==========================================================
+    // ESTILO DE CAMPOS
+    //==========================================================
+    private void aplicarEstiloCampo(JTextField campo) {
+
+        campo.setFont(
+                new Font("Segoe UI", Font.PLAIN, 14)
+        );
+
+        campo.setBackground(Color.WHITE);
+
+        campo.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(
+                                new Color(205, 214, 226)
+                        ),
+                        new EmptyBorder(6, 10, 6, 10)
+                )
+        );
+    }
+
     private JLabel crearLabel(
             String texto) {
 
@@ -1756,6 +2539,8 @@ public class DialogoEntradaManual extends JDialog {
     public static class DetalleEntradaTemporal {
 
         private final Producto producto;
+        private final String unidadCompra;
+        private final BigDecimal factorConversion;
         private final BigDecimal cantidadCompra;
         private final BigDecimal cantidadStock;
         private final BigDecimal costoUnitario;
@@ -1763,12 +2548,16 @@ public class DialogoEntradaManual extends JDialog {
 
         public DetalleEntradaTemporal(
                 Producto producto,
+                String unidadCompra,
+                BigDecimal factorConversion,
                 BigDecimal cantidadCompra,
                 BigDecimal cantidadStock,
                 BigDecimal costoUnitario,
                 BigDecimal subtotal) {
 
             this.producto = producto;
+            this.unidadCompra = unidadCompra;
+            this.factorConversion = factorConversion;
             this.cantidadCompra = cantidadCompra;
             this.cantidadStock = cantidadStock;
             this.costoUnitario = costoUnitario;
@@ -1777,6 +2566,14 @@ public class DialogoEntradaManual extends JDialog {
 
         public Producto getProducto() {
             return producto;
+        }
+
+        public String getUnidadCompra() {
+            return unidadCompra;
+        }
+
+        public BigDecimal getFactorConversion() {
+            return factorConversion;
         }
 
         public BigDecimal getCantidadCompra() {
