@@ -362,17 +362,15 @@ public class CompraService {
                 }
 
                 // =================================================
-                // 8. FACTOR DE CONVERSIÓN
+                // 8. CANTIDAD DE STOCK HISTÓRICA DEL DETALLE
                 //
-                // Ejemplo:
-                //
-                // Compra 5 cajas
-                // Factor 12
-                //
-                // 5 x 12 = 60 unidades de stock
+                // La presentación y el factor utilizados quedaron
+                // guardados en compra_detalle al agregar el producto.
+                // NO usamos producto.factorConversion porque puede
+                // cambiar en compras futuras.
                 // =================================================
                 BigDecimal factorConversion
-                        = producto.getFactorConversion();
+                        = detalle.getFactorConversion();
 
                 if (factorConversion == null
                         || factorConversion.compareTo(
@@ -385,23 +383,43 @@ public class CompraService {
                             "El producto "
                             + producto.getNombre()
                             + " tiene un factor de conversión "
-                            + "inválido."
+                            + "inválido en el detalle de compra."
                     );
                 }
 
                 BigDecimal cantidadStock
+                        = detalle.getCantidadStock();
+
+                if (cantidadStock == null
+                        || cantidadStock.compareTo(
+                                BigDecimal.ZERO
+                        ) <= 0) {
+
+                    cn.rollback();
+
+                    return ResultadoOperacion.error(
+                            "La cantidad de stock guardada para "
+                            + producto.getNombre()
+                            + " no es válida."
+                    );
+                }
+
+                BigDecimal cantidadStockEsperada
                         = detalle.getCantidad()
                                 .multiply(
                                         factorConversion
                                 );
 
-                // ---------------------------------------------
-                // stock_producto trabaja con DECIMAL(15,3)
-                // ---------------------------------------------
                 try {
 
                     cantidadStock
                             = cantidadStock.setScale(
+                                    3,
+                                    RoundingMode.UNNECESSARY
+                            );
+
+                    cantidadStockEsperada
+                            = cantidadStockEsperada.setScale(
                                     3,
                                     RoundingMode.UNNECESSARY
                             );
@@ -418,15 +436,16 @@ public class CompraService {
                 }
 
                 if (cantidadStock.compareTo(
-                        BigDecimal.ZERO
-                ) <= 0) {
+                        cantidadStockEsperada
+                ) != 0) {
 
                     cn.rollback();
 
                     return ResultadoOperacion.error(
-                            "La cantidad de stock calculada para "
+                            "La cantidad de stock del producto "
                             + producto.getNombre()
-                            + " no es válida."
+                            + " no coincide con la cantidad comprada "
+                            + "y el factor de conversión."
                     );
                 }
 
@@ -767,138 +786,157 @@ public class CompraService {
     // =========================================================
     // AGREGAR PRODUCTO
     // =========================================================
-    public ResultadoOperacion agregarProducto(
-            long idCompra,
-            int idProducto,
-            BigDecimal cantidad,
-            BigDecimal costoUnitario) {
+  public ResultadoOperacion agregarProducto(
+        long idCompra,
+        int idProducto,
+        String unidadCompra,
+        BigDecimal factorConversion,
+        BigDecimal cantidad,
+        BigDecimal costoUnitario) {
 
         if (idCompra <= 0) {
-
             return ResultadoOperacion.error(
                     "La compra indicada no es válida."
             );
         }
 
         if (idProducto <= 0) {
-
             return ResultadoOperacion.error(
                     "El producto indicado no es válido."
             );
         }
 
-        if (cantidad == null
-                || cantidad.compareTo(
-                        BigDecimal.ZERO
-                ) <= 0) {
+        unidadCompra = limpiar(unidadCompra);
 
+        if (unidadCompra == null) {
+            return ResultadoOperacion.error(
+                    "Debe indicar la unidad o presentación de compra."
+            );
+        }
+
+        if (unidadCompra.length() > 20) {
+            return ResultadoOperacion.error(
+                    "La unidad de compra no puede superar los 20 caracteres."
+            );
+        }
+
+        if (factorConversion == null
+                || factorConversion.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResultadoOperacion.error(
+                    "El factor de conversión debe ser mayor que cero."
+            );
+        }
+
+        if (cantidad == null
+                || cantidad.compareTo(BigDecimal.ZERO) <= 0) {
             return ResultadoOperacion.error(
                     "La cantidad debe ser mayor que cero."
             );
         }
 
         if (costoUnitario == null
-                || costoUnitario.compareTo(
-                        BigDecimal.ZERO
-                ) < 0) {
-
+                || costoUnitario.compareTo(BigDecimal.ZERO) < 0) {
             return ResultadoOperacion.error(
                     "El costo unitario no puede ser negativo."
             );
         }
 
-        try (Connection cn
-                = conexion.getConexion()) {
+        try (Connection cn = conexion.getConexion()) {
 
-            cn.setAutoCommit(
-                    false
-            );
+            cn.setAutoCommit(false);
 
             try {
 
-                // ---------------------------------------------
-                // BLOQUEAR COMPRA
-                // ---------------------------------------------
-                Compra compra
-                        = compraDao.buscarPorIdParaActualizar(
+                Compra compra =
+                        compraDao.buscarPorIdParaActualizar(
                                 idCompra,
                                 cn
                         );
 
                 if (compra == null) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "La compra no existe."
                     );
                 }
 
                 if (!compra.estaEnBorrador()) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "Solo se pueden agregar productos "
                             + "a una compra en borrador."
                     );
                 }
 
-                // ---------------------------------------------
-                // PRODUCTO
-                // ---------------------------------------------
-                Producto producto
-                        = productoDao.buscarPorId(
+                Producto producto =
+                        productoDao.buscarPorId(
                                 idProducto
                         );
 
                 if (producto == null) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "El producto no existe."
                     );
                 }
 
                 if (!producto.isActivo()) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "El producto está inactivo."
                     );
                 }
 
-                // ---------------------------------------------
-                // VALIDAR DECIMALES
-                //
-                // La cantidad ingresada corresponde a la
-                // unidad de compra.
-                // ---------------------------------------------
+                if (!producto.isControlaStock()) {
+                    cn.rollback();
+                    return ResultadoOperacion.error(
+                            "El producto no controla stock."
+                    );
+                }
+
+                // Si se usa la unidad de compra o de venta/stock
+                // configurada en el producto, respetamos su regla
+                // de decimales. Las presentaciones desconocidas
+                // (por ejemplo CAJA/BULTO ingresadas manualmente)
+                // se consideran enteras.
+                boolean permiteDecimalesCompra = false;
+
                 if (producto.getUnidadCompra() != null
-                        && !producto.getUnidadCompra()
-                                .isPermiteDecimales()
+                        && producto.getUnidadCompra().getCodigo() != null
+                        && producto.getUnidadCompra().getCodigo()
+                                .equalsIgnoreCase(unidadCompra)) {
+
+                    permiteDecimalesCompra =
+                            producto.getUnidadCompra()
+                                    .isPermiteDecimales();
+
+                } else if (producto.getUnidadVenta() != null
+                        && producto.getUnidadVenta().getCodigo() != null
+                        && producto.getUnidadVenta().getCodigo()
+                                .equalsIgnoreCase(unidadCompra)) {
+
+                    permiteDecimalesCompra =
+                            producto.getUnidadVenta()
+                                    .isPermiteDecimales();
+                }
+
+                if (!permiteDecimalesCompra
                         && tieneDecimales(cantidad)) {
 
                     cn.rollback();
 
                     return ResultadoOperacion.error(
-                            "La unidad de compra del producto "
-                            + "no permite cantidades decimales."
+                            "La presentación "
+                            + unidadCompra
+                            + " no permite cantidades decimales."
                     );
                 }
 
-                // ---------------------------------------------
-                // EVITAR PRODUCTO DUPLICADO
-                // ---------------------------------------------
-                for (CompraDetalle detalle
-                        : compra.getDetalles()) {
+                for (CompraDetalle detalle : compra.getDetalles()) {
 
                     if (detalle.getProducto() != null
                             && detalle.getProducto()
-                                    .getIdProducto()
-                            == idProducto) {
+                                    .getIdProducto() == idProducto) {
 
                         cn.rollback();
 
@@ -909,75 +947,101 @@ public class CompraService {
                     }
                 }
 
-                // ---------------------------------------------
-                // NORMALIZAR VALORES
-                // ---------------------------------------------
-                cantidad
-                        = cantidad.setScale(
-                                3,
-                                RoundingMode.HALF_UP
-                        );
+                try {
 
-                costoUnitario
-                        = costoUnitario.setScale(
+                    factorConversion =
+                            factorConversion.setScale(
+                                    3,
+                                    RoundingMode.UNNECESSARY
+                            );
+
+                    cantidad =
+                            cantidad.setScale(
+                                    3,
+                                    RoundingMode.UNNECESSARY
+                            );
+
+                } catch (ArithmeticException ex) {
+
+                    cn.rollback();
+
+                    return ResultadoOperacion.error(
+                            "La cantidad y el factor de conversión "
+                            + "admiten como máximo 3 decimales."
+                    );
+                }
+
+                costoUnitario =
+                        costoUnitario.setScale(
                                 2,
                                 RoundingMode.HALF_UP
                         );
 
-                BigDecimal subtotalDetalle
-                        = cantidad
-                                .multiply(
-                                        costoUnitario
-                                )
-                                .setScale(
-                                        2,
-                                        RoundingMode.HALF_UP
-                                );
+                BigDecimal cantidadStock;
 
-                // ---------------------------------------------
-                // CREAR DETALLE
-                // ---------------------------------------------
-                CompraDetalle detalle
-                        = new CompraDetalle();
+                try {
 
-                detalle.setIdCompra(
-                        idCompra
+                    cantidadStock =
+                            cantidad.multiply(
+                                    factorConversion
+                            ).setScale(
+                                    3,
+                                    RoundingMode.UNNECESSARY
+                            );
+
+                } catch (ArithmeticException ex) {
+
+                    cn.rollback();
+
+                    return ResultadoOperacion.error(
+                            "La conversión genera una cantidad de stock "
+                            + "con más de 3 decimales."
+                    );
+                }
+
+                BigDecimal subtotalDetalle =
+                        cantidad.multiply(
+                                costoUnitario
+                        ).setScale(
+                                2,
+                                RoundingMode.HALF_UP
+                        );
+
+                CompraDetalle detalle =
+                        new CompraDetalle();
+
+                detalle.setIdCompra(idCompra);
+                detalle.setProducto(producto);
+                detalle.setUnidadCompra(
+                        unidadCompra.toUpperCase()
                 );
-
-                detalle.setProducto(
-                        producto
+                detalle.setFactorConversion(
+                        factorConversion
                 );
-
-                detalle.setCantidad(
-                        cantidad
+                detalle.setCantidad(cantidad);
+                detalle.setCantidadStock(
+                        cantidadStock
                 );
-
                 detalle.setCostoUnitario(
                         costoUnitario
                 );
-
                 detalle.setSubtotal(
                         subtotalDetalle
                 );
 
-                long idDetalle
-                        = compraDao.guardarDetalle(
+                long idDetalle =
+                        compraDao.guardarDetalle(
                                 detalle,
                                 cn
                         );
 
                 if (idDetalle <= 0) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "No se pudo agregar el producto."
                     );
                 }
 
-                // ---------------------------------------------
-                // RECALCULAR TOTALES
-                // ---------------------------------------------
                 recalcularTotales(
                         idCompra,
                         compra.getDescuento(),
@@ -1002,11 +1066,7 @@ public class CompraService {
             } finally {
 
                 try {
-
-                    cn.setAutoCommit(
-                            true
-                    );
-
+                    cn.setAutoCommit(true);
                 } catch (SQLException ex) {
                     // No hacemos nada.
                 }
@@ -1021,181 +1081,235 @@ public class CompraService {
         }
     }
 
+
     // =========================================================
     // ACTUALIZAR DETALLE
     // =========================================================
     public ResultadoOperacion actualizarDetalle(
             long idCompra,
             long idDetalle,
+            String unidadCompra,
+            BigDecimal factorConversion,
             BigDecimal cantidad,
             BigDecimal costoUnitario) {
 
         if (idCompra <= 0
                 || idDetalle <= 0) {
-
             return ResultadoOperacion.error(
                     "La compra o el detalle no son válidos."
             );
         }
 
-        if (cantidad == null
-                || cantidad.compareTo(
-                        BigDecimal.ZERO
-                ) <= 0) {
+        unidadCompra = limpiar(unidadCompra);
 
+        if (unidadCompra == null) {
+            return ResultadoOperacion.error(
+                    "Debe indicar la unidad o presentación de compra."
+            );
+        }
+
+        if (unidadCompra.length() > 20) {
+            return ResultadoOperacion.error(
+                    "La unidad de compra no puede superar los 20 caracteres."
+            );
+        }
+
+        if (factorConversion == null
+                || factorConversion.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResultadoOperacion.error(
+                    "El factor de conversión debe ser mayor que cero."
+            );
+        }
+
+        if (cantidad == null
+                || cantidad.compareTo(BigDecimal.ZERO) <= 0) {
             return ResultadoOperacion.error(
                     "La cantidad debe ser mayor que cero."
             );
         }
 
         if (costoUnitario == null
-                || costoUnitario.compareTo(
-                        BigDecimal.ZERO
-                ) < 0) {
-
+                || costoUnitario.compareTo(BigDecimal.ZERO) < 0) {
             return ResultadoOperacion.error(
                     "El costo unitario no puede ser negativo."
             );
         }
 
-        try (Connection cn
-                = conexion.getConexion()) {
+        try (Connection cn = conexion.getConexion()) {
 
-            cn.setAutoCommit(
-                    false
-            );
+            cn.setAutoCommit(false);
 
             try {
 
-                Compra compra
-                        = compraDao.buscarPorIdParaActualizar(
+                Compra compra =
+                        compraDao.buscarPorIdParaActualizar(
                                 idCompra,
                                 cn
                         );
 
                 if (compra == null) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "La compra no existe."
                     );
                 }
 
                 if (!compra.estaEnBorrador()) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "Solo se puede modificar "
                             + "una compra en borrador."
                     );
                 }
 
-                // ---------------------------------------------
-                // BUSCAR DETALLE DENTRO DE LA COMPRA
-                // ---------------------------------------------
-                CompraDetalle detalleEncontrado
-                        = null;
+                CompraDetalle detalleEncontrado = null;
 
-                for (CompraDetalle detalle
-                        : compra.getDetalles()) {
-
-                    if (detalle.getIdDetalle()
-                            == idDetalle) {
-
-                        detalleEncontrado
-                                = detalle;
-
+                for (CompraDetalle detalle : compra.getDetalles()) {
+                    if (detalle.getIdDetalle() == idDetalle) {
+                        detalleEncontrado = detalle;
                         break;
                     }
                 }
 
                 if (detalleEncontrado == null) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
-                            "El detalle no pertenece "
-                            + "a la compra."
+                            "El detalle no pertenece a la compra."
                     );
                 }
 
-                Producto producto
-                        = detalleEncontrado.getProducto();
+                Producto producto =
+                        detalleEncontrado.getProducto();
 
                 if (producto == null) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
                             "No se pudo obtener el producto."
                     );
                 }
 
-                // ---------------------------------------------
-                // VALIDAR DECIMALES
-                // ---------------------------------------------
+                boolean permiteDecimalesCompra = false;
+
                 if (producto.getUnidadCompra() != null
-                        && !producto.getUnidadCompra()
-                                .isPermiteDecimales()
+                        && producto.getUnidadCompra().getCodigo() != null
+                        && producto.getUnidadCompra().getCodigo()
+                                .equalsIgnoreCase(unidadCompra)) {
+
+                    permiteDecimalesCompra =
+                            producto.getUnidadCompra()
+                                    .isPermiteDecimales();
+
+                } else if (producto.getUnidadVenta() != null
+                        && producto.getUnidadVenta().getCodigo() != null
+                        && producto.getUnidadVenta().getCodigo()
+                                .equalsIgnoreCase(unidadCompra)) {
+
+                    permiteDecimalesCompra =
+                            producto.getUnidadVenta()
+                                    .isPermiteDecimales();
+                }
+
+                if (!permiteDecimalesCompra
                         && tieneDecimales(cantidad)) {
 
                     cn.rollback();
 
                     return ResultadoOperacion.error(
-                            "La unidad de compra del producto "
-                            + "no permite cantidades decimales."
+                            "La presentación "
+                            + unidadCompra
+                            + " no permite cantidades decimales."
                     );
                 }
 
-                cantidad
-                        = cantidad.setScale(
-                                3,
-                                RoundingMode.HALF_UP
-                        );
+                try {
 
-                costoUnitario
-                        = costoUnitario.setScale(
+                    factorConversion =
+                            factorConversion.setScale(
+                                    3,
+                                    RoundingMode.UNNECESSARY
+                            );
+
+                    cantidad =
+                            cantidad.setScale(
+                                    3,
+                                    RoundingMode.UNNECESSARY
+                            );
+
+                } catch (ArithmeticException ex) {
+
+                    cn.rollback();
+
+                    return ResultadoOperacion.error(
+                            "La cantidad y el factor de conversión "
+                            + "admiten como máximo 3 decimales."
+                    );
+                }
+
+                costoUnitario =
+                        costoUnitario.setScale(
                                 2,
                                 RoundingMode.HALF_UP
                         );
 
-                BigDecimal subtotal
-                        = cantidad
-                                .multiply(
-                                        costoUnitario
-                                )
-                                .setScale(
-                                        2,
-                                        RoundingMode.HALF_UP
-                                );
+                BigDecimal cantidadStock;
 
+                try {
+
+                    cantidadStock =
+                            cantidad.multiply(
+                                    factorConversion
+                            ).setScale(
+                                    3,
+                                    RoundingMode.UNNECESSARY
+                            );
+
+                } catch (ArithmeticException ex) {
+
+                    cn.rollback();
+
+                    return ResultadoOperacion.error(
+                            "La conversión genera una cantidad de stock "
+                            + "con más de 3 decimales."
+                    );
+                }
+
+                BigDecimal subtotal =
+                        cantidad.multiply(
+                                costoUnitario
+                        ).setScale(
+                                2,
+                                RoundingMode.HALF_UP
+                        );
+
+                detalleEncontrado.setUnidadCompra(
+                        unidadCompra.toUpperCase()
+                );
+                detalleEncontrado.setFactorConversion(
+                        factorConversion
+                );
                 detalleEncontrado.setCantidad(
                         cantidad
                 );
-
+                detalleEncontrado.setCantidadStock(
+                        cantidadStock
+                );
                 detalleEncontrado.setCostoUnitario(
                         costoUnitario
                 );
-
                 detalleEncontrado.setSubtotal(
                         subtotal
                 );
 
-                boolean actualizado
-                        = compraDao.actualizarDetalle(
+                boolean actualizado =
+                        compraDao.actualizarDetalle(
                                 detalleEncontrado,
                                 cn
                         );
 
                 if (!actualizado) {
-
                     cn.rollback();
-
                     return ResultadoOperacion.error(
-                            "No se pudo actualizar "
-                            + "el detalle."
+                            "No se pudo actualizar el detalle."
                     );
                 }
 
@@ -1223,11 +1337,7 @@ public class CompraService {
             } finally {
 
                 try {
-
-                    cn.setAutoCommit(
-                            true
-                    );
-
+                    cn.setAutoCommit(true);
                 } catch (SQLException ex) {
                     // No hacemos nada.
                 }
@@ -1241,6 +1351,7 @@ public class CompraService {
             );
         }
     }
+
 
     // =========================================================
     // ELIMINAR PRODUCTO DE LA COMPRA

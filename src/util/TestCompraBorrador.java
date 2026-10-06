@@ -199,6 +199,8 @@ public class TestCompraBorrador {
                     = compraService.agregarProducto(
                             idCompra,
                             idProducto,
+                            "UN",
+                            BigDecimal.ONE,
                             new BigDecimal("10"),
                             new BigDecimal("850")
                     );

@@ -376,6 +376,8 @@ public class TestCompraJamon25Kg {
                     compraService.agregarProducto(
                             compra.getIdCompra(),
                             jamon.getIdProducto(),
+                            "KG",
+                            BigDecimal.ONE,
                             CANTIDAD_COMPRA,
                             COSTO_KG
                     );

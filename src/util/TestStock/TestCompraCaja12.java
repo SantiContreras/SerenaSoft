@@ -399,6 +399,10 @@ public class TestCompraCaja12 {
 
                             producto.getIdProducto(),
 
+                            "CAJA",
+
+                            new BigDecimal("12"),
+
                             CANTIDAD_INVALIDA,
 
                             COSTO_CAJA
@@ -446,6 +450,10 @@ public class TestCompraCaja12 {
                             compra.getIdCompra(),
 
                             producto.getIdProducto(),
+
+                            "CAJA",
+
+                            new BigDecimal("12"),
 
                             CANTIDAD_CAJAS,
 

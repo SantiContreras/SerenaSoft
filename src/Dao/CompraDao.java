@@ -356,84 +356,150 @@ public class CompraDao {
     // GUARDAR DETALLE - CONEXIÓN EXTERNA
     // =========================================================
 
-    public long guardarDetalle(
-            CompraDetalle detalle,
-            Connection cn)
-            throws SQLException {
+  public long guardarDetalle(
+        CompraDetalle detalle,
+        Connection cn)
+        throws SQLException {
 
-        String sql =
-                "INSERT INTO compra_detalle ("
-                + "id_compra, "
-                + "id_producto, "
-                + "cantidad, "
-                + "costo_unitario, "
-                + "subtotal"
-                + ") VALUES (?, ?, ?, ?, ?)";
-
-
-        try (PreparedStatement ps =
-                     cn.prepareStatement(
-                             sql,
-                             Statement.RETURN_GENERATED_KEYS
-                     )) {
-
-            ps.setLong(
-                    1,
-                    detalle.getIdCompra()
-            );
-
-            ps.setInt(
-                    2,
-                    detalle.getProducto()
-                            .getIdProducto()
-            );
-
-            ps.setBigDecimal(
-                    3,
-                    detalle.getCantidad()
-            );
-
-            ps.setBigDecimal(
-                    4,
-                    detalle.getCostoUnitario()
-            );
-
-            ps.setBigDecimal(
-                    5,
-                    detalle.getSubtotal()
-            );
+    String sql =
+            "INSERT INTO compra_detalle ("
+            + "id_compra, "
+            + "id_producto, "
+            + "unidad_compra, "
+            + "factor_conversion, "
+            + "cantidad, "
+            + "cantidad_stock, "
+            + "costo_unitario, "
+            + "subtotal"
+            + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
 
-            int filas =
-                    ps.executeUpdate();
+    try (PreparedStatement ps =
+                 cn.prepareStatement(
+                         sql,
+                         Statement.RETURN_GENERATED_KEYS
+                 )) {
+
+        // =====================================================
+        // COMPRA
+        // =====================================================
+
+        ps.setLong(
+                1,
+                detalle.getIdCompra()
+        );
 
 
-            if (filas == 0) {
+        // =====================================================
+        // PRODUCTO
+        // =====================================================
 
-                return 0;
-            }
+        ps.setInt(
+                2,
+                detalle.getProducto()
+                        .getIdProducto()
+        );
 
 
-            try (ResultSet rs =
-                         ps.getGeneratedKeys()) {
+        // =====================================================
+        // PRESENTACIÓN UTILIZADA EN ESTA COMPRA
+        // =====================================================
 
-                if (rs.next()) {
+        ps.setString(
+                3,
+                detalle.getUnidadCompra()
+        );
 
-                    long idDetalle =
-                            rs.getLong(1);
 
-                    detalle.setIdDetalle(
-                            idDetalle
-                    );
+        // =====================================================
+        // FACTOR UTILIZADO EN ESTA COMPRA
+        //
+        // Ejemplo:
+        // 1 CAJA = 20 UN
+        // factor = 20
+        // =====================================================
 
-                    return idDetalle;
-                }
-            }
+        ps.setBigDecimal(
+                4,
+                detalle.getFactorConversion()
+        );
+
+
+        // =====================================================
+        // CANTIDAD COMPRADA
+        //
+        // Ejemplo:
+        // 2 CAJAS
+        // cantidad = 2
+        // =====================================================
+
+        ps.setBigDecimal(
+                5,
+                detalle.getCantidad()
+        );
+
+
+        // =====================================================
+        // CANTIDAD QUE INGRESA AL STOCK
+        //
+        // Ejemplo:
+        // 2 CAJAS x 20 = 40 UN
+        // =====================================================
+
+        ps.setBigDecimal(
+                6,
+                detalle.getCantidadStock()
+        );
+
+
+        // =====================================================
+        // COSTO POR PRESENTACIÓN
+        // =====================================================
+
+        ps.setBigDecimal(
+                7,
+                detalle.getCostoUnitario()
+        );
+
+
+        // =====================================================
+        // SUBTOTAL
+        // =====================================================
+
+        ps.setBigDecimal(
+                8,
+                detalle.getSubtotal()
+        );
+
+
+        int filas =
+                ps.executeUpdate();
+
+
+        if (filas == 0) {
+            return 0;
         }
 
-        return 0;
+
+        try (ResultSet rs =
+                     ps.getGeneratedKeys()) {
+
+            if (rs.next()) {
+
+                long idDetalle =
+                        rs.getLong(1);
+
+                detalle.setIdDetalle(
+                        idDetalle
+                );
+
+                return idDetalle;
+            }
+        }
     }
 
+    return 0;
+}
 
     // =========================================================
     // GUARDAR LISTA DE DETALLES
@@ -484,53 +550,110 @@ public class CompraDao {
     }
 
 
-    public boolean actualizarDetalle(
-            CompraDetalle detalle,
-            Connection cn)
-            throws SQLException {
+   public boolean actualizarDetalle(
+        CompraDetalle detalle,
+        Connection cn)
+        throws SQLException {
 
-        String sql =
-                "UPDATE compra_detalle SET "
-                + "id_producto = ?, "
-                + "cantidad = ?, "
-                + "costo_unitario = ?, "
-                + "subtotal = ? "
-                + "WHERE id_detalle = ?";
-
-
-        try (PreparedStatement ps =
-                     cn.prepareStatement(sql)) {
-
-            ps.setInt(
-                    1,
-                    detalle.getProducto()
-                            .getIdProducto()
-            );
-
-            ps.setBigDecimal(
-                    2,
-                    detalle.getCantidad()
-            );
-
-            ps.setBigDecimal(
-                    3,
-                    detalle.getCostoUnitario()
-            );
-
-            ps.setBigDecimal(
-                    4,
-                    detalle.getSubtotal()
-            );
-
-            ps.setLong(
-                    5,
-                    detalle.getIdDetalle()
-            );
+    String sql =
+            "UPDATE compra_detalle SET "
+            + "id_producto = ?, "
+            + "unidad_compra = ?, "
+            + "factor_conversion = ?, "
+            + "cantidad = ?, "
+            + "cantidad_stock = ?, "
+            + "costo_unitario = ?, "
+            + "subtotal = ? "
+            + "WHERE id_detalle = ?";
 
 
-            return ps.executeUpdate() > 0;
-        }
+    try (PreparedStatement ps =
+                 cn.prepareStatement(sql)) {
+
+        // =====================================================
+        // PRODUCTO
+        // =====================================================
+
+        ps.setInt(
+                1,
+                detalle.getProducto()
+                        .getIdProducto()
+        );
+
+
+        // =====================================================
+        // UNIDAD DE COMPRA
+        // =====================================================
+
+        ps.setString(
+                2,
+                detalle.getUnidadCompra()
+        );
+
+
+        // =====================================================
+        // FACTOR DE ESTA COMPRA
+        // =====================================================
+
+        ps.setBigDecimal(
+                3,
+                detalle.getFactorConversion()
+        );
+
+
+        // =====================================================
+        // CANTIDAD COMPRADA
+        // =====================================================
+
+        ps.setBigDecimal(
+                4,
+                detalle.getCantidad()
+        );
+
+
+        // =====================================================
+        // CANTIDAD QUE INGRESA AL STOCK
+        // =====================================================
+
+        ps.setBigDecimal(
+                5,
+                detalle.getCantidadStock()
+        );
+
+
+        // =====================================================
+        // COSTO UNITARIO
+        // =====================================================
+
+        ps.setBigDecimal(
+                6,
+                detalle.getCostoUnitario()
+        );
+
+
+        // =====================================================
+        // SUBTOTAL
+        // =====================================================
+
+        ps.setBigDecimal(
+                7,
+                detalle.getSubtotal()
+        );
+
+
+        // =====================================================
+        // ID DETALLE
+        // =====================================================
+
+        ps.setLong(
+                8,
+                detalle.getIdDetalle()
+        );
+
+
+        return ps.executeUpdate() > 0;
     }
+}
 
 
     // =========================================================
@@ -730,54 +853,57 @@ public class CompraDao {
     }
 
 
-    public List<CompraDetalle> listarDetalles(
-            long idCompra,
-            Connection cn)
-            throws SQLException {
+   public List<CompraDetalle> listarDetalles(
+        long idCompra,
+        Connection cn)
+        throws SQLException {
 
-        List<CompraDetalle> lista =
-                new ArrayList<>();
-
-
-        String sql =
-                "SELECT "
-                + "id_detalle, "
-                + "id_compra, "
-                + "id_producto, "
-                + "cantidad, "
-                + "costo_unitario, "
-                + "subtotal "
-                + "FROM compra_detalle "
-                + "WHERE id_compra = ? "
-                + "ORDER BY id_detalle ASC";
+    List<CompraDetalle> lista =
+            new ArrayList<>();
 
 
-        try (PreparedStatement ps =
-                     cn.prepareStatement(sql)) {
+    String sql =
+            "SELECT "
+            + "id_detalle, "
+            + "id_compra, "
+            + "id_producto, "
+            + "unidad_compra, "
+            + "factor_conversion, "
+            + "cantidad, "
+            + "cantidad_stock, "
+            + "costo_unitario, "
+            + "subtotal "
+            + "FROM compra_detalle "
+            + "WHERE id_compra = ? "
+            + "ORDER BY id_detalle ASC";
 
-            ps.setLong(
-                    1,
-                    idCompra
-            );
+
+    try (PreparedStatement ps =
+                 cn.prepareStatement(sql)) {
+
+        ps.setLong(
+                1,
+                idCompra
+        );
 
 
-            try (ResultSet rs =
-                         ps.executeQuery()) {
+        try (ResultSet rs =
+                     ps.executeQuery()) {
 
-                while (rs.next()) {
+            while (rs.next()) {
 
-                    lista.add(
-                            mapearDetalle(
-                                    rs
-                            )
-                    );
-                }
+                lista.add(
+                        mapearDetalle(
+                                rs
+                        )
+                );
             }
         }
-
-        return lista;
     }
 
+
+    return lista;
+}
 
     // =========================================================
     // LISTAR TODAS
@@ -1307,57 +1433,117 @@ public class CompraDao {
     // =========================================================
 
     private CompraDetalle mapearDetalle(
-            ResultSet rs)
-            throws SQLException {
+        ResultSet rs)
+        throws SQLException {
 
-        CompraDetalle detalle =
-                new CompraDetalle();
-
-
-        detalle.setIdDetalle(
-                rs.getLong(
-                        "id_detalle"
-                )
-        );
-
-        detalle.setIdCompra(
-                rs.getLong(
-                        "id_compra"
-                )
-        );
+    CompraDetalle detalle =
+            new CompraDetalle();
 
 
-        Producto producto =
-                productoDao.buscarPorId(
-                        rs.getInt(
-                                "id_producto"
-                        )
-                );
+    // =========================================================
+    // ID DETALLE
+    // =========================================================
 
-        detalle.setProducto(
-                producto
-        );
-
-
-        detalle.setCantidad(
-                rs.getBigDecimal(
-                        "cantidad"
-                )
-        );
-
-        detalle.setCostoUnitario(
-                rs.getBigDecimal(
-                        "costo_unitario"
-                )
-        );
-
-        detalle.setSubtotal(
-                rs.getBigDecimal(
-                        "subtotal"
-                )
-        );
+    detalle.setIdDetalle(
+            rs.getLong(
+                    "id_detalle"
+            )
+    );
 
 
-        return detalle;
-    }
+    // =========================================================
+    // ID COMPRA
+    // =========================================================
+
+    detalle.setIdCompra(
+            rs.getLong(
+                    "id_compra"
+            )
+    );
+
+
+    // =========================================================
+    // PRODUCTO
+    // =========================================================
+
+    Producto producto =
+            productoDao.buscarPorId(
+                    rs.getInt(
+                            "id_producto"
+                    )
+            );
+
+    detalle.setProducto(
+            producto
+    );
+
+
+    // =========================================================
+    // UNIDAD DE COMPRA UTILIZADA
+    // =========================================================
+
+    detalle.setUnidadCompra(
+            rs.getString(
+                    "unidad_compra"
+            )
+    );
+
+
+    // =========================================================
+    // FACTOR DE CONVERSIÓN UTILIZADO
+    // =========================================================
+
+    detalle.setFactorConversion(
+            rs.getBigDecimal(
+                    "factor_conversion"
+            )
+    );
+
+
+    // =========================================================
+    // CANTIDAD COMPRADA
+    // =========================================================
+
+    detalle.setCantidad(
+            rs.getBigDecimal(
+                    "cantidad"
+            )
+    );
+
+
+    // =========================================================
+    // CANTIDAD QUE INGRESA AL STOCK
+    // =========================================================
+
+    detalle.setCantidadStock(
+            rs.getBigDecimal(
+                    "cantidad_stock"
+            )
+    );
+
+
+    // =========================================================
+    // COSTO
+    // =========================================================
+
+    detalle.setCostoUnitario(
+            rs.getBigDecimal(
+                    "costo_unitario"
+            )
+    );
+
+
+    // =========================================================
+    // SUBTOTAL
+    // =========================================================
+
+    detalle.setSubtotal(
+            rs.getBigDecimal(
+                    "subtotal"
+            )
+    );
+
+
+    return detalle;
+}
 }

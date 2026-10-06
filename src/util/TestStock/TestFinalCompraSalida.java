@@ -777,6 +777,8 @@ public class TestFinalCompraSalida {
                 compraService.agregarProducto(
                         idCompra,
                         producto.getIdProducto(),
+                        producto.getUnidadCompra().getCodigo(),
+                        producto.getFactorConversion(),
                         new BigDecimal(cantidad),
                         new BigDecimal(costo)
                 );
