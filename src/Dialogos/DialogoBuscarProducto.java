@@ -13,6 +13,9 @@ import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
+import Dao.DepositoDao;
+import Dao.StockProductoDao;
+import model.Deposito;
 
 public class DialogoBuscarProducto extends JDialog {
 
@@ -54,6 +57,14 @@ public class DialogoBuscarProducto extends JDialog {
 //==========================================================
     private final ProductoService productoService
             = new ProductoService();
+
+    private final StockProductoDao stockProductoDao
+            = new StockProductoDao();
+
+    private final DepositoDao depositoDao
+            = new DepositoDao();
+
+    private Deposito depositoPrincipal;
 
     private List<Producto> productosActivos
             = new ArrayList<>();
@@ -122,18 +133,39 @@ public class DialogoBuscarProducto extends JDialog {
         inicializarTabla();
     }
 
-    //==========================================================
+  //==========================================================
 // CARGAR PRODUCTOS ACTIVOS
+// Y OBTENER EL DEPÓSITO PRINCIPAL
 //==========================================================
-    private void cargarProductos() {
+private void cargarProductos() {
 
-        productosActivos
-                = productoService.listarActivos();
+    // -----------------------------------------------------
+    // Depósito utilizado por Entrada Manual
+    // -----------------------------------------------------
+    depositoPrincipal
+            = depositoDao.buscarPrincipal();
 
-        mostrarProductos(
-                productosActivos
+    if (depositoPrincipal == null) {
+
+        JOptionPane.showMessageDialog(
+                this,
+                "No existe un depósito principal activo.\n"
+                + "No se podrá consultar el stock actual.",
+                "Depósito",
+                JOptionPane.WARNING_MESSAGE
         );
     }
+
+    // -----------------------------------------------------
+    // Productos activos
+    // -----------------------------------------------------
+    productosActivos
+            = productoService.listarActivos();
+
+    mostrarProductos(
+            productosActivos
+    );
+}
 
 //==========================================================
 // MOSTRAR PRODUCTOS
@@ -153,50 +185,155 @@ public class DialogoBuscarProducto extends JDialog {
 
 //==========================================================
 // AGREGAR PRODUCTO A TABLA
+// MOSTRANDO STOCK REAL DEL DEPÓSITO PRINCIPAL
 //==========================================================
-    private void agregarProductoTabla(
-            Producto producto) {
+private void agregarProductoTabla(
+        Producto producto) {
 
-        String marca = "";
+    // -----------------------------------------------------
+    // MARCA
+    // -----------------------------------------------------
+    String marca = "";
 
-        if (producto.getMarca() != null
-                && producto.getMarca().getNombre() != null) {
+    if (producto.getMarca() != null
+            && producto.getMarca().getNombre() != null) {
 
-            marca = producto
-                    .getMarca()
-                    .getNombre();
-        }
-
-        BigDecimal precio
-                = producto.getPrecioVenta();
-
-        if (precio == null) {
-            precio = BigDecimal.ZERO;
-        }
-
-
-        /*
-     * Por ahora dejamos el stock en cero.
-     *
-     * El stock real depende del depósito.
-     * Cuando conectemos este buscador específicamente
-     * con Entrada Manual, vamos a obtener el stock
-     * del depósito de destino.
-         */
-        BigDecimal stock
-                = BigDecimal.ZERO;
-
-        modeloTabla.addRow(
-                new Object[]{
-                    producto.getCodigo(),
-                    producto.getNombre(),
-                    marca,
-                    stock,
-                    precio,
-                    "Disponible"
-                }
-        );
+        marca = producto
+                .getMarca()
+                .getNombre();
     }
+
+    // -----------------------------------------------------
+    // PRECIO DE VENTA
+    // -----------------------------------------------------
+    BigDecimal precio
+            = producto.getPrecioVenta();
+
+    if (precio == null) {
+
+        precio = BigDecimal.ZERO;
+    }
+
+    // -----------------------------------------------------
+    // STOCK REAL
+    // -----------------------------------------------------
+    BigDecimal stock
+            = BigDecimal.ZERO;
+
+    if (depositoPrincipal != null) {
+
+        stock
+                = stockProductoDao.obtenerCantidad(
+                        producto.getIdProducto(),
+                        depositoPrincipal.getIdDeposito()
+                );
+    }
+
+    if (stock == null) {
+
+        stock = BigDecimal.ZERO;
+    }
+
+    // -----------------------------------------------------
+    // UNIDAD DE STOCK
+    //
+    // En nuestro sistema la unidad de venta representa
+    // también la unidad en la que controlamos el stock.
+    //
+    // Ej:
+    // Agua      -> UN
+    // Jamón     -> KG
+    // Queso     -> KG
+    // -----------------------------------------------------
+    String unidadStock = "";
+
+    if (producto.getUnidadVenta() != null
+            && producto.getUnidadVenta().getCodigo() != null) {
+
+        unidadStock
+                = producto
+                        .getUnidadVenta()
+                        .getCodigo();
+    }
+
+    // -----------------------------------------------------
+    // TEXTO QUE SE MOSTRARÁ EN LA TABLA
+    // -----------------------------------------------------
+    String stockMostrar
+            = formatearStock(
+                    stock,
+                    unidadStock
+            );
+    
+    
+    
+
+    // -----------------------------------------------------
+    // AGREGAR FILA
+    // -----------------------------------------------------
+    modeloTabla.addRow(
+            new Object[]{
+                producto.getCodigo(),
+                producto.getNombre(),
+                marca,
+                stockMostrar,
+                precio,
+                "Disponible"
+            }
+    );
+}
+
+
+//==========================================================
+// FORMATEAR STOCK PARA MOSTRAR
+//
+// UN -> 56 UN
+// KG -> 6,500 KG
+//==========================================================
+private String formatearStock(
+        BigDecimal stock,
+        String unidad) {
+
+    if (stock == null) {
+
+        stock = BigDecimal.ZERO;
+    }
+
+    String cantidad;
+
+    // -----------------------------------------------------
+    // UNIDADES ENTERAS
+    // -----------------------------------------------------
+    if ("UN".equalsIgnoreCase(unidad)) {
+
+        cantidad
+                = stock.setScale(
+                        0,
+                        java.math.RoundingMode.DOWN
+                ).toPlainString();
+
+    } else {
+
+        // -------------------------------------------------
+        // KG / LT / ETC.
+        // Quitamos ceros innecesarios.
+        // -------------------------------------------------
+        cantidad
+                = stock
+                        .stripTrailingZeros()
+                        .toPlainString();
+    }
+
+    if (unidad == null
+            || unidad.trim().isEmpty()) {
+
+        return cantidad;
+    }
+
+    return cantidad
+            + " "
+            + unidad;
+}
 
     private void inicializarTabla() {
 
@@ -590,7 +727,6 @@ public class DialogoBuscarProducto extends JDialog {
 
             filtrar();
         });
-        
 
         tablaProductos.addMouseListener(
                 new java.awt.event.MouseAdapter() {
@@ -605,8 +741,7 @@ public class DialogoBuscarProducto extends JDialog {
                 }
             }
         });
-        
-        
+
     }
 
     //==========================================================

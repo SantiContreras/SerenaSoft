@@ -56,504 +56,537 @@ public class CompraService {
                 = new DepositoDao();
     }
 
-    // =========================================================
+  // =========================================================
 // CONFIRMAR COMPRA
 //
-// Al confirmar:
+// Esta operación es la que impacta físicamente el stock.
 //
-// 1. Bloquea la compra.
-// 2. Verifica que siga en BORRADOR.
-// 3. Valida sus detalles.
-// 4. Convierte cantidad comprada a cantidad de stock.
-// 5. Suma o crea stock_producto.
-// 6. Cambia BORRADOR -> CONFIRMADA.
-// 7. Confirma todo con COMMIT.
+// IMPORTANTE:
+// La cantidad que entra al stock NO se vuelve a calcular
+// usando el factor actual del producto.
 //
-// Si algo falla:
-// ROLLBACK completo.
+// Se utiliza cantidadStock guardada en compra_detalle,
+// porque representa exactamente cómo fue cargada la compra.
+//
+// Todo se ejecuta dentro de UNA transacción.
 // =========================================================
-    public ResultadoOperacion confirmarCompra(
-            long idCompra) {
+public ResultadoOperacion confirmarCompra(
+        long idCompra) {
 
-        // =====================================================
-        // VALIDACIONES INICIALES
-        // =====================================================
-        if (idCompra <= 0) {
+    // =====================================================
+    // VALIDACIONES INICIALES
+    // =====================================================
+    if (idCompra <= 0) {
+
+        return ResultadoOperacion.error(
+                "La compra indicada no es válida."
+        );
+    }
+
+    if (!SesionUsuario.haySesion()) {
+
+        return ResultadoOperacion.error(
+                "No hay una sesión de usuario activa."
+        );
+    }
+
+    Connection cn = null;
+
+    try {
+
+        cn = conexion.getConexion();
+
+        cn.setAutoCommit(false);
+
+        // =================================================
+        // 1. BLOQUEAR LA COMPRA
+        // =================================================
+        Compra compra
+                = compraDao.buscarPorIdParaActualizar(
+                        idCompra,
+                        cn
+                );
+
+        if (compra == null) {
+
+            cn.rollback();
 
             return ResultadoOperacion.error(
-                    "La compra indicada no es válida."
+                    "La compra no existe."
             );
         }
 
-        if (!SesionUsuario.haySesion()) {
+        // =================================================
+        // 2. SOLO SE CONFIRMA UNA COMPRA BORRADOR
+        // =================================================
+        if (!compra.estaEnBorrador()) {
+
+            cn.rollback();
 
             return ResultadoOperacion.error(
-                    "No hay una sesión de usuario activa."
+                    "La compra ya no se encuentra "
+                    + "en estado BORRADOR."
             );
         }
 
-        Connection cn = null;
+        // =================================================
+        // 3. VALIDAR DEPÓSITO
+        // =================================================
+        if (compra.getDeposito() == null
+                || compra.getDeposito()
+                        .getIdDeposito() <= 0) {
 
-        try {
+            cn.rollback();
 
-            cn = conexion.getConexion();
+            return ResultadoOperacion.error(
+                    "La compra no tiene un depósito válido."
+            );
+        }
 
-            cn.setAutoCommit(false);
+        int idDeposito
+                = compra.getDeposito()
+                        .getIdDeposito();
 
-            // =================================================
-            // 1. BLOQUEAR COMPRA
-            // =================================================
-            Compra compra
-                    = compraDao.buscarPorIdParaActualizar(
-                            idCompra,
-                            cn
-                    );
+        // =================================================
+        // 4. VALIDAR DETALLES
+        // =================================================
+        List<CompraDetalle> detalles
+                = compra.getDetalles();
 
-            if (compra == null) {
+        if (detalles == null
+                || detalles.isEmpty()) {
 
-                cn.rollback();
+            cn.rollback();
 
-                return ResultadoOperacion.error(
-                        "La compra no existe."
-                );
-            }
+            return ResultadoOperacion.error(
+                    "No se puede confirmar una compra "
+                    + "sin productos."
+            );
+        }
 
-            // =================================================
-            // 2. VERIFICAR ESTADO
-            // =================================================
-            if (!compra.estaEnBorrador()) {
+        // =================================================
+        // 5. RECALCULAR SUBTOTAL
+        // =================================================
+        BigDecimal subtotalCalculado
+                = BigDecimal.ZERO;
 
-                cn.rollback();
+        for (CompraDetalle detalle : detalles) {
 
-                return ResultadoOperacion.error(
-                        "La compra ya no se encuentra "
-                        + "en estado BORRADOR."
-                );
-            }
-
-            // =================================================
-            // 3. VERIFICAR DEPÓSITO
-            // =================================================
-            if (compra.getDeposito() == null
-                    || compra.getDeposito()
-                            .getIdDeposito() <= 0) {
-
-                cn.rollback();
-
-                return ResultadoOperacion.error(
-                        "La compra no tiene un depósito válido."
-                );
-            }
-
-            int idDeposito
-                    = compra.getDeposito()
-                            .getIdDeposito();
-
-            // =================================================
-            // 4. VERIFICAR DETALLES
-            // =================================================
-            List<CompraDetalle> detalles
-                    = compra.getDetalles();
-
-            if (detalles == null
-                    || detalles.isEmpty()) {
+            if (detalle.getProducto() == null
+                    || detalle.getProducto()
+                            .getIdProducto() <= 0) {
 
                 cn.rollback();
 
                 return ResultadoOperacion.error(
-                        "No se puede confirmar una compra "
-                        + "sin productos."
+                        "Existe un detalle sin producto válido."
                 );
             }
 
-            // =================================================
-            // 5. RECALCULAR Y VALIDAR TOTAL
-            //
-            // No confiamos ciegamente en los totales que
-            // quedaron guardados anteriormente.
-            // =================================================
-            BigDecimal subtotalCalculado
-                    = BigDecimal.ZERO;
-
-            for (CompraDetalle detalle
-                    : detalles) {
-
-                if (detalle.getProducto() == null) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "Existe un detalle sin producto."
-                    );
-                }
-
-                if (detalle.getCantidad() == null
-                        || detalle.getCantidad()
-                                .compareTo(
-                                        BigDecimal.ZERO
-                                ) <= 0) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "Existe un producto con "
-                            + "cantidad inválida."
-                    );
-                }
-
-                if (detalle.getCostoUnitario() == null
-                        || detalle.getCostoUnitario()
-                                .compareTo(
-                                        BigDecimal.ZERO
-                                ) < 0) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "Existe un producto con "
-                            + "costo inválido."
-                    );
-                }
-
-                BigDecimal subtotalDetalle
-                        = detalle.getCantidad()
-                                .multiply(
-                                        detalle.getCostoUnitario()
-                                )
-                                .setScale(
-                                        2,
-                                        RoundingMode.HALF_UP
-                                );
-
-                subtotalCalculado
-                        = subtotalCalculado.add(
-                                subtotalDetalle
-                        );
-            }
-
-            subtotalCalculado
-                    = subtotalCalculado.setScale(
-                            2,
-                            RoundingMode.HALF_UP
-                    );
-
-            BigDecimal descuento
-                    = compra.getDescuento();
-
-            if (descuento == null) {
-
-                descuento
-                        = BigDecimal.ZERO;
-            }
-
-            descuento
-                    = descuento.setScale(
-                            2,
-                            RoundingMode.HALF_UP
-                    );
-
-            if (descuento.compareTo(
-                    BigDecimal.ZERO
-            ) < 0) {
+            if (detalle.getCantidad() == null
+                    || detalle.getCantidad()
+                            .compareTo(
+                                    BigDecimal.ZERO
+                            ) <= 0) {
 
                 cn.rollback();
 
                 return ResultadoOperacion.error(
-                        "El descuento de la compra "
-                        + "no puede ser negativo."
+                        "Existe un producto con "
+                        + "cantidad de compra inválida."
                 );
             }
 
-            if (descuento.compareTo(
-                    subtotalCalculado
-            ) > 0) {
+            if (detalle.getCostoUnitario() == null
+                    || detalle.getCostoUnitario()
+                            .compareTo(
+                                    BigDecimal.ZERO
+                            ) < 0) {
 
                 cn.rollback();
 
                 return ResultadoOperacion.error(
-                        "El descuento no puede superar "
-                        + "el subtotal."
+                        "Existe un producto con "
+                        + "costo inválido."
                 );
             }
 
-            BigDecimal totalCalculado
-                    = subtotalCalculado
-                            .subtract(
-                                    descuento
+            BigDecimal subtotalDetalle
+                    = detalle.getCantidad()
+                            .multiply(
+                                    detalle.getCostoUnitario()
                             )
                             .setScale(
                                     2,
                                     RoundingMode.HALF_UP
                             );
 
-            // =================================================
-            // 6. ACTUALIZAR TOTALES DEFINITIVOS
-            // =================================================
-            boolean totalesActualizados
-                    = compraDao.actualizarTotales(
-                            idCompra,
-                            subtotalCalculado,
-                            descuento,
-                            totalCalculado,
-                            cn
+            subtotalCalculado
+                    = subtotalCalculado.add(
+                            subtotalDetalle
+                    );
+        }
+
+        subtotalCalculado
+                = subtotalCalculado.setScale(
+                        2,
+                        RoundingMode.HALF_UP
+                );
+
+        // =================================================
+        // 6. DESCUENTO
+        // =================================================
+        BigDecimal descuento
+                = compra.getDescuento();
+
+        if (descuento == null) {
+
+            descuento
+                    = BigDecimal.ZERO;
+        }
+
+        descuento
+                = descuento.setScale(
+                        2,
+                        RoundingMode.HALF_UP
+                );
+
+        if (descuento.compareTo(
+                BigDecimal.ZERO
+        ) < 0) {
+
+            cn.rollback();
+
+            return ResultadoOperacion.error(
+                    "El descuento no puede ser negativo."
+            );
+        }
+
+        if (descuento.compareTo(
+                subtotalCalculado
+        ) > 0) {
+
+            cn.rollback();
+
+            return ResultadoOperacion.error(
+                    "El descuento no puede superar "
+                    + "el subtotal."
+            );
+        }
+
+        BigDecimal totalCalculado
+                = subtotalCalculado
+                        .subtract(
+                                descuento
+                        )
+                        .setScale(
+                                2,
+                                RoundingMode.HALF_UP
+                        );
+
+        // =================================================
+        // 7. ACTUALIZAR TOTALES DEFINITIVOS
+        // =================================================
+        boolean totalesActualizados
+                = compraDao.actualizarTotales(
+                        idCompra,
+                        subtotalCalculado,
+                        descuento,
+                        totalCalculado,
+                        cn
+                );
+
+        if (!totalesActualizados) {
+
+            cn.rollback();
+
+            return ResultadoOperacion.error(
+                    "No se pudieron actualizar "
+                    + "los totales de la compra."
+            );
+        }
+
+        // =================================================
+        // 8. DAO DE STOCK
+        // =================================================
+        StockProductoDao stockProductoDao
+                = new StockProductoDao();
+
+        // =================================================
+        // 9. PROCESAR CADA DETALLE
+        // =================================================
+        for (CompraDetalle detalle : detalles) {
+
+            int idProducto
+                    = detalle.getProducto()
+                            .getIdProducto();
+
+            // =============================================
+            // RECUPERAR PRODUCTO ACTUAL
+            // =============================================
+            Producto producto
+                    = productoDao.buscarPorId(
+                            idProducto
                     );
 
-            if (!totalesActualizados) {
+            if (producto == null) {
 
                 cn.rollback();
 
                 return ResultadoOperacion.error(
-                        "No se pudieron actualizar "
-                        + "los totales de la compra."
+                        "Uno de los productos ya no existe."
                 );
             }
 
-            // =================================================
-            // 7. PROCESAR CADA PRODUCTO
-            // =================================================
-            StockProductoDao stockProductoDao
-                    = new StockProductoDao();
+            if (!producto.isActivo()) {
 
-            for (CompraDetalle detalle
-                    : detalles) {
+                cn.rollback();
 
-                int idProducto
-                        = detalle.getProducto()
-                                .getIdProducto();
+                return ResultadoOperacion.error(
+                        "El producto "
+                        + producto.getNombre()
+                        + " está inactivo."
+                );
+            }
 
-                // ---------------------------------------------
-                // RECUPERAR PRODUCTO ACTUAL
-                // ---------------------------------------------
-                Producto producto
-                        = productoDao.buscarPorId(
-                                idProducto
+            if (!producto.isControlaStock()) {
+
+                cn.rollback();
+
+                return ResultadoOperacion.error(
+                        "El producto "
+                        + producto.getNombre()
+                        + " no controla stock."
+                );
+            }
+
+            // =============================================
+            // FACTOR HISTÓRICO DE ESTA COMPRA
+            // =============================================
+            BigDecimal factorConversion
+                    = detalle.getFactorConversion();
+
+            if (factorConversion == null
+                    || factorConversion.compareTo(
+                            BigDecimal.ZERO
+                    ) <= 0) {
+
+                cn.rollback();
+
+                return ResultadoOperacion.error(
+                        "El producto "
+                        + producto.getNombre()
+                        + " tiene un factor de compra inválido."
+                );
+            }
+
+            // =============================================
+            // CANTIDAD DE STOCK HISTÓRICA
+            //
+            // Ejemplo:
+            // cantidad compra = 2 CAJA
+            // factor compra   = 20
+            // cantidad stock  = 40 UN
+            //
+            // Para KG:
+            // cantidad compra = 8 KG
+            // factor          = 1
+            // cantidad stock  = 8 KG
+            // =============================================
+            BigDecimal cantidadStock
+                    = detalle.getCantidadStock();
+
+            if (cantidadStock == null
+                    || cantidadStock.compareTo(
+                            BigDecimal.ZERO
+                    ) <= 0) {
+
+                cn.rollback();
+
+                return ResultadoOperacion.error(
+                        "El producto "
+                        + producto.getNombre()
+                        + " tiene una cantidad de stock inválida."
+                );
+            }
+
+            // =============================================
+            // NORMALIZAR A DECIMAL(15,3)
+            // =============================================
+            try {
+
+                cantidadStock
+                        = cantidadStock.setScale(
+                                3,
+                                RoundingMode.UNNECESSARY
                         );
 
-                if (producto == null) {
+                factorConversion
+                        = factorConversion.setScale(
+                                3,
+                                RoundingMode.UNNECESSARY
+                        );
 
-                    cn.rollback();
+            } catch (ArithmeticException ex) {
 
-                    return ResultadoOperacion.error(
-                            "Uno de los productos "
-                            + "ya no existe."
-                    );
-                }
+                cn.rollback();
 
-                if (!producto.isActivo()) {
+                return ResultadoOperacion.error(
+                        "La conversión de "
+                        + producto.getNombre()
+                        + " genera más de 3 decimales."
+                );
+            }
 
-                    cn.rollback();
+            // =============================================
+            // CONTROL DE INTEGRIDAD
+            //
+            // Verificamos que:
+            //
+            // cantidad × factor = cantidad_stock
+            //
+            // Esto evita confirmar un detalle inconsistente.
+            // =============================================
+            BigDecimal cantidadEsperada;
 
-                    return ResultadoOperacion.error(
-                            "El producto "
-                            + producto.getNombre()
-                            + " está inactivo."
-                    );
-                }
+            try {
 
-                if (!producto.isControlaStock()) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "El producto "
-                            + producto.getNombre()
-                            + " no controla stock."
-                    );
-                }
-
-                // =================================================
-                // 8. CANTIDAD DE STOCK HISTÓRICA DEL DETALLE
-                //
-                // La presentación y el factor utilizados quedaron
-                // guardados en compra_detalle al agregar el producto.
-                // NO usamos producto.factorConversion porque puede
-                // cambiar en compras futuras.
-                // =================================================
-                BigDecimal factorConversion
-                        = detalle.getFactorConversion();
-
-                if (factorConversion == null
-                        || factorConversion.compareTo(
-                                BigDecimal.ZERO
-                        ) <= 0) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "El producto "
-                            + producto.getNombre()
-                            + " tiene un factor de conversión "
-                            + "inválido en el detalle de compra."
-                    );
-                }
-
-                BigDecimal cantidadStock
-                        = detalle.getCantidadStock();
-
-                if (cantidadStock == null
-                        || cantidadStock.compareTo(
-                                BigDecimal.ZERO
-                        ) <= 0) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "La cantidad de stock guardada para "
-                            + producto.getNombre()
-                            + " no es válida."
-                    );
-                }
-
-                BigDecimal cantidadStockEsperada
+                cantidadEsperada
                         = detalle.getCantidad()
                                 .multiply(
                                         factorConversion
+                                )
+                                .setScale(
+                                        3,
+                                        RoundingMode.UNNECESSARY
                                 );
 
-                try {
-
-                    cantidadStock
-                            = cantidadStock.setScale(
-                                    3,
-                                    RoundingMode.UNNECESSARY
-                            );
-
-                    cantidadStockEsperada
-                            = cantidadStockEsperada.setScale(
-                                    3,
-                                    RoundingMode.UNNECESSARY
-                            );
-
-                } catch (ArithmeticException ex) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "La conversión de stock del producto "
-                            + producto.getNombre()
-                            + " genera más de 3 decimales."
-                    );
-                }
-
-                if (cantidadStock.compareTo(
-                        cantidadStockEsperada
-                ) != 0) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "La cantidad de stock del producto "
-                            + producto.getNombre()
-                            + " no coincide con la cantidad comprada "
-                            + "y el factor de conversión."
-                    );
-                }
-
-                // =================================================
-                // 9. SUMAR O CREAR STOCK
-                //
-                // Si existe:
-                //      cantidad = cantidad + ingreso
-                //
-                // Si no existe:
-                //      INSERT stock_producto
-                // =================================================
-                boolean stockActualizado
-                        = stockProductoDao.sumarOCrearStock(
-                                cn,
-                                idProducto,
-                                idDeposito,
-                                cantidadStock
-                        );
-
-                if (!stockActualizado) {
-
-                    cn.rollback();
-
-                    return ResultadoOperacion.error(
-                            "No se pudo actualizar el stock "
-                            + "del producto "
-                            + producto.getNombre()
-                            + "."
-                    );
-                }
-            }
-
-            // =================================================
-            // 10. CAMBIAR ESTADO
-            //
-            // Esta condición es una segunda protección contra
-            // confirmaciones duplicadas.
-            // =================================================
-            boolean estadoActualizado
-                    = compraDao.cambiarEstadoSiCoincide(
-                            idCompra,
-                            "BORRADOR",
-                            "CONFIRMADA",
-                            cn
-                    );
-
-            if (!estadoActualizado) {
+            } catch (ArithmeticException ex) {
 
                 cn.rollback();
 
                 return ResultadoOperacion.error(
-                        "La compra no pudo ser confirmada "
-                        + "porque su estado cambió."
+                        "La cantidad calculada para "
+                        + producto.getNombre()
+                        + " genera más de 3 decimales."
                 );
             }
 
-            // =================================================
-            // 11. COMMIT
-            // =================================================
-            cn.commit();
+            if (cantidadEsperada.compareTo(
+                    cantidadStock
+            ) != 0) {
 
-            return ResultadoOperacion.ok(
-                    "Compra confirmada correctamente."
-            );
+                cn.rollback();
 
-        } catch (Exception ex) {
-
-            if (cn != null) {
-
-                try {
-
-                    cn.rollback();
-
-                } catch (SQLException rollbackEx) {
-                    // No reemplazamos el error original.
-                }
+                return ResultadoOperacion.error(
+                        "La cantidad de stock del producto "
+                        + producto.getNombre()
+                        + " no coincide con su conversión."
+                );
             }
 
-            return ResultadoOperacion.error(
-                    "Error al confirmar la compra: "
-                    + ex.getMessage()
-            );
-
-        } finally {
-
-            if (cn != null) {
-
-                try {
-
-                    cn.setAutoCommit(
-                            true
+            // =============================================
+            // 10. SUMAR O CREAR STOCK
+            // =============================================
+            boolean stockActualizado
+                    = stockProductoDao.sumarOCrearStock(
+                            cn,
+                            idProducto,
+                            idDeposito,
+                            cantidadStock
                     );
 
-                } catch (SQLException ex) {
-                    // No hacemos nada.
-                }
+            if (!stockActualizado) {
 
-                try {
+                cn.rollback();
 
-                    cn.close();
+                return ResultadoOperacion.error(
+                        "No se pudo actualizar el stock "
+                        + "del producto "
+                        + producto.getNombre()
+                        + "."
+                );
+            }
+        }
 
-                } catch (SQLException ex) {
-                    // No hacemos nada.
-                }
+        // =================================================
+        // 11. BORRADOR -> CONFIRMADA
+        //
+        // Segunda defensa contra doble confirmación.
+        // =================================================
+        boolean estadoActualizado
+                = compraDao.cambiarEstadoSiCoincide(
+                        idCompra,
+                        "BORRADOR",
+                        "CONFIRMADA",
+                        cn
+                );
+
+        if (!estadoActualizado) {
+
+            cn.rollback();
+
+            return ResultadoOperacion.error(
+                    "La compra no pudo confirmarse "
+                    + "porque su estado cambió."
+            );
+        }
+
+        // =================================================
+        // 12. COMMIT
+        // =================================================
+        cn.commit();
+
+        return ResultadoOperacion.ok(
+                "Compra confirmada correctamente."
+        );
+
+    } catch (Exception ex) {
+
+        // =================================================
+        // ERROR -> ROLLBACK COMPLETO
+        // =================================================
+        if (cn != null) {
+
+            try {
+
+                cn.rollback();
+
+            } catch (SQLException rollbackEx) {
+                // Conservamos el error original.
+            }
+        }
+
+        return ResultadoOperacion.error(
+                "Error al confirmar la compra: "
+                + ex.getMessage()
+        );
+
+    } finally {
+
+        // =================================================
+        // CERRAR CONEXIÓN
+        // =================================================
+        if (cn != null) {
+
+            try {
+
+                cn.setAutoCommit(true);
+
+            } catch (SQLException ex) {
+                // Nada.
+            }
+
+            try {
+
+                cn.close();
+
+            } catch (SQLException ex) {
+                // Nada.
             }
         }
     }
+}
 
     // =========================================================
     // CREAR COMPRA BORRADOR
