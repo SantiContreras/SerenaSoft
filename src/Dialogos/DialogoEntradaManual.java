@@ -45,6 +45,11 @@ import services.CompraService;
 import services.ResultadoOperacion;
 import Dao.StockProductoDao;
 import java.awt.GridLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.BasicStroke;
+import java.awt.RenderingHints;
+import javax.swing.Icon;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
@@ -97,6 +102,125 @@ public class DialogoEntradaManual extends JDialog {
     private JLabel lblSubtotalItem;
 
     private JButton btnAgregarProducto;
+
+    //==========================================================
+    // ICONOGRAFÍA DEL DIÁLOGO
+    // Dibujada con Java2D: no depende de archivos PNG.
+    //==========================================================
+    private void configurarIconografia() {
+        iconoBoton(btnBuscarProveedor, "buscar");
+        iconoBoton(btnBuscarProducto, "buscar");
+        iconoBoton(btnAgregarProducto, "agregar");
+        iconoBoton(btnEliminarItem, "eliminar");
+        iconoBoton(btnLimpiar, "limpiar");
+        iconoBoton(btnCancelar, "cerrar");
+        iconoBoton(btnConfirmar, "confirmar");
+    }
+
+    private void iconoBoton(JButton boton, String tipo) {
+        boton.setIcon(crearIcono(tipo, Color.WHITE, 16));
+        boton.setIconTextGap(9);
+        boton.setHorizontalAlignment(JButton.CENTER);
+    }
+
+    private Icon crearIcono(String tipo, Color color, int lado) {
+        return new Icon() {
+            @Override
+            public int getIconWidth() {
+                return lado;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return lado;
+            }
+
+            @Override
+            public void paintIcon(Component componente, Graphics grafico, int x, int y) {
+                Graphics2D g = (Graphics2D) grafico.create();
+                try {
+                    g.translate(x, y);
+                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                            RenderingHints.VALUE_ANTIALIAS_ON);
+                    g.setColor(color);
+                    g.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND,
+                            BasicStroke.JOIN_ROUND));
+                    int m = lado / 2;
+                    switch (tipo) {
+                        case "buscar" -> {
+                            g.drawOval(2, 2, lado - 8, lado - 8);
+                            g.drawLine(lado - 6, lado - 6, lado - 2, lado - 2);
+                        }
+                        case "agregar" -> {
+                            g.drawRoundRect(1, 1, lado - 3, lado - 3, 4, 4);
+                            g.drawLine(m, 4, m, lado - 5);
+                            g.drawLine(4, m, lado - 5, m);
+                        }
+                        case "eliminar" -> {
+                            g.drawLine(3, 4, lado - 4, 4);
+                            g.drawLine(5, 2, lado - 6, 2);
+                            g.drawRoundRect(5, 6, lado - 11, lado - 9, 2, 2);
+                            g.drawLine(m - 2, 8, m - 2, lado - 5);
+                            g.drawLine(m + 2, 8, m + 2, lado - 5);
+                        }
+                        case "limpiar" -> {
+                            g.drawArc(2, 2, lado - 5, lado - 5, 35, 280);
+                            g.drawLine(2, 2, 2, 7);
+                            g.drawLine(2, 7, 7, 7);
+                        }
+                        case "cerrar" -> {
+                            g.drawLine(3, 3, lado - 4, lado - 4);
+                            g.drawLine(lado - 4, 3, 3, lado - 4);
+                        }
+                        case "confirmar" -> {
+                            g.drawOval(1, 1, lado - 3, lado - 3);
+                            g.drawLine(4, m, m - 1, lado - 5);
+                            g.drawLine(m - 1, lado - 5, lado - 4, 4);
+                        }
+                        case "producto" -> {
+                            g.drawRect(2, 5, lado - 5, lado - 8);
+                            g.drawLine(2, 5, m, 1);
+                            g.drawLine(m, 1, lado - 3, 5);
+                            g.drawLine(m, 1, m, lado - 3);
+                        }
+                        case "stock" -> {
+                            g.drawRect(2, 2, lado - 5, lado - 5);
+                            g.drawLine(2, m, lado - 3, m);
+                            g.drawLine(m, 2, m, lado - 3);
+                        }
+                        case "dinero" -> {
+                            g.drawOval(2, 2, lado - 5, lado - 5);
+                            g.drawString("$", Math.max(3, m - 4), lado - 4);
+                        }
+                        case "documento" -> {
+                            g.drawRoundRect(3, 1, lado - 7, lado - 3, 2, 2);
+                            g.drawLine(5, 6, lado - 6, 6);
+                            g.drawLine(5, 9, lado - 6, 9);
+                        }
+                        case "calendario" -> {
+                            g.drawRect(2, 4, lado - 5, lado - 7);
+                            g.drawLine(2, 7, lado - 3, 7);
+                            g.drawLine(5, 1, 5, 5);
+                            g.drawLine(lado - 6, 1, lado - 6, 5);
+                        }
+                        case "proveedor" -> {
+                            g.drawOval(m - 3, 1, 6, 6);
+                            g.drawArc(2, 7, lado - 5, lado - 5, 0, 180);
+                        }
+                        default ->
+                            g.drawOval(2, 2, lado - 5, lado - 5);
+                    }
+                } finally {
+                    g.dispose();
+                }
+            }
+        };
+    }
+
+    private void iconoLabel(JLabel label, String tipo, Color color) {
+        label.setIcon(crearIcono(tipo, color, 15));
+        label.setIconTextGap(7);
+    }
 
     //==========================================================
     // TABLA
@@ -164,18 +288,22 @@ public class DialogoEntradaManual extends JDialog {
                 getContentPane()
         );
 
+        // Íconos vectoriales: sin imágenes externas ni dependencias.
+        configurarIconografia();
+
         setModal(true);
 
+        // Ventana más ancha para visualizar todos los componentes
         setSize(
                 new Dimension(
-                        1050,
+                        1200,
                         680
                 )
         );
 
         setMinimumSize(
                 new Dimension(
-                        950,
+                        1100,
                         620
                 )
         );
@@ -214,8 +342,6 @@ public class DialogoEntradaManual extends JDialog {
         txtProveedor.setToolTipText(
                 "Proveedor seleccionado para esta compra"
         );
-
-   
 
         btnBuscarProveedor
                 = crearBoton(
@@ -915,883 +1041,887 @@ public class DialogoEntradaManual extends JDialog {
     //==========================================================
 // PRODUCTO
 //==========================================================
-  //==========================================================
+    //==========================================================
 // PANEL PRODUCTO
 //==========================================================
-private JPanel crearPanelProducto() {
-
-    //======================================================
-    // COLORES DEL BLOQUE
-    //======================================================
-    Color fondoGeneral = new Color(250, 248, 243);
-    Color fondoTarjeta = new Color(255, 255, 255);
-    Color fondoTitulo = new Color(239, 234, 222);
-    Color bordeSuave = new Color(220, 214, 201);
-
-    Color fondoResumen = new Color(237, 248, 242);
-    Color bordeResumen = new Color(198, 226, 208);
-
-    //======================================================
-    // PANEL PRINCIPAL
-    //======================================================
-    JPanel panel = new JPanel(new GridBagLayout());
-
-    panel.setBackground(fondoGeneral);
-
-    panel.setBorder(
-            BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(
-                            bordeSuave
-                    ),
-                    new EmptyBorder(
-                            16,
-                            18,
-                            16,
-                            18
-                    )
-            )
-    );
-
-    GridBagConstraints c = new GridBagConstraints();
-
-    c.insets = new Insets(
-            5,
-            5,
-            5,
-            5
-    );
-
-    c.anchor = GridBagConstraints.WEST;
-
-    //======================================================
-    // 1. ENCABEZADO
-    //======================================================
-    JPanel panelEncabezado = new JPanel();
-
-    panelEncabezado.setOpaque(false);
-
-    panelEncabezado.setLayout(
-            new BoxLayout(
-                    panelEncabezado,
-                    BoxLayout.Y_AXIS
-            )
-    );
-
-    JLabel titulo = new JLabel(
-            "AGREGAR PRODUCTO"
-    );
-
-    titulo.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    16
-            )
-    );
-
-    titulo.setForeground(
-            AZUL_OSCURO
-    );
-
-    JLabel subtitulo = new JLabel(
-            "Seleccione el producto y cargue cómo se lo entregó el proveedor"
-    );
-
-    subtitulo.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.PLAIN,
-                    12
-            )
-    );
-
-    subtitulo.setForeground(
-            TEXTO_SECUNDARIO
-    );
-
-    panelEncabezado.add(titulo);
-
-    panelEncabezado.add(
-            Box.createVerticalStrut(3)
-    );
-
-    panelEncabezado.add(subtitulo);
-
-    c.gridx = 0;
-    c.gridy = 0;
-    c.gridwidth = 4;
-    c.weightx = 1;
-    c.fill = GridBagConstraints.HORIZONTAL;
-
-    panel.add(
-            panelEncabezado,
-            c
-    );
-
-    //======================================================
-    // 2. BUSCAR PRODUCTO
-    //======================================================
-    JPanel panelBuscar = new JPanel(
-            new BorderLayout(
-                    15,
-                    0
-            )
-    );
-
-    panelBuscar.setOpaque(false);
-
-    JPanel panelTextoBuscar = new JPanel();
-
-    panelTextoBuscar.setOpaque(false);
-
-    panelTextoBuscar.setLayout(
-            new BoxLayout(
-                    panelTextoBuscar,
-                    BoxLayout.Y_AXIS
-            )
-    );
-
-    JLabel lblProducto = new JLabel(
-            "Producto"
-    );
-
-    lblProducto.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    13
-            )
-    );
-
-    lblProducto.setForeground(
-            AZUL_OSCURO
-    );
-
-    JLabel lblBuscarAyuda = new JLabel(
-            "Busque por código, nombre, marca o categoría"
-    );
-
-    lblBuscarAyuda.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.PLAIN,
-                    11
-            )
-    );
-
-    lblBuscarAyuda.setForeground(
-            TEXTO_SECUNDARIO
-    );
-
-    panelTextoBuscar.add(
-            lblProducto
-    );
-
-    panelTextoBuscar.add(
-            Box.createVerticalStrut(2)
-    );
-
-    panelTextoBuscar.add(
-            lblBuscarAyuda
-    );
-
-    btnBuscarProducto.setText(
-            "Buscar producto"
-    );
-
-    btnBuscarProducto.setPreferredSize(
-            new Dimension(
-                    155,
-                    40
-            )
-    );
-
-    panelBuscar.add(
-            panelTextoBuscar,
-            BorderLayout.CENTER
-    );
-
-    panelBuscar.add(
-            btnBuscarProducto,
-            BorderLayout.EAST
-    );
-
-    c.gridx = 0;
-    c.gridy = 1;
-    c.gridwidth = 4;
-    c.weightx = 1;
-    c.fill = GridBagConstraints.HORIZONTAL;
-
-    panel.add(
-            panelBuscar,
-            c
-    );
-
-    //======================================================
-    // 3. PRODUCTO SELECCIONADO
-    //======================================================
-    JPanel panelProductoSeleccionado
-            = new JPanel(
-                    new BorderLayout(
-                            15,
-                            0
-                    )
-            );
-
-    panelProductoSeleccionado.setBackground(
-            fondoTarjeta
-    );
-
-    panelProductoSeleccionado.setBorder(
-            BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(
-                            bordeSuave
-                    ),
-                    new EmptyBorder(
-                            11,
-                            14,
-                            11,
-                            14
-                    )
-            )
-    );
-
-    //======================================================
-    // DATOS DEL PRODUCTO
-    //======================================================
-    JPanel panelDatosProducto = new JPanel();
-
-    panelDatosProducto.setOpaque(false);
-
-    panelDatosProducto.setLayout(
-            new BoxLayout(
-                    panelDatosProducto,
-                    BoxLayout.Y_AXIS
-            )
-    );
-
-    lblProductoSeleccionado.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    15
-            )
-    );
-
-    lblProductoSeleccionado.setForeground(
-            AZUL_OSCURO
-    );
-
-    lblCodigoProducto.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.PLAIN,
-                    12
-            )
-    );
-
-    lblCodigoProducto.setForeground(
-            TEXTO_SECUNDARIO
-    );
-
-    panelDatosProducto.add(
-            lblProductoSeleccionado
-    );
-
-    panelDatosProducto.add(
-            Box.createVerticalStrut(3)
-    );
-
-    panelDatosProducto.add(
-            lblCodigoProducto
-    );
-
-    //======================================================
-    // STOCK ACTUAL
-    //======================================================
-    JPanel panelStock = new JPanel(
-            new FlowLayout(
-                    FlowLayout.RIGHT,
-                    6,
-                    5
-            )
-    );
-
-    panelStock.setOpaque(false);
-
-    JLabel lblStockTitulo = new JLabel(
-            "Stock actual:"
-    );
-
-    lblStockTitulo.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    12
-            )
-    );
-
-    lblStockTitulo.setForeground(
-            AZUL_OSCURO
-    );
-
-    lblStockActual.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    16
-            )
-    );
-
-    lblStockActual.setForeground(
-            VERDE
-    );
-
-    panelStock.add(
-            lblStockTitulo
-    );
-
-    panelStock.add(
-            lblStockActual
-    );
-
-    panelProductoSeleccionado.add(
-            panelDatosProducto,
-            BorderLayout.CENTER
-    );
-
-    panelProductoSeleccionado.add(
-            panelStock,
-            BorderLayout.EAST
-    );
-
-    c.gridx = 0;
-    c.gridy = 2;
-    c.gridwidth = 4;
-    c.weightx = 1;
-    c.fill = GridBagConstraints.HORIZONTAL;
-
-    panel.add(
-            panelProductoSeleccionado,
-            c
-    );
-
-    //======================================================
-    // 4. TITULO FORMA DE COMPRA
-    //======================================================
-    JPanel panelTituloCompra = new JPanel(
-            new FlowLayout(
-                    FlowLayout.LEFT,
-                    10,
-                    7
-            )
-    );
-
-    panelTituloCompra.setBackground(
-            fondoTitulo
-    );
-
-    JLabel lblTituloCompra = new JLabel(
-            "¿CÓMO LO ESTÁS COMPRANDO?"
-    );
-
-    lblTituloCompra.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    13
-            )
-    );
-
-    lblTituloCompra.setForeground(
-            AZUL_OSCURO
-    );
-
-    panelTituloCompra.add(
-            lblTituloCompra
-    );
-
-    c.gridx = 0;
-    c.gridy = 3;
-    c.gridwidth = 4;
-    c.weightx = 1;
-    c.fill = GridBagConstraints.HORIZONTAL;
-
-    panel.add(
-            panelTituloCompra,
-            c
-    );
-
-    //======================================================
-    // 5. CAMPOS DE CARGA
-    //
-    // PRESENTACION | CANTIDAD | CONTENIDO | COSTO
-    //======================================================
-    JPanel panelCampos = new JPanel(
-            new GridLayout(
-                    1,
-                    4,
-                    18,
-                    0
-            )
-    );
-
-    panelCampos.setOpaque(false);
-
-    //======================================================
-    // PRESENTACION
-    //======================================================
-    JPanel bloquePresentacion
-            = crearBloqueVerticalProducto(
-                    "PRESENTACIÓN",
-                    cmbFormaCompra
-            );
-
-    cmbFormaCompra.setPreferredSize(
-            new Dimension(
-                    160,
-                    38
-            )
-    );
-
-    //======================================================
-    // CANTIDAD
-    //======================================================
-    JPanel contenidoCantidad = new JPanel(
-            new BorderLayout(
-                    7,
-                    0
-            )
-    );
-
-    contenidoCantidad.setOpaque(false);
-
-    spnCantidad.setPreferredSize(
-            new Dimension(
-                    120,
-                    38
-            )
-    );
-
-    lblUnidadCantidad.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    12
-            )
-    );
-
-    lblUnidadCantidad.setForeground(
-            AZUL_OSCURO
-    );
-
-    contenidoCantidad.add(
-            spnCantidad,
-            BorderLayout.CENTER
-    );
-
-    contenidoCantidad.add(
-            lblUnidadCantidad,
-            BorderLayout.EAST
-    );
-
-    JPanel bloqueCantidad
-            = crearBloqueVerticalProducto(
-                    "CANTIDAD",
-                    contenidoCantidad
-            );
-
-    //======================================================
-    // CONTENIDO / FACTOR
-    //======================================================
-    JPanel bloqueFactor = new JPanel();
-
-    bloqueFactor.setOpaque(false);
-
-    bloqueFactor.setLayout(
-            new BoxLayout(
-                    bloqueFactor,
-                    BoxLayout.Y_AXIS
-            )
-    );
-
-    lblFactorCompraTitulo.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    11
-            )
-    );
-
-    lblFactorCompraTitulo.setForeground(
-            new Color(
-                    70,
-                    75,
-                    85
-            )
-    );
-
-    lblFactorCompraTitulo.setAlignmentX(
-            Component.LEFT_ALIGNMENT
-    );
-
-    spnFactorCompra.setMaximumSize(
-            new Dimension(
-                    Integer.MAX_VALUE,
-                    38
-            )
-    );
-
-    spnFactorCompra.setPreferredSize(
-            new Dimension(
-                    140,
-                    38
-            )
-    );
-
-    spnFactorCompra.setAlignmentX(
-            Component.LEFT_ALIGNMENT
-    );
-
-    bloqueFactor.add(
-            lblFactorCompraTitulo
-    );
-
-    bloqueFactor.add(
-            Box.createVerticalStrut(5)
-    );
-
-    bloqueFactor.add(
-            spnFactorCompra
-    );
-
-    //======================================================
-    // COSTO
-    //======================================================
-    JPanel contenidoCosto = new JPanel(
-            new BorderLayout(
-                    6,
-                    0
-            )
-    );
-
-    contenidoCosto.setOpaque(false);
-
-    JLabel simboloPeso = new JLabel(
-            "$"
-    );
-
-    simboloPeso.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    16
-            )
-    );
-
-    simboloPeso.setForeground(
-            VERDE
-    );
-
-    txtCosto.setPreferredSize(
-            new Dimension(
-                    140,
-                    38
-            )
-    );
-
-    contenidoCosto.add(
-            simboloPeso,
-            BorderLayout.WEST
-    );
-
-    contenidoCosto.add(
-            txtCosto,
-            BorderLayout.CENTER
-    );
-
-    JPanel bloqueCosto = new JPanel();
-
-    bloqueCosto.setOpaque(false);
-
-    bloqueCosto.setLayout(
-            new BoxLayout(
-                    bloqueCosto,
-                    BoxLayout.Y_AXIS
-            )
-    );
-
-    lblCostoUnidad.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    11
-            )
-    );
-
-    lblCostoUnidad.setForeground(
-            new Color(
-                    70,
-                    75,
-                    85
-            )
-    );
-
-    lblCostoUnidad.setAlignmentX(
-            Component.LEFT_ALIGNMENT
-    );
-
-    contenidoCosto.setAlignmentX(
-            Component.LEFT_ALIGNMENT
-    );
-
-    bloqueCosto.add(
-            lblCostoUnidad
-    );
-
-    bloqueCosto.add(
-            Box.createVerticalStrut(5)
-    );
-
-    bloqueCosto.add(
-            contenidoCosto
-    );
-
-    //======================================================
-    // AGREGAMOS LAS 4 COLUMNAS
-    //======================================================
-    panelCampos.add(
-            bloquePresentacion
-    );
-
-    panelCampos.add(
-            bloqueCantidad
-    );
-
-    panelCampos.add(
-            bloqueFactor
-    );
-
-    panelCampos.add(
-            bloqueCosto
-    );
-
-    c.gridx = 0;
-    c.gridy = 4;
-    c.gridwidth = 4;
-    c.weightx = 1;
-    c.fill = GridBagConstraints.HORIZONTAL;
-
-    c.insets = new Insets(
-            12,
-            5,
-            7,
-            5
-    );
-
-    panel.add(
-            panelCampos,
-            c
-    );
-
-    //======================================================
-    // 6. PARTE INFERIOR
-    //
-    // INGRESO + SUBTOTAL       BOTON AGREGAR
-    //======================================================
-    JPanel panelInferior = new JPanel(
-            new BorderLayout(
-                    15,
-                    0
-            )
-    );
-
-    panelInferior.setOpaque(false);
-
-    //======================================================
-    // RESUMEN
-    //======================================================
-    JPanel panelResumen = new JPanel(
-            new GridBagLayout()
-    );
-
-    panelResumen.setBackground(
-            fondoResumen
-    );
-
-    panelResumen.setBorder(
-            BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(
-                            bordeResumen
-                    ),
-                    new EmptyBorder(
-                            9,
-                            14,
-                            9,
-                            14
-                    )
-            )
-    );
-
-    GridBagConstraints r
-            = new GridBagConstraints();
-
-    r.anchor = GridBagConstraints.WEST;
-
-    r.insets = new Insets(
-            2,
-            4,
-            2,
-            10
-    );
-
-    //======================================================
-    // INGRESO STOCK
-    //======================================================
-    JLabel lblTituloIngreso = new JLabel(
-            "INGRESAN AL STOCK"
-    );
-
-    lblTituloIngreso.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    11
-            )
-    );
-
-    lblTituloIngreso.setForeground(
-            new Color(
-                    65,
-                    100,
-                    78
-            )
-    );
-
-    r.gridx = 0;
-    r.gridy = 0;
-
-    panelResumen.add(
-            lblTituloIngreso,
-            r
-    );
-
-    lblIngresoStock.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    20
-            )
-    );
-
-    lblIngresoStock.setForeground(
-            VERDE
-    );
-
-    r.gridx = 1;
-    r.weightx = 1;
-
-    panelResumen.add(
-            lblIngresoStock,
-            r
-    );
-
-    //======================================================
-    // SUBTOTAL
-    //======================================================
-    JLabel lblSubtotalTitulo = new JLabel(
-            "SUBTOTAL"
-    );
-
-    lblSubtotalTitulo.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    11
-            )
-    );
-
-    lblSubtotalTitulo.setForeground(
-            new Color(
-                    65,
-                    100,
-                    78
-            )
-    );
-
-    r.gridx = 2;
-    r.weightx = 0;
-
-    panelResumen.add(
-            lblSubtotalTitulo,
-            r
-    );
-
-    lblSubtotalItem.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    18
-            )
-    );
-
-    lblSubtotalItem.setForeground(
-            VERDE
-    );
-
-    r.gridx = 3;
-
-    panelResumen.add(
-            lblSubtotalItem,
-            r
-    );
-
-    //======================================================
-    // BOTON AGREGAR
-    //======================================================
-    btnAgregarProducto.setText(
-            "Agregar Producto"
-    );
-
-    btnAgregarProducto.setPreferredSize(
-            new Dimension(
-                    175,
-                    52
-            )
-    );
-
-    panelInferior.add(
-            panelResumen,
-            BorderLayout.CENTER
-    );
-
-    panelInferior.add(
-            btnAgregarProducto,
-            BorderLayout.EAST
-    );
-
-    c.gridx = 0;
-    c.gridy = 5;
-    c.gridwidth = 4;
-    c.weightx = 1;
-    c.fill = GridBagConstraints.HORIZONTAL;
-
-    c.insets = new Insets(
-            7,
-            5,
-            2,
-            5
-    );
-
-    panel.add(
-            panelInferior,
-            c
-    );
-
-    return panel;
-}
-
-
+    private JPanel crearPanelProducto() {
+
+        //======================================================
+        // COLORES DEL BLOQUE
+        //======================================================
+        Color fondoGeneral = new Color(250, 248, 243);
+        Color fondoTarjeta = new Color(255, 255, 255);
+        Color fondoTitulo = new Color(239, 234, 222);
+        Color bordeSuave = new Color(220, 214, 201);
+
+        Color fondoResumen = new Color(237, 248, 242);
+        Color bordeResumen = new Color(198, 226, 208);
+
+        //======================================================
+        // PANEL PRINCIPAL
+        //======================================================
+        JPanel panel = new JPanel(new GridBagLayout());
+
+        panel.setBackground(fondoGeneral);
+
+        panel.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(
+                                bordeSuave
+                        ),
+                        new EmptyBorder(
+                                16,
+                                18,
+                                16,
+                                18
+                        )
+                )
+        );
+
+        GridBagConstraints c = new GridBagConstraints();
+
+        c.insets = new Insets(
+                5,
+                5,
+                5,
+                5
+        );
+
+        c.anchor = GridBagConstraints.WEST;
+
+        //======================================================
+        // 1. ENCABEZADO
+        //======================================================
+        JPanel panelEncabezado = new JPanel();
+
+        panelEncabezado.setOpaque(false);
+
+        panelEncabezado.setLayout(
+                new BoxLayout(
+                        panelEncabezado,
+                        BoxLayout.Y_AXIS
+                )
+        );
+
+        JLabel titulo = new JLabel(
+                "AGREGAR PRODUCTO"
+        );
+
+        titulo.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        16
+                )
+        );
+
+        titulo.setForeground(
+                AZUL_OSCURO
+        );
+
+        JLabel subtitulo = new JLabel(
+                "Seleccione el producto y cargue cómo se lo entregó el proveedor"
+        );
+
+        subtitulo.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.PLAIN,
+                        12
+                )
+        );
+
+        subtitulo.setForeground(
+                TEXTO_SECUNDARIO
+        );
+
+        iconoLabel(titulo, "producto", AZUL_OSCURO);
+        panelEncabezado.add(titulo);
+
+        panelEncabezado.add(
+                Box.createVerticalStrut(3)
+        );
+
+        panelEncabezado.add(subtitulo);
+
+        c.gridx = 0;
+        c.gridy = 0;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        panel.add(
+                panelEncabezado,
+                c
+        );
+
+        //======================================================
+        // 2. BUSCAR PRODUCTO
+        //======================================================
+        JPanel panelBuscar = new JPanel(
+                new BorderLayout(
+                        15,
+                        0
+                )
+        );
+
+        panelBuscar.setOpaque(false);
+
+        JPanel panelTextoBuscar = new JPanel();
+
+        panelTextoBuscar.setOpaque(false);
+
+        panelTextoBuscar.setLayout(
+                new BoxLayout(
+                        panelTextoBuscar,
+                        BoxLayout.Y_AXIS
+                )
+        );
+
+        JLabel lblProducto = new JLabel(
+                "Producto"
+        );
+
+        lblProducto.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        13
+                )
+        );
+
+        lblProducto.setForeground(
+                AZUL_OSCURO
+        );
+
+        JLabel lblBuscarAyuda = new JLabel(
+                "Busque por código, nombre, marca o categoría"
+        );
+
+        lblBuscarAyuda.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.PLAIN,
+                        11
+                )
+        );
+
+        lblBuscarAyuda.setForeground(
+                TEXTO_SECUNDARIO
+        );
+
+        iconoLabel(lblProducto, "buscar", AZUL_OSCURO);
+        panelTextoBuscar.add(
+                lblProducto
+        );
+
+        panelTextoBuscar.add(
+                Box.createVerticalStrut(2)
+        );
+
+        panelTextoBuscar.add(
+                lblBuscarAyuda
+        );
+
+        btnBuscarProducto.setText(
+                "Buscar producto"
+        );
+
+        btnBuscarProducto.setPreferredSize(
+                new Dimension(
+                        155,
+                        40
+                )
+        );
+
+        panelBuscar.add(
+                panelTextoBuscar,
+                BorderLayout.CENTER
+        );
+
+        panelBuscar.add(
+                btnBuscarProducto,
+                BorderLayout.EAST
+        );
+
+        c.gridx = 0;
+        c.gridy = 1;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        panel.add(
+                panelBuscar,
+                c
+        );
+
+        //======================================================
+        // 3. PRODUCTO SELECCIONADO
+        //======================================================
+        JPanel panelProductoSeleccionado
+                = new JPanel(
+                        new BorderLayout(
+                                15,
+                                0
+                        )
+                );
+
+        panelProductoSeleccionado.setBackground(
+                fondoTarjeta
+        );
+
+        panelProductoSeleccionado.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(
+                                bordeSuave
+                        ),
+                        new EmptyBorder(
+                                11,
+                                14,
+                                11,
+                                14
+                        )
+                )
+        );
+
+        //======================================================
+        // DATOS DEL PRODUCTO
+        //======================================================
+        JPanel panelDatosProducto = new JPanel();
+
+        panelDatosProducto.setOpaque(false);
+
+        panelDatosProducto.setLayout(
+                new BoxLayout(
+                        panelDatosProducto,
+                        BoxLayout.Y_AXIS
+                )
+        );
+
+        lblProductoSeleccionado.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        15
+                )
+        );
+
+        lblProductoSeleccionado.setForeground(
+                AZUL_OSCURO
+        );
+
+        lblCodigoProducto.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.PLAIN,
+                        12
+                )
+        );
+
+        lblCodigoProducto.setForeground(
+                TEXTO_SECUNDARIO
+        );
+
+        panelDatosProducto.add(
+                lblProductoSeleccionado
+        );
+
+        panelDatosProducto.add(
+                Box.createVerticalStrut(3)
+        );
+
+        panelDatosProducto.add(
+                lblCodigoProducto
+        );
+
+        //======================================================
+        // STOCK ACTUAL
+        //======================================================
+        JPanel panelStock = new JPanel(
+                new FlowLayout(
+                        FlowLayout.RIGHT,
+                        6,
+                        5
+                )
+        );
+
+        panelStock.setOpaque(false);
+
+        JLabel lblStockTitulo = new JLabel(
+                "Stock actual:"
+        );
+
+        lblStockTitulo.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        12
+                )
+        );
+
+        lblStockTitulo.setForeground(
+                AZUL_OSCURO
+        );
+
+        lblStockActual.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        16
+                )
+        );
+
+        lblStockActual.setForeground(
+                VERDE
+        );
+
+        iconoLabel(lblStockTitulo, "stock", AZUL_OSCURO);
+        panelStock.add(
+                lblStockTitulo
+        );
+
+        panelStock.add(
+                lblStockActual
+        );
+
+        panelProductoSeleccionado.add(
+                panelDatosProducto,
+                BorderLayout.CENTER
+        );
+
+        panelProductoSeleccionado.add(
+                panelStock,
+                BorderLayout.EAST
+        );
+
+        c.gridx = 0;
+        c.gridy = 2;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        panel.add(
+                panelProductoSeleccionado,
+                c
+        );
+
+        //======================================================
+        // 4. TITULO FORMA DE COMPRA
+        //======================================================
+        JPanel panelTituloCompra = new JPanel(
+                new FlowLayout(
+                        FlowLayout.LEFT,
+                        10,
+                        7
+                )
+        );
+
+        panelTituloCompra.setBackground(
+                fondoTitulo
+        );
+
+        JLabel lblTituloCompra = new JLabel(
+                "¿CÓMO LO ESTÁS COMPRANDO?"
+        );
+
+        lblTituloCompra.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        13
+                )
+        );
+
+        lblTituloCompra.setForeground(
+                AZUL_OSCURO
+        );
+
+        iconoLabel(lblTituloCompra, "documento", AZUL_OSCURO);
+        panelTituloCompra.add(
+                lblTituloCompra
+        );
+
+        c.gridx = 0;
+        c.gridy = 3;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        panel.add(
+                panelTituloCompra,
+                c
+        );
+
+        //======================================================
+        // 5. CAMPOS DE CARGA
+        //
+        // PRESENTACION | CANTIDAD | CONTENIDO | COSTO
+        //======================================================
+        JPanel panelCampos = new JPanel(
+                new GridLayout(
+                        1,
+                        4,
+                        18,
+                        0
+                )
+        );
+
+        panelCampos.setOpaque(false);
+
+        //======================================================
+        // PRESENTACION
+        //======================================================
+        JPanel bloquePresentacion
+                = crearBloqueVerticalProducto(
+                        "PRESENTACIÓN",
+                        cmbFormaCompra
+                );
+
+        cmbFormaCompra.setPreferredSize(
+                new Dimension(
+                        160,
+                        38
+                )
+        );
+
+        //======================================================
+        // CANTIDAD
+        //======================================================
+        JPanel contenidoCantidad = new JPanel(
+                new BorderLayout(
+                        7,
+                        0
+                )
+        );
+
+        contenidoCantidad.setOpaque(false);
+
+        spnCantidad.setPreferredSize(
+                new Dimension(
+                        120,
+                        38
+                )
+        );
+
+        lblUnidadCantidad.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        12
+                )
+        );
+
+        lblUnidadCantidad.setForeground(
+                AZUL_OSCURO
+        );
+
+        contenidoCantidad.add(
+                spnCantidad,
+                BorderLayout.CENTER
+        );
+
+        contenidoCantidad.add(
+                lblUnidadCantidad,
+                BorderLayout.EAST
+        );
+
+        JPanel bloqueCantidad
+                = crearBloqueVerticalProducto(
+                        "CANTIDAD",
+                        contenidoCantidad
+                );
+
+        //======================================================
+        // CONTENIDO / FACTOR
+        //======================================================
+        JPanel bloqueFactor = new JPanel();
+
+        bloqueFactor.setOpaque(false);
+
+        bloqueFactor.setLayout(
+                new BoxLayout(
+                        bloqueFactor,
+                        BoxLayout.Y_AXIS
+                )
+        );
+
+        lblFactorCompraTitulo.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        11
+                )
+        );
+
+        lblFactorCompraTitulo.setForeground(
+                new Color(
+                        70,
+                        75,
+                        85
+                )
+        );
+
+        lblFactorCompraTitulo.setAlignmentX(
+                Component.LEFT_ALIGNMENT
+        );
+
+        spnFactorCompra.setMaximumSize(
+                new Dimension(
+                        Integer.MAX_VALUE,
+                        38
+                )
+        );
+
+        spnFactorCompra.setPreferredSize(
+                new Dimension(
+                        140,
+                        38
+                )
+        );
+
+        spnFactorCompra.setAlignmentX(
+                Component.LEFT_ALIGNMENT
+        );
+
+        bloqueFactor.add(
+                lblFactorCompraTitulo
+        );
+
+        bloqueFactor.add(
+                Box.createVerticalStrut(5)
+        );
+
+        bloqueFactor.add(
+                spnFactorCompra
+        );
+
+        //======================================================
+        // COSTO
+        //======================================================
+        JPanel contenidoCosto = new JPanel(
+                new BorderLayout(
+                        6,
+                        0
+                )
+        );
+
+        contenidoCosto.setOpaque(false);
+
+        JLabel simboloPeso = new JLabel(
+                "$"
+        );
+
+        simboloPeso.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        16
+                )
+        );
+
+        simboloPeso.setForeground(
+                VERDE
+        );
+
+        txtCosto.setPreferredSize(
+                new Dimension(
+                        140,
+                        38
+                )
+        );
+
+        contenidoCosto.add(
+                simboloPeso,
+                BorderLayout.WEST
+        );
+
+        contenidoCosto.add(
+                txtCosto,
+                BorderLayout.CENTER
+        );
+
+        JPanel bloqueCosto = new JPanel();
+
+        bloqueCosto.setOpaque(false);
+
+        bloqueCosto.setLayout(
+                new BoxLayout(
+                        bloqueCosto,
+                        BoxLayout.Y_AXIS
+                )
+        );
+
+        lblCostoUnidad.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        11
+                )
+        );
+
+        lblCostoUnidad.setForeground(
+                new Color(
+                        70,
+                        75,
+                        85
+                )
+        );
+
+        lblCostoUnidad.setAlignmentX(
+                Component.LEFT_ALIGNMENT
+        );
+
+        contenidoCosto.setAlignmentX(
+                Component.LEFT_ALIGNMENT
+        );
+
+        bloqueCosto.add(
+                lblCostoUnidad
+        );
+
+        bloqueCosto.add(
+                Box.createVerticalStrut(5)
+        );
+
+        bloqueCosto.add(
+                contenidoCosto
+        );
+
+        //======================================================
+        // AGREGAMOS LAS 4 COLUMNAS
+        //======================================================
+        panelCampos.add(
+                bloquePresentacion
+        );
+
+        panelCampos.add(
+                bloqueCantidad
+        );
+
+        panelCampos.add(
+                bloqueFactor
+        );
+
+        panelCampos.add(
+                bloqueCosto
+        );
+
+        c.gridx = 0;
+        c.gridy = 4;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        c.insets = new Insets(
+                12,
+                5,
+                7,
+                5
+        );
+
+        panel.add(
+                panelCampos,
+                c
+        );
+
+        //======================================================
+        // 6. PARTE INFERIOR
+        //
+        // INGRESO + SUBTOTAL       BOTON AGREGAR
+        //======================================================
+        JPanel panelInferior = new JPanel(
+                new BorderLayout(
+                        15,
+                        0
+                )
+        );
+
+        panelInferior.setOpaque(false);
+
+        //======================================================
+        // RESUMEN
+        //======================================================
+        JPanel panelResumen = new JPanel(
+                new GridBagLayout()
+        );
+
+        panelResumen.setBackground(
+                fondoResumen
+        );
+
+        panelResumen.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(
+                                bordeResumen
+                        ),
+                        new EmptyBorder(
+                                9,
+                                14,
+                                9,
+                                14
+                        )
+                )
+        );
+
+        GridBagConstraints r
+                = new GridBagConstraints();
+
+        r.anchor = GridBagConstraints.WEST;
+
+        r.insets = new Insets(
+                2,
+                4,
+                2,
+                10
+        );
+
+        //======================================================
+        // INGRESO STOCK
+        //======================================================
+        JLabel lblTituloIngreso = new JLabel(
+                "INGRESAN AL STOCK"
+        );
+
+        lblTituloIngreso.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        11
+                )
+        );
+
+        lblTituloIngreso.setForeground(
+                new Color(
+                        65,
+                        100,
+                        78
+                )
+        );
+
+        r.gridx = 0;
+        r.gridy = 0;
+
+        iconoLabel(lblTituloIngreso, "stock", VERDE);
+        panelResumen.add(
+                lblTituloIngreso,
+                r
+        );
+
+        lblIngresoStock.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        20
+                )
+        );
+
+        lblIngresoStock.setForeground(
+                VERDE
+        );
+
+        r.gridx = 1;
+        r.weightx = 1;
+
+        panelResumen.add(
+                lblIngresoStock,
+                r
+        );
+
+        //======================================================
+        // SUBTOTAL
+        //======================================================
+        JLabel lblSubtotalTitulo = new JLabel(
+                "SUBTOTAL"
+        );
+
+        lblSubtotalTitulo.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        11
+                )
+        );
+
+        lblSubtotalTitulo.setForeground(
+                new Color(
+                        65,
+                        100,
+                        78
+                )
+        );
+
+        r.gridx = 2;
+        r.weightx = 0;
+
+        iconoLabel(lblSubtotalTitulo, "dinero", VERDE);
+        panelResumen.add(
+                lblSubtotalTitulo,
+                r
+        );
+
+        lblSubtotalItem.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        18
+                )
+        );
+
+        lblSubtotalItem.setForeground(
+                VERDE
+        );
+
+        r.gridx = 3;
+
+        panelResumen.add(
+                lblSubtotalItem,
+                r
+        );
+
+        //======================================================
+        // BOTON AGREGAR
+        //======================================================
+        btnAgregarProducto.setText(
+                "Agregar Producto"
+        );
+
+        btnAgregarProducto.setPreferredSize(
+                new Dimension(
+                        175,
+                        52
+                )
+        );
+
+        panelInferior.add(
+                panelResumen,
+                BorderLayout.CENTER
+        );
+
+        panelInferior.add(
+                btnAgregarProducto,
+                BorderLayout.EAST
+        );
+
+        c.gridx = 0;
+        c.gridy = 5;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        c.insets = new Insets(
+                7,
+                5,
+                2,
+                5
+        );
+
+        panel.add(
+                panelInferior,
+                c
+        );
+
+        return panel;
+    }
 
 //==========================================================
 // BLOQUE VERTICAL PARA CAMPOS DEL PRODUCTO
@@ -1804,59 +1934,60 @@ private JPanel crearPanelProducto() {
 // CANTIDAD
 // [ 2 ] CAJA
 //==========================================================
-private JPanel crearBloqueVerticalProducto(
-        String titulo,
-        JComponent componente) {
+    private JPanel crearBloqueVerticalProducto(
+            String titulo,
+            JComponent componente) {
 
-    JPanel panel = new JPanel();
+        JPanel panel = new JPanel();
 
-    panel.setOpaque(false);
+        panel.setOpaque(false);
 
-    panel.setLayout(
-            new BoxLayout(
-                    panel,
-                    BoxLayout.Y_AXIS
-            )
-    );
+        panel.setLayout(
+                new BoxLayout(
+                        panel,
+                        BoxLayout.Y_AXIS
+                )
+        );
 
-    JLabel label = new JLabel(
-            titulo
-    );
+        JLabel label = new JLabel(
+                titulo
+        );
 
-    label.setFont(
-            new Font(
-                    "Segoe UI",
-                    Font.BOLD,
-                    11
-            )
-    );
+        label.setFont(
+                new Font(
+                        "Segoe UI",
+                        Font.BOLD,
+                        11
+                )
+        );
 
-    label.setForeground(
-            new Color(
-                    70,
-                    75,
-                    85
-            )
-    );
+        label.setForeground(
+                new Color(
+                        70,
+                        75,
+                        85
+                )
+        );
 
-    label.setAlignmentX(
-            Component.LEFT_ALIGNMENT
-    );
+        label.setAlignmentX(
+                Component.LEFT_ALIGNMENT
+        );
 
-    componente.setAlignmentX(
-            Component.LEFT_ALIGNMENT
-    );
+        componente.setAlignmentX(
+                Component.LEFT_ALIGNMENT
+        );
 
-    panel.add(label);
+        panel.add(label);
 
-    panel.add(
-            Box.createVerticalStrut(5)
-    );
+        panel.add(
+                Box.createVerticalStrut(5)
+        );
 
-    panel.add(componente);
+        panel.add(componente);
 
-    return panel;
-}
+        return panel;
+    }
+
     //==========================================================
     // TABLA DETALLE
     //==========================================================
@@ -1998,6 +2129,7 @@ private JPanel crearBloqueVerticalProducto(
                 AZUL_OSCURO
         );
 
+        iconoLabel(lblTotal, "dinero", AZUL_OSCURO);
         total.add(lblTotal);
 
         total.add(
@@ -2927,8 +3059,14 @@ private JPanel crearBloqueVerticalProducto(
     //==========================================================
     // CONFIRMAR ENTRADA REAL
     //==========================================================
+//==========================================================
+// CONFIRMAR ENTRADA REAL DE MERCADERIA
+//==========================================================
     private void confirmarEntrada() {
 
+        //======================================================
+        // 1. VALIDAR PROVEEDOR
+        //======================================================
         if (idProveedorSeleccionado <= 0) {
 
             JOptionPane.showMessageDialog(
@@ -2941,6 +3079,9 @@ private JPanel crearBloqueVerticalProducto(
             return;
         }
 
+        //======================================================
+        // 2. VALIDAR PRODUCTOS
+        //======================================================
         if (detalles.isEmpty()) {
 
             JOptionPane.showMessageDialog(
@@ -2953,12 +3094,17 @@ private JPanel crearBloqueVerticalProducto(
             return;
         }
 
+        // Evitar nuevas confirmaciones mientras se procesa.
+        btnConfirmar.setEnabled(false);
+
         try {
 
-            Proveedor proveedor
-                    = proveedorDao.buscarPorId(
-                            idProveedorSeleccionado
-                    );
+            //==================================================
+            // 3. BUSCAR PROVEEDOR
+            //==================================================
+            Proveedor proveedor = proveedorDao.buscarPorId(
+                    idProveedorSeleccionado
+            );
 
             if (proveedor == null) {
 
@@ -2969,8 +3115,10 @@ private JPanel crearBloqueVerticalProducto(
                 return;
             }
 
-            Deposito deposito
-                    = depositoDao.buscarPrincipal();
+            //==================================================
+            // 4. BUSCAR DEPOSITO PRINCIPAL
+            //==================================================
+            Deposito deposito = depositoDao.buscarPrincipal();
 
             if (deposito == null) {
 
@@ -2981,21 +3129,17 @@ private JPanel crearBloqueVerticalProducto(
                 return;
             }
 
-            Compra compra
-                    = new Compra();
+            //==================================================
+            // 5. PREPARAR COMPRA
+            //==================================================
+            Compra compra = new Compra();
 
-            compra.setProveedor(
-                    proveedor
-            );
+            compra.setProveedor(proveedor);
+            compra.setDeposito(deposito);
 
-            compra.setDeposito(
-                    deposito
-            );
-
-            String comprobante
-                    = txtNumeroFactura
-                            .getText()
-                            .trim();
+            String comprobante = txtNumeroFactura
+                    .getText()
+                    .trim();
 
             compra.setNumeroComprobante(
                     comprobante.isEmpty()
@@ -3003,106 +3147,136 @@ private JPanel crearBloqueVerticalProducto(
                     : comprobante
             );
 
-            compra.setOrigenCarga(
-                    "MANUAL"
-            );
+            compra.setOrigenCarga("MANUAL");
 
             compra.setObservaciones(
                     "Entrada manual de mercadería"
             );
 
+            //==================================================
+            // 6. CREAR COMPRA EN BORRADOR
+            //==================================================
             ResultadoOperacion crear
-                    = compraService.crearCompra(
-                            compra
-                    );
+                    = compraService.crearCompra(compra);
 
             if (!crear.isExitoso()) {
 
-                mostrarError(
-                        crear.getMensaje()
-                );
+                mostrarError(crear.getMensaje());
 
                 return;
             }
 
-            long idCompra
-                    = compra.getIdCompra();
+            long idCompra = compra.getIdCompra();
 
             if (idCompra <= 0) {
 
                 mostrarError(
-                        "La compra fue creada, pero no se pudo recuperar su ID."
+                        "La compra fue creada, pero no se pudo "
+                        + "recuperar su ID."
                 );
 
                 return;
             }
 
-            for (DetalleEntradaTemporal detalle
-                    : detalles) {
+            //==================================================
+            // 7. REGISTRAR DETALLES DE COMPRA
+            //==================================================
+            for (DetalleEntradaTemporal detalle : detalles) {
 
                 ResultadoOperacion agregar
                         = compraService.agregarProducto(
                                 idCompra,
-                                detalle
-                                        .getProducto()
+                                detalle.getProducto()
                                         .getIdProducto(),
-                                detalle
-                                        .getUnidadCompra(),
-                                detalle
-                                        .getFactorConversion(),
-                                detalle
-                                        .getCantidadCompra(),
-                                detalle
-                                        .getCostoUnitario()
+                                detalle.getUnidadCompra(),
+                                detalle.getFactorConversion(),
+                                detalle.getCantidadCompra(),
+                                detalle.getCostoUnitario()
                         );
 
                 if (!agregar.isExitoso()) {
 
                     mostrarError(
                             "No se pudo agregar "
-                            + detalle
-                                    .getProducto()
-                                    .getNombre()
+                            + detalle.getProducto().getNombre()
                             + ": "
                             + agregar.getMensaje()
+                            + "\n\nLa compra N.º "
+                            + idCompra
+                            + " quedó en borrador."
                     );
 
                     return;
                 }
             }
 
+            //==================================================
+            // 8. CONFIRMAR COMPRA Y ACTUALIZAR STOCK
+            //==================================================
             ResultadoOperacion confirmar
-                    = compraService.confirmarCompra(
-                            idCompra
-                    );
+                    = compraService.confirmarCompra(idCompra);
 
             if (!confirmar.isExitoso()) {
 
                 mostrarError(
-                        confirmar.getMensaje()
+                        "No se pudo confirmar la compra N.º "
+                        + idCompra
+                        + ":\n"
+                        + confirmar.getMensaje()
+                        + "\n\nVerificá su estado antes de "
+                        + "intentar registrarla nuevamente."
                 );
 
                 return;
             }
 
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Entrada registrada correctamente.\n"
-                    + "Compra N.º "
-                    + idCompra
-                    + "\nEl stock fue actualizado.",
-                    "Entrada de Mercadería",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
+            //==================================================
+            // 9. MOSTRAR DIALOGO PERSONALIZADO
+            //==================================================
+            // Obtener la ventana principal si es un JFrame.
+            java.awt.Window ventana
+                    = javax.swing.SwingUtilities
+                            .getWindowAncestor(this);
 
+            java.awt.Frame propietario = null;
+
+            if (ventana instanceof java.awt.Frame frame) {
+                propietario = frame;
+            }
+
+            DialogoEntradaConfirmada dialogo
+                    = new DialogoEntradaConfirmada(
+                            propietario,
+                            idCompra,
+                            proveedor.getRazonSocial(),
+                            detalles.size(),
+                            deposito.getNombre(),
+                            lblTotalCompra.getText()
+                    );
+
+            dialogo.setLocationRelativeTo(this);
+
+            dialogo.setVisible(true);
+
+            //==================================================
+            // 10. CERRAR ENTRADA MANUAL
+            //==================================================
             dispose();
 
         } catch (Exception ex) {
 
             mostrarError(
-                    "No se pudo registrar la entrada: "
+                    "Ocurrió un error durante el registro:\n"
                     + ex.getMessage()
+                    + "\n\nSi la compra llegó a confirmarse, "
+                    + "no la cargues nuevamente sin verificar "
+                    + "primero la base de datos."
             );
+
+        } finally {
+
+            // Solo se utiliza si el diálogo permanece abierto.
+            btnConfirmar.setEnabled(true);
         }
     }
 
@@ -3271,6 +3445,17 @@ private JPanel crearBloqueVerticalProducto(
                         85
                 )
         );
+
+        switch (texto) {
+            case "Proveedor" ->
+                iconoLabel(label, "proveedor", AZUL);
+            case "Factura N°" ->
+                iconoLabel(label, "documento", AZUL);
+            case "Fecha" ->
+                iconoLabel(label, "calendario", AZUL);
+            default -> {
+            }
+        }
 
         return label;
     }

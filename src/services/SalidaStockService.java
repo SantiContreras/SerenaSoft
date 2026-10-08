@@ -1189,4 +1189,92 @@ public ResultadoOperacion confirmarSalida(
                 ? null
                 : texto;
     }
+
+    // =========================================================
+    // REGISTRAR SALIDA COMPLETA - UNA SOLA TRANSACCIÓN
+    // =========================================================
+    public ResultadoOperacion registrarSalidaCompleta(
+            int idDeposito, String motivo, String destino,
+            String observaciones, List<SalidaStockDetalle> items) {
+
+        if (!SesionUsuario.haySesion() || SesionUsuario.getUsuarioActual() == null)
+            return ResultadoOperacion.error("Debe iniciar sesión.");
+        if (idDeposito <= 0 || motivo == null || motivo.isBlank())
+            return ResultadoOperacion.error("Depósito o motivo inválido.");
+        if (items == null || items.isEmpty())
+            return ResultadoOperacion.error("Agregue productos a la salida.");
+        if (motivo.length() > 120 || (destino != null && destino.length() > 150)
+                || (observaciones != null && observaciones.length() > 500))
+            return ResultadoOperacion.error("Los datos de la salida superan la longitud permitida.");
+        if ("Traslado".equalsIgnoreCase(motivo.trim())
+                || "Venta / despacho".equalsIgnoreCase(motivo.trim()))
+            return ResultadoOperacion.error("Las transferencias y ventas deben registrarse en sus módulos correspondientes.");
+
+        Deposito deposito = depositoDao.buscarPorId(idDeposito);
+        if (deposito == null || !deposito.isActivo())
+            return ResultadoOperacion.error("El depósito no está activo.");
+
+        // Validaciones previas y orden de bloqueo consistente.
+        java.util.TreeMap<Integer, SalidaStockDetalle> ordenados = new java.util.TreeMap<>();
+        for (SalidaStockDetalle item : items) {
+            if (item == null || item.getProducto() == null || item.getCantidad() == null)
+                return ResultadoOperacion.error("Hay un detalle incompleto.");
+            int id = item.getProducto().getIdProducto();
+            BigDecimal cantidad = item.getCantidad();
+            if (id <= 0 || cantidad.signum() <= 0 || cantidad.scale() > 3)
+                return ResultadoOperacion.error("Cantidad inválida para el producto " + id);
+            if (ordenados.putIfAbsent(id, item) != null)
+                return ResultadoOperacion.error("Hay productos duplicados en la salida.");
+            Producto producto = productoDao.buscarPorId(id);
+            if (producto == null || !producto.isActivo() || !producto.isControlaStock())
+                return ResultadoOperacion.error("Producto inactivo o sin control de stock: " + id);
+            if (producto.getUnidadVenta() != null
+                    && "UN".equalsIgnoreCase(producto.getUnidadVenta().getCodigo())
+                    && cantidad.stripTrailingZeros().scale() > 0)
+                return ResultadoOperacion.error("El producto " + producto.getNombre() + " requiere unidades enteras.");
+        }
+
+        try (Connection cn = conexion.getConexion()) {
+            cn.setAutoCommit(false);
+            try {
+                SalidaStock salida = new SalidaStock();
+                salida.setDeposito(deposito);
+                salida.setUsuario(SesionUsuario.getUsuarioActual());
+                salida.setMotivo(motivo.trim());
+                salida.setDestino(destino == null ? null : destino.trim());
+                salida.setObservaciones(observaciones == null ? null : observaciones.trim());
+                salida.setEstado("BORRADOR");
+                if (!salidaStockDao.guardar(salida, cn) || salida.getIdSalida() <= 0)
+                    throw new SQLException("No se pudo crear la salida.");
+
+                for (SalidaStockDetalle item : ordenados.values()) {
+                    int id = item.getProducto().getIdProducto();
+                    StockProducto stock = stockProductoDao.buscarParaActualizar(cn, id, idDeposito);
+                    if (stock == null || stock.getCantidad() == null
+                            || stock.getCantidad().compareTo(item.getCantidad()) < 0)
+                        throw new SQLException("Stock insuficiente para producto ID " + id);
+                }
+                for (SalidaStockDetalle item : ordenados.values()) {
+                    int id = item.getProducto().getIdProducto();
+                    StockProducto stock = stockProductoDao.buscarParaActualizar(cn, id, idDeposito);
+                    item.setIdSalida(salida.getIdSalida());
+                    if (!salidaStockDao.guardarDetalle(item, cn))
+                        throw new SQLException("No se pudo guardar el detalle de " + id);
+                    if (!stockProductoDao.descontarStock(cn, stock.getIdStock(), item.getCantidad()))
+                        throw new SQLException("No se pudo descontar el stock de " + id);
+                }
+                if (!salidaStockDao.cambiarEstadoSiCoincide(
+                        salida.getIdSalida(), "BORRADOR", "CONFIRMADA", cn))
+                    throw new SQLException("No se pudo confirmar el estado.");
+                cn.commit();
+                return ResultadoOperacion.ok("Salida N.º " + salida.getIdSalida() + " confirmada. Stock descontado.");
+            } catch (Exception ex) {
+                cn.rollback();
+                return ResultadoOperacion.error("No se registró la salida: " + ex.getMessage());
+            }
+        } catch (SQLException ex) {
+            return ResultadoOperacion.error("Error de conexión: " + ex.getMessage());
+        }
+    }
+
 }

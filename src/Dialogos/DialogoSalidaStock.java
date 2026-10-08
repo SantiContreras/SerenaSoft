@@ -3,6 +3,16 @@ package Dialogos;
 import Diseños.EstiloBotones;
 import java.awt.*;
 import java.text.DecimalFormat;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import Dao.DepositoDao;
+import Dao.StockProductoDao;
+import model.Deposito;
+import model.Producto;
+import model.SalidaStockDetalle;
+import services.SalidaStockService;
+import services.ResultadoOperacion;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -80,6 +90,12 @@ public class DialogoSalidaStock extends JDialog {
     //==========================================================
     // PRODUCTO SELECCIONADO
     //==========================================================
+    private final DepositoDao depositoDao = new DepositoDao();
+    private final StockProductoDao stockDao = new StockProductoDao();
+    private final SalidaStockService salidaService = new SalidaStockService();
+    private final Map<String, Producto> productosDetalle = new LinkedHashMap<>();
+    private Producto objetoSeleccionado;
+    private Deposito depositoPrincipal;
     private String codigoSeleccionado;
     private String productoSeleccionado;
 
@@ -124,6 +140,7 @@ public class DialogoSalidaStock extends JDialog {
         construirDialogo();
 
         cargarDatosPrueba();
+        depositoPrincipal = depositoDao.buscarPrincipal();
 
         configurarEventos();
 
@@ -151,6 +168,7 @@ public class DialogoSalidaStock extends JDialog {
          EstiloBotones.corregirBotones(
                 getContentPane()
     );
+        aplicarEstiloVisualSerena();
         setDefaultCloseOperation(
                 JDialog.DISPOSE_ON_CLOSE
         );
@@ -651,14 +669,10 @@ public class DialogoSalidaStock extends JDialog {
                 Color.WHITE
         );
 
-        panel.setBorder(
-                new EmptyBorder(
-                        17,
-                        25,
-                        15,
-                        25
-                )
-        );
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 3, 0, AZUL_SERENA),
+                new EmptyBorder(17, 25, 15, 25)
+        ));
 
         JLabel titulo =
                 new JLabel(
@@ -669,13 +683,15 @@ public class DialogoSalidaStock extends JDialog {
                 new Font(
                         "Segoe UI",
                         Font.BOLD,
-                        23
+                        25
                 )
         );
 
         titulo.setForeground(
-                AZUL_OSCURO
+                AZUL_SERENA
         );
+        titulo.setIcon(new IconoSerena("salida", AZUL_SERENA, 27));
+        titulo.setIconTextGap(12);
 
         JLabel subtitulo =
                 new JLabel(
@@ -1238,40 +1254,23 @@ public class DialogoSalidaStock extends JDialog {
                 return;
             }
 
-            codigoSeleccionado =
-                    dialogo.getCodigoSeleccionado();
-
-            productoSeleccionado =
-                    dialogo.getProductoSeleccionado();
-
-            stockActualSeleccionado =
-                    dialogo.getStockSeleccionado();
-
-            precioSeleccionado =
-                    dialogo.getPrecioSeleccionado();
-
-            txtProducto.setText(
-                    productoSeleccionado
-            );
-
-            lblCodigo.setText(
-                    codigoSeleccionado
-            );
-
-            lblNombreProducto.setText(
-                    productoSeleccionado
-            );
-
-            lblStockActual.setText(
-                    formatearCantidad(
-                            stockActualSeleccionado
-                    )
-                    + " unidades"
-            );
-
-            spnCantidad.setValue(
-                    1.0
-            );
+            objetoSeleccionado = dialogo.getObjetoProductoSeleccionado();
+            if (objetoSeleccionado == null || depositoPrincipal == null) {
+                JOptionPane.showMessageDialog(this, "Producto o depósito no disponible.");
+                return;
+            }
+            codigoSeleccionado = objetoSeleccionado.getCodigo();
+            productoSeleccionado = objetoSeleccionado.getNombre();
+            BigDecimal disponible = stockDao.obtenerCantidad(
+                    objetoSeleccionado.getIdProducto(), depositoPrincipal.getIdDeposito());
+            stockActualSeleccionado = disponible.doubleValue();
+            txtProducto.setText(productoSeleccionado);
+            lblCodigo.setText(codigoSeleccionado);
+            lblNombreProducto.setText(productoSeleccionado);
+            String unidad = objetoSeleccionado.getUnidadVenta() == null
+                    ? "" : objetoSeleccionado.getUnidadVenta().getCodigo();
+            lblStockActual.setText(disponible.stripTrailingZeros().toPlainString() + " " + unidad);
+            spnCantidad.setValue(1.0);
         });
 
         //======================================================
@@ -1322,113 +1321,41 @@ public class DialogoSalidaStock extends JDialog {
     // AGREGAR PRODUCTO
     //==========================================================
     private void agregarProducto() {
-
-        if (codigoSeleccionado == null
-                || productoSeleccionado == null) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Seleccione un producto.",
-                    "Salida de Stock",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
+        if (objetoSeleccionado == null || depositoPrincipal == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un producto y verifique el depósito.");
             return;
         }
-
-        double cantidad =
-                ((Number)
-                spnCantidad.getValue())
-                        .doubleValue();
-
-        if (cantidad <= 0) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "La cantidad debe ser mayor a cero.",
-                    "Cantidad inválida",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
+        BigDecimal cantidad = new BigDecimal(spnCantidad.getValue().toString());
+        if (cantidad.signum() <= 0 || cantidad.scale() > 3) {
+            JOptionPane.showMessageDialog(this, "Cantidad inválida (máximo 3 decimales).");
             return;
         }
-
-        //======================================================
-        // VER CUANTO YA AGREGAMOS DEL MISMO PRODUCTO
-        //======================================================
-        double yaAgregado =
-                obtenerCantidadYaAgregada(
-                        codigoSeleccionado
-                );
-
-        if ((yaAgregado + cantidad)
-                > stockActualSeleccionado) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "La cantidad supera el stock disponible.\n\n"
-                    + "Stock actual: "
-                    + formatearCantidad(
-                            stockActualSeleccionado
-                    )
-                    + "\n"
-                    + "Ya agregado: "
-                    + formatearCantidad(
-                            yaAgregado
-                    )
-                    + "\n"
-                    + "Intentando agregar: "
-                    + formatearCantidad(
-                            cantidad
-                    ),
-                    "Stock insuficiente",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
+        String unidad = objetoSeleccionado.getUnidadVenta() == null
+                ? "" : objetoSeleccionado.getUnidadVenta().getCodigo();
+        if ("UN".equalsIgnoreCase(unidad) && cantidad.stripTrailingZeros().scale() > 0) {
+            JOptionPane.showMessageDialog(this, "Este producto requiere unidades enteras.");
             return;
         }
-
-        //======================================================
-        // SI YA EXISTE, SUMAMOS
-        //======================================================
-        int filaExistente =
-                buscarFilaProducto(
-                        codigoSeleccionado
-                );
-
-        if (filaExistente != -1) {
-
-            double cantidadAnterior =
-                    Double.parseDouble(
-                            modeloTabla
-                                    .getValueAt(
-                                            filaExistente,
-                                            2
-                                    )
-                                    .toString()
-                    );
-
-            modeloTabla.setValueAt(
-                    cantidadAnterior
-                    + cantidad,
-                    filaExistente,
-                    2
-            );
-
+        BigDecimal disponible = stockDao.obtenerCantidad(
+                objetoSeleccionado.getIdProducto(), depositoPrincipal.getIdDeposito());
+        int fila = buscarFilaProducto(codigoSeleccionado);
+        BigDecimal anterior = fila < 0 ? BigDecimal.ZERO
+                : new BigDecimal(modeloTabla.getValueAt(fila, 2).toString());
+        BigDecimal total = anterior.add(cantidad);
+        if (total.compareTo(disponible) > 0) {
+            JOptionPane.showMessageDialog(this, "Stock insuficiente. Disponible: "
+                    + disponible.stripTrailingZeros().toPlainString() + " " + unidad);
+            return;
+        }
+        productosDetalle.put(codigoSeleccionado, objetoSeleccionado);
+        if (fila >= 0) {
+            modeloTabla.setValueAt(total, fila, 2);
+            modeloTabla.setValueAt(disponible, fila, 3);
         } else {
-
-            modeloTabla.addRow(
-                    new Object[]{
-                        codigoSeleccionado,
-                        productoSeleccionado,
-                        cantidad,
-                        stockActualSeleccionado
-                    }
-            );
+            modeloTabla.addRow(new Object[]{codigoSeleccionado, productoSeleccionado,
+                    cantidad, disponible});
         }
-
         actualizarResumen();
-
         limpiarProductoSeleccionado();
     }
 
@@ -1530,6 +1457,7 @@ public class DialogoSalidaStock extends JDialog {
         if (opcion
                 == JOptionPane.YES_OPTION) {
 
+            productosDetalle.remove(modeloTabla.getValueAt(fila, 0).toString());
             modeloTabla.removeRow(
                     fila
             );
@@ -1542,112 +1470,79 @@ public class DialogoSalidaStock extends JDialog {
     // RESUMEN
     //==========================================================
     private void actualizarResumen() {
-
-        int productos =
-                modeloTabla.getRowCount();
-
-        double unidades =
-                0;
-
-        for (int i = 0;
-             i < modeloTabla.getRowCount();
-             i++) {
-
-            unidades +=
-                    Double.parseDouble(
-                            modeloTabla
-                                    .getValueAt(
-                                            i,
-                                            2
-                                    )
-                                    .toString()
-                    );
+        BigDecimal total = BigDecimal.ZERO;
+        for (int i = 0; i < modeloTabla.getRowCount(); i++) {
+            total = total.add(new BigDecimal(modeloTabla.getValueAt(i, 2).toString()));
         }
-
-        lblProductos.setText(
-                String.valueOf(
-                        productos
-                )
-        );
-
-        lblUnidades.setText(
-                formatearCantidad(
-                        unidades
-                )
-        );
+        lblProductos.setText(String.valueOf(modeloTabla.getRowCount()));
+        lblUnidades.setText(total.stripTrailingZeros().toPlainString());
     }
 
     //==========================================================
     // REGISTRAR SALIDA
     //==========================================================
     private void registrarSalida() {
-
-        if (comboMotivo.getSelectedIndex()
-                == 0) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Seleccione el motivo de la salida.",
-                    "Salida de Stock",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
-            comboMotivo.requestFocus();
-
+        if (depositoPrincipal == null) {
+            JOptionPane.showMessageDialog(this, "No existe depósito principal activo.");
             return;
         }
-
-        if (modeloTabla.getRowCount()
-                == 0) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Agregue al menos un producto.",
-                    "Salida de Stock",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
+        if (comboMotivo.getSelectedIndex() <= 0 || modeloTabla.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this, "Seleccione un motivo y agregue productos.");
             return;
         }
-
-        int opcion =
-                JOptionPane.showConfirmDialog(
-                        this,
-                        "¿Desea registrar la salida de stock?\n\n"
-                        + "Productos: "
-                        + lblProductos.getText()
-                        + "\n"
-                        + "Unidades: "
-                        + lblUnidades.getText(),
-                        "Confirmar Salida",
-                        JOptionPane.YES_NO_OPTION,
-                        JOptionPane.QUESTION_MESSAGE
-                );
-
-        if (opcion
-                != JOptionPane.YES_OPTION) {
-
+        String motivo = comboMotivo.getSelectedItem().toString();
+        if ("Traslado".equalsIgnoreCase(motivo)
+                || "Venta / despacho".equalsIgnoreCase(motivo)) {
+            JOptionPane.showMessageDialog(this,
+                    "Los traslados y las ventas deben registrarse desde sus módulos específicos.");
             return;
         }
-
-        confirmado =
-                true;
-
-        JOptionPane.showMessageDialog(
-                this,
-                "Salida preparada correctamente.\n"
-                + "Más adelante se descontará el stock en MySQL.",
-                "Salida Registrada",
-                JOptionPane.INFORMATION_MESSAGE
-        );
-
-        dispose();
+        java.util.List<SalidaStockDetalle> items = new java.util.ArrayList<>();
+        for (int i = 0; i < modeloTabla.getRowCount(); i++) {
+            String codigo = modeloTabla.getValueAt(i, 0).toString();
+            Producto producto = productosDetalle.get(codigo);
+            if (producto == null) {
+                JOptionPane.showMessageDialog(this, "No se pudo identificar: " + codigo);
+                return;
+            }
+            SalidaStockDetalle item = new SalidaStockDetalle();
+            item.setProducto(producto);
+            item.setCantidad(new BigDecimal(modeloTabla.getValueAt(i, 2).toString()));
+            items.add(item);
+        }
+        int respuesta = JOptionPane.showConfirmDialog(this,
+                "¿Confirmar salida de " + items.size() + " productos del depósito "
+                + depositoPrincipal.getNombre() + "?\nEl stock se descontará definitivamente.",
+                "Confirmar salida", JOptionPane.YES_NO_OPTION);
+        if (respuesta != JOptionPane.YES_OPTION) return;
+        btnRegistrarSalida.setEnabled(false);
+        try {
+            ResultadoOperacion resultado = salidaService.registrarSalidaCompleta(
+                    depositoPrincipal.getIdDeposito(), motivo,
+                    txtDestino.getText(), txtObservaciones.getText(), items);
+            if (!resultado.isExitoso()) {
+                JOptionPane.showMessageDialog(this, resultado.getMensaje(),
+                        "No se registró la salida", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            confirmado = true;
+            JOptionPane.showMessageDialog(this, resultado.getMensaje(),
+                    "Salida confirmada", JOptionPane.INFORMATION_MESSAGE);
+            dispose();
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al registrar. Verifique el historial antes de reintentar: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            btnRegistrarSalida.setEnabled(true);
+        }
     }
 
     //==========================================================
     // LIMPIAR SALIDA
     //==========================================================
     private void limpiarSalida() {
+        productosDetalle.clear();
 
         modeloTabla.setRowCount(
                 0
@@ -1674,6 +1569,7 @@ public class DialogoSalidaStock extends JDialog {
     // LIMPIAR PRODUCTO
     //==========================================================
     private void limpiarProductoSeleccionado() {
+        objetoSeleccionado = null;
 
         codigoSeleccionado =
                 null;
@@ -2187,4 +2083,114 @@ public class DialogoSalidaStock extends JDialog {
 
         return modeloTabla;
     }
+
+    // =========================================================
+    // RETOQUES VISUALES - NO MODIFICAN LA LOGICA DE STOCK
+    // =========================================================
+    private void aplicarEstiloVisualSerena() {
+        personalizarBoton(btnBuscarProducto, "buscar");
+        personalizarBoton(btnAgregarProducto, "agregar");
+        personalizarBoton(btnEliminarItem, "eliminar");
+        personalizarBoton(btnLimpiar, "limpiar");
+        personalizarBoton(btnCancelar, "cancelar");
+        personalizarBoton(btnRegistrarSalida, "confirmar");
+
+        btnRegistrarSalida.setBackground(VERDE);
+        btnRegistrarSalida.setForeground(Color.WHITE);
+        btnRegistrarSalida.setPreferredSize(new Dimension(195, 40));
+        btnAgregarProducto.setPreferredSize(new Dimension(195, 40));
+        btnBuscarProducto.setPreferredSize(new Dimension(118, 40));
+
+        tablaDetalle.setRowHeight(33);
+        tablaDetalle.setShowVerticalLines(false);
+        tablaDetalle.setGridColor(new Color(232, 237, 245));
+        tablaDetalle.setSelectionBackground(new Color(211, 227, 249));
+        tablaDetalle.setSelectionForeground(AZUL_OSCURO);
+        tablaDetalle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        tablaDetalle.getTableHeader().setPreferredSize(new Dimension(0, 38));
+        tablaDetalle.getTableHeader().setReorderingAllowed(false);
+        aplicarHeaderAzul();
+    }
+
+    private void personalizarBoton(JButton boton, String tipo) {
+        if (boton == null) return;
+        boton.setIcon(new IconoSerena(tipo, Color.WHITE, 15));
+        boton.setIconTextGap(8);
+        boton.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        boton.setFocusPainted(false);
+        boton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        boton.setMargin(new Insets(7, 10, 7, 10));
+    }
+
+    /** Iconos vectoriales: no requieren archivos PNG ni dependencias. */
+    private static final class IconoSerena implements Icon {
+        private final String tipo;
+        private final Color color;
+        private final int tam;
+
+        IconoSerena(String tipo, Color color, int tam) {
+            this.tipo = tipo;
+            this.color = color;
+            this.tam = tam;
+        }
+
+        @Override public int getIconWidth() { return tam; }
+        @Override public int getIconHeight() { return tam; }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.translate(x, y);
+                g2.scale(tam / 24.0, tam / 24.0);
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(color);
+                g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND,
+                        BasicStroke.JOIN_ROUND));
+                switch (tipo) {
+                    case "buscar":
+                        g2.drawOval(3, 3, 13, 13);
+                        g2.drawLine(15, 15, 22, 22);
+                        break;
+                    case "agregar":
+                        g2.drawRoundRect(3, 3, 18, 18, 4, 4);
+                        g2.drawLine(12, 7, 12, 17);
+                        g2.drawLine(7, 12, 17, 12);
+                        break;
+                    case "eliminar":
+                        g2.drawLine(5, 6, 19, 6);
+                        g2.drawLine(9, 3, 15, 3);
+                        g2.drawRoundRect(7, 7, 10, 14, 2, 2);
+                        g2.drawLine(10, 11, 10, 17);
+                        g2.drawLine(14, 11, 14, 17);
+                        break;
+                    case "limpiar":
+                        g2.drawArc(4, 4, 16, 16, 45, 280);
+                        g2.drawLine(19, 4, 20, 10);
+                        g2.drawLine(20, 10, 14, 9);
+                        break;
+                    case "cancelar":
+                        g2.drawLine(5, 5, 19, 19);
+                        g2.drawLine(19, 5, 5, 19);
+                        break;
+                    case "confirmar":
+                        g2.drawOval(2, 2, 20, 20);
+                        g2.drawLine(6, 12, 10, 16);
+                        g2.drawLine(10, 16, 18, 8);
+                        break;
+                    case "salida":
+                        g2.drawRoundRect(2, 5, 13, 15, 2, 2);
+                        g2.drawLine(10, 12, 22, 12);
+                        g2.drawLine(17, 7, 22, 12);
+                        g2.drawLine(22, 12, 17, 17);
+                        break;
+                    default: break;
+                }
+            } finally {
+                g2.dispose();
+            }
+        }
+    }
+
 }
