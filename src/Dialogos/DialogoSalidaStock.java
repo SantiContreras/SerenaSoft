@@ -654,76 +654,26 @@ public class DialogoSalidaStock extends JDialog {
     // HEADER
     //==========================================================
     private JPanel crearHeader() {
+        // Identidad visual compartida con Ajuste de Stock.
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(AZUL_OSCURO);
+        panel.setBorder(new EmptyBorder(20, 25, 19, 25));
 
-        JPanel panel =
-                new JPanel();
-
-        panel.setLayout(
-                new BoxLayout(
-                        panel,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-        panel.setBackground(
-                Color.WHITE
-        );
-
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 3, 0, AZUL_SERENA),
-                new EmptyBorder(17, 25, 15, 25)
-        ));
-
-        JLabel titulo =
-                new JLabel(
-                        "SALIDA DE STOCK"
-                );
-
-        titulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        25
-                )
-        );
-
-        titulo.setForeground(
-                AZUL_SERENA
-        );
-        titulo.setIcon(new IconoSerena("salida", AZUL_SERENA, 27));
+        JLabel titulo = new JLabel("SALIDA DE STOCK");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 23));
+        titulo.setForeground(Color.WHITE);
+        titulo.setIcon(new IconoSerena("salida", Color.WHITE, 26));
         titulo.setIconTextGap(12);
 
-        JLabel subtitulo =
-                new JLabel(
-                        "Registre uno o varios productos que egresan del inventario"
-                );
+        JLabel subtitulo = new JLabel(
+                "Registre uno o varios productos que egresan del inventario");
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitulo.setForeground(new Color(218, 231, 250));
 
-        subtitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        13
-                )
-        );
-
-        subtitulo.setForeground(
-                TEXTO_SECUNDARIO
-        );
-
-        panel.add(
-                titulo
-        );
-
-        panel.add(
-                Box.createVerticalStrut(
-                        4
-                )
-        );
-
-        panel.add(
-                subtitulo
-        );
-
+        panel.add(titulo);
+        panel.add(Box.createVerticalStrut(4));
+        panel.add(subtitulo);
         return panel;
     }
 
@@ -1526,8 +1476,7 @@ public class DialogoSalidaStock extends JDialog {
                 return;
             }
             confirmado = true;
-            JOptionPane.showMessageDialog(this, resultado.getMensaje(),
-                    "Salida confirmada", JOptionPane.INFORMATION_MESSAGE);
+            mostrarConfirmacionSerena(resultado.getMensaje(), items);
             dispose();
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
@@ -1536,6 +1485,161 @@ public class DialogoSalidaStock extends JDialog {
         } finally {
             btnRegistrarSalida.setEnabled(true);
         }
+    }
+
+    //==========================================================
+    // MENSAJE DE EXITO - ESTILO SERENA SOFT
+    // Solo se muestra DESPUES de que el Service confirma la salida.
+    // No modifica stock, base de datos ni transacciones.
+    //==========================================================
+    private void mostrarConfirmacionSerena(
+            String mensajeServicio,
+            java.util.List<SalidaStockDetalle> items) {
+
+        BigDecimal totalUnidades = BigDecimal.ZERO;
+        for (SalidaStockDetalle item : items) {
+            if (item.getCantidad() != null) {
+                totalUnidades = totalUnidades.add(item.getCantidad());
+            }
+        }
+
+        JDialog ventana = new JDialog(this, "Salida confirmada", Dialog.ModalityType.APPLICATION_MODAL);
+        ventana.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        ventana.setResizable(false);
+
+        JPanel raiz = new JPanel(new BorderLayout());
+        raiz.setBackground(Color.WHITE);
+        raiz.setBorder(BorderFactory.createMatteBorder(0, 0, 4, 0, VERDE));
+
+        JPanel cabecera = new JPanel(new BorderLayout(15, 0));
+        cabecera.setOpaque(false);
+        cabecera.setBorder(new EmptyBorder(24, 28, 14, 28));
+
+        JLabel icono = new JLabel(new Icon() {
+            @Override public int getIconWidth() { return 52; }
+            @Override public int getIconHeight() { return 52; }
+            @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                            RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(new Color(226, 245, 233));
+                    g2.fillOval(x, y, 52, 52);
+                    g2.setColor(VERDE);
+                    g2.setStroke(new BasicStroke(3.5f, BasicStroke.CAP_ROUND,
+                            BasicStroke.JOIN_ROUND));
+                    g2.drawOval(x + 8, y + 8, 36, 36);
+                    g2.drawLine(x + 17, y + 26, x + 23, y + 32);
+                    g2.drawLine(x + 23, y + 32, x + 35, y + 19);
+                } finally {
+                    g2.dispose();
+                }
+            }
+        });
+        cabecera.add(icono, BorderLayout.WEST);
+
+        JPanel textos = new JPanel();
+        textos.setOpaque(false);
+        textos.setLayout(new BoxLayout(textos, BoxLayout.Y_AXIS));
+        JLabel titulo = new JLabel("¡Salida registrada correctamente!");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 19));
+        titulo.setForeground(AZUL_OSCURO);
+        JLabel subtitulo = new JLabel("El stock fue descontado del inventario.");
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitulo.setForeground(TEXTO_SECUNDARIO);
+        textos.add(titulo);
+        textos.add(Box.createVerticalStrut(7));
+        textos.add(subtitulo);
+        cabecera.add(textos, BorderLayout.CENTER);
+        raiz.add(cabecera, BorderLayout.NORTH);
+
+        JPanel informacion = new JPanel(new GridBagLayout());
+        informacion.setBackground(new Color(246, 249, 253));
+        informacion.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDE),
+                new EmptyBorder(14, 18, 14, 18)));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(5, 4, 5, 4);
+        c.anchor = GridBagConstraints.WEST;
+        c.fill = GridBagConstraints.HORIZONTAL;
+
+        // Mostrar solo el identificador, sin repetir el texto de confirmación.
+        String numeroSalida = "Salida confirmada";
+        if (mensajeServicio != null) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("(?i)salida\\s*(?:n[.°ºo]*\\s*)?(?:n[.°ºo]*\\s*)?(\\d+)")
+                    .matcher(mensajeServicio);
+            if (matcher.find()) {
+                numeroSalida = "Salida N.º " + matcher.group(1);
+            }
+        }
+        agregarFilaConfirmacion(informacion, c, 0, "Salida:", numeroSalida);
+        agregarFilaConfirmacion(informacion, c, 1, "Productos:",
+                String.valueOf(items.size()));
+        agregarFilaConfirmacion(informacion, c, 2, "Cantidad total:",
+                totalUnidades.stripTrailingZeros().toPlainString());
+        agregarFilaConfirmacion(informacion, c, 3, "Depósito:",
+                depositoPrincipal == null ? "-" : depositoPrincipal.getNombre());
+        agregarFilaConfirmacion(informacion, c, 4, "Estado:", "CONFIRMADA");
+
+        JPanel centro = new JPanel(new BorderLayout());
+        centro.setOpaque(false);
+        centro.setBorder(new EmptyBorder(0, 28, 12, 28));
+        centro.add(informacion, BorderLayout.CENTER);
+        raiz.add(centro, BorderLayout.CENTER);
+
+        JButton aceptar = new JButton("ACEPTAR");
+        aceptar.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        // El Look & Feel puede ignorar el fondo de un JButton estándar.
+        // BasicButtonUI respeta el azul elegido y evita el botón gris.
+        aceptar.setUI(new javax.swing.plaf.basic.BasicButtonUI());
+        aceptar.setBackground(AZUL_SERENA);
+        aceptar.setForeground(Color.WHITE);
+        aceptar.setOpaque(true);
+        aceptar.setContentAreaFilled(true);
+        aceptar.setBorderPainted(false);
+        aceptar.setFocusPainted(false);
+        aceptar.setPreferredSize(new Dimension(132, 39));
+        aceptar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        aceptar.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseEntered(java.awt.event.MouseEvent e) {
+                aceptar.setBackground(AZUL_HOVER);
+            }
+            @Override public void mouseExited(java.awt.event.MouseEvent e) {
+                aceptar.setBackground(AZUL_SERENA);
+            }
+        });
+        aceptar.addActionListener(e -> ventana.dispose());
+
+        JPanel pie = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        pie.setOpaque(false);
+        pie.setBorder(new EmptyBorder(0, 28, 22, 28));
+        pie.add(aceptar);
+        raiz.add(pie, BorderLayout.SOUTH);
+
+        ventana.setContentPane(raiz);
+        ventana.setSize(540, 355);
+        ventana.setLocationRelativeTo(this);
+        ventana.getRootPane().setDefaultButton(aceptar);
+        ventana.setVisible(true);
+    }
+
+    private void agregarFilaConfirmacion(JPanel panel, GridBagConstraints c,
+            int fila, String etiqueta, String valor) {
+        c.gridy = fila;
+        c.gridx = 0;
+        c.weightx = 0;
+        JLabel label = new JLabel(etiqueta);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        label.setForeground(TEXTO_SECUNDARIO);
+        panel.add(label, c);
+
+        c.gridx = 1;
+        c.weightx = 1;
+        JLabel dato = new JLabel(valor);
+        dato.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        dato.setForeground("CONFIRMADA".equals(valor) ? VERDE : AZUL_OSCURO);
+        panel.add(dato, c);
     }
 
     //==========================================================
@@ -2114,7 +2218,7 @@ public class DialogoSalidaStock extends JDialog {
 
     private void personalizarBoton(JButton boton, String tipo) {
         if (boton == null) return;
-        boton.setIcon(new IconoSerena(tipo, Color.WHITE, 15));
+        boton.setIcon(new IconoSerena(tipo, boton == btnLimpiar ? TEXTO : Color.WHITE, 15));
         boton.setIconTextGap(8);
         boton.setFont(new Font("Segoe UI", Font.BOLD, 11));
         boton.setFocusPainted(false);

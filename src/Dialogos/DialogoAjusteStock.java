@@ -3,6 +3,14 @@ package Dialogos;
 import Diseños.EstiloBotones;
 import java.awt.*;
 import java.text.DecimalFormat;
+import java.math.BigDecimal;
+import java.awt.geom.*;
+import Dao.DepositoDao;
+import Dao.StockProductoDao;
+import model.Deposito;
+import model.Producto;
+import services.AjusteStockService;
+import services.ResultadoOperacion;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -97,6 +105,12 @@ public class DialogoAjusteStock extends JDialog {
     private String categoriaSeleccionada;
 
     private double stockSistema;
+    private BigDecimal stockSistemaExacto = BigDecimal.ZERO;
+    private Producto objetoSeleccionado;
+    private final DepositoDao depositoDao = new DepositoDao();
+    private final StockProductoDao stockDao = new StockProductoDao();
+    private final AjusteStockService ajusteService = new AjusteStockService();
+    private Deposito depositoPrincipal;
 
     //==========================================================
     // ESTADO
@@ -115,6 +129,7 @@ public class DialogoAjusteStock extends JDialog {
         construirDialogo();
 
         cargarDatosPrueba();
+        depositoPrincipal = depositoDao.buscarPrincipal();
 
         configurarEventos();
 
@@ -489,18 +504,8 @@ public class DialogoAjusteStock extends JDialog {
                 )
         );
 
-        panel.setBackground(
-                Color.WHITE
-        );
-
-        panel.setBorder(
-                new EmptyBorder(
-                        17,
-                        25,
-                        15,
-                        25
-                )
-        );
+        panel.setBackground(AZUL_OSCURO);
+        panel.setBorder(new EmptyBorder(20, 25, 19, 25));
 
         JLabel titulo =
                 new JLabel(
@@ -515,9 +520,9 @@ public class DialogoAjusteStock extends JDialog {
                 )
         );
 
-        titulo.setForeground(
-                AZUL_OSCURO
-        );
+        titulo.setForeground(Color.WHITE);
+        titulo.setIcon(icono("ajuste", Color.WHITE, 26));
+        titulo.setIconTextGap(12);
 
         JLabel subtitulo =
                 new JLabel(
@@ -532,9 +537,7 @@ public class DialogoAjusteStock extends JDialog {
                 )
         );
 
-        subtitulo.setForeground(
-                TEXTO_SECUNDARIO
-        );
+        subtitulo.setForeground(new Color(218, 231, 250));
 
         panel.add(
                 titulo
@@ -560,7 +563,7 @@ public class DialogoAjusteStock extends JDialog {
 
         JPanel panel =
                 crearTarjetaSeccion(
-                        "BUSCAR ARTÍCULO"
+                        "⌕  BUSCAR ARTÍCULO"
                 );
 
         panel.setLayout(
@@ -694,7 +697,7 @@ public class DialogoAjusteStock extends JDialog {
 
         JPanel panel =
                 crearTarjetaSeccion(
-                        "CONTEO DE INVENTARIO"
+                        "▤  CONTEO DE INVENTARIO"
                 );
 
         panel.setLayout(
@@ -799,7 +802,7 @@ public class DialogoAjusteStock extends JDialog {
 
         JPanel panel =
                 crearTarjetaSeccion(
-                        "INFORMACIÓN DEL AJUSTE"
+                        "✎  INFORMACIÓN DEL AJUSTE"
                 );
 
         panel.setLayout(
@@ -990,27 +993,20 @@ public class DialogoAjusteStock extends JDialog {
                 return;
             }
 
-            codigoSeleccionado =
-                    dialogo.getCodigoSeleccionado();
-
-            productoSeleccionado =
-                    dialogo.getProductoSeleccionado();
-
-            stockSistema =
-                    dialogo.getStockSeleccionado();
-
-            /*
-             * DialogoBuscarProducto actual no devuelve todavía
-             * marca y categoría.
-             *
-             * Por ahora dejamos datos de prueba.
-             * Cuando conectemos BD se cargarán realmente.
-             */
-            marcaSeleccionada =
-                    "Marca del producto";
-
-            categoriaSeleccionada =
-                    "Categoría";
+            objetoSeleccionado = dialogo.getObjetoProductoSeleccionado();
+            if (objetoSeleccionado == null || depositoPrincipal == null) {
+                JOptionPane.showMessageDialog(this, "Producto o depósito principal no disponible.");
+                return;
+            }
+            codigoSeleccionado = objetoSeleccionado.getCodigo();
+            productoSeleccionado = objetoSeleccionado.getNombre();
+            marcaSeleccionada = objetoSeleccionado.getMarca() == null
+                    ? "-" : objetoSeleccionado.getMarca().getNombre();
+            categoriaSeleccionada = objetoSeleccionado.getCategoria() == null
+                    ? "-" : objetoSeleccionado.getCategoria().getNombre();
+            stockSistemaExacto = stockDao.obtenerCantidad(
+                    objetoSeleccionado.getIdProducto(), depositoPrincipal.getIdDeposito());
+            stockSistema = stockSistemaExacto.doubleValue();
 
             txtProducto.setText(
                     productoSeleccionado
@@ -1106,262 +1102,262 @@ public class DialogoAjusteStock extends JDialog {
     // ACTUALIZAR DIFERENCIA
     //==========================================================
     private void actualizarDiferencia() {
-
-        if (codigoSeleccionado == null) {
-
-            lblDiferencia.setText(
-                    "0"
-            );
-
-            lblDiferencia.setForeground(
-                    AZUL_SERENA
-            );
-
-            lblInterpretacion.setText(
-                    "Seleccione un artículo e ingrese el stock físico"
-            );
-
+        BigDecimal fisico = obtenerStockFisicoExacto();
+        if (objetoSeleccionado == null || fisico == null || fisico.signum() < 0) {
+            lblDiferencia.setText("0");
+            lblDiferencia.setForeground(AZUL_SERENA);
+            lblInterpretacion.setText("Seleccione un artículo e ingrese un conteo válido");
             return;
         }
-
-        Double stockFisico =
-                obtenerStockFisico();
-
-        if (stockFisico == null) {
-
-            lblDiferencia.setText(
-                    "0"
-            );
-
-            lblDiferencia.setForeground(
-                    AZUL_SERENA
-            );
-
-            lblInterpretacion.setText(
-                    "Ingrese la cantidad física contada"
-            );
-
-            return;
-        }
-
-        double diferencia =
-                stockFisico
-                - stockSistema;
-
-        if (diferencia > 0) {
-
-            lblDiferencia.setText(
-                    "+"
-                    + formatearCantidad(
-                            diferencia
-                    )
-            );
-
-            lblDiferencia.setForeground(
-                    VERDE
-            );
-
-            lblInterpretacion.setText(
-                    "Se agregarán "
-                    + formatearCantidad(
-                            diferencia
-                    )
-                    + " unidades al stock."
-            );
-
-        } else if (diferencia < 0) {
-
-            lblDiferencia.setText(
-                    formatearCantidad(
-                            diferencia
-                    )
-            );
-
-            lblDiferencia.setForeground(
-                    ROJO
-            );
-
-            lblInterpretacion.setText(
-                    "Se descontarán "
-                    + formatearCantidad(
-                            Math.abs(
-                                    diferencia
-                            )
-                    )
-                    + " unidades del stock."
-            );
-
-        } else {
-
-            lblDiferencia.setText(
-                    "0"
-            );
-
-            lblDiferencia.setForeground(
-                    AZUL_SERENA
-            );
-
-            lblInterpretacion.setText(
-                    "El conteo físico coincide con el stock del sistema."
-            );
-        }
+        BigDecimal diferencia = fisico.subtract(stockSistemaExacto);
+        lblDiferencia.setText((diferencia.signum() > 0 ? "+" : "") + formatearCantidad(diferencia));
+        lblDiferencia.setForeground(diferencia.signum() > 0 ? VERDE
+                : diferencia.signum() < 0 ? ROJO : AZUL_SERENA);
+        lblInterpretacion.setText(diferencia.signum() > 0
+                ? "Se agregarán " + formatearCantidad(diferencia) + " unidades al stock."
+                : diferencia.signum() < 0
+                ? "Se descontarán " + formatearCantidad(diferencia.abs()) + " unidades del stock."
+                : "El conteo coincide con el stock del sistema.");
     }
 
     //==========================================================
     // APLICAR AJUSTE
     //==========================================================
     private void aplicarAjuste() {
-
-        //======================================================
-        // PRODUCTO
-        //======================================================
-        if (codigoSeleccionado == null) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Seleccione un artículo.",
-                    "Ajuste de Stock",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
+        if (objetoSeleccionado == null || depositoPrincipal == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un artículo y un depósito.");
             return;
         }
-
-        //======================================================
-        // STOCK FISICO
-        //======================================================
-        Double stockFisico =
-                obtenerStockFisico();
-
-        if (stockFisico == null
-                || stockFisico < 0) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Ingrese un stock físico válido.",
-                    "Ajuste de Stock",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
-            txtStockFisico.requestFocus();
-
+        BigDecimal fisico = obtenerStockFisicoExacto();
+        if (fisico == null || fisico.signum() < 0 || fisico.stripTrailingZeros().scale() > 3) {
+            JOptionPane.showMessageDialog(this, "Ingrese un stock físico válido (máximo 3 decimales).");
             return;
         }
-
-        //======================================================
-        // MOTIVO
-        //======================================================
-        if (comboMotivo.getSelectedIndex()
-                == 0) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Seleccione el motivo del ajuste.",
-                    "Ajuste de Stock",
-                    JOptionPane.WARNING_MESSAGE
-            );
-
-            comboMotivo.requestFocus();
-
+        if (comboMotivo.getSelectedIndex() <= 0) {
+            JOptionPane.showMessageDialog(this, "Seleccione el motivo del ajuste.");
             return;
         }
-
-        //======================================================
-        // DIFERENCIA
-        //======================================================
-        double diferencia =
-                stockFisico
-                - stockSistema;
-
-        if (diferencia == 0) {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "No existe diferencia entre el stock físico y el stock del sistema.",
-                    "Sin diferencias",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-
+        if (objetoSeleccionado.getUnidadVenta() != null
+                && !objetoSeleccionado.getUnidadVenta().isPermiteDecimales()
+                && fisico.stripTrailingZeros().scale() > 0) {
+            JOptionPane.showMessageDialog(this, "Este producto solo admite cantidades enteras.");
             return;
         }
-
-        //======================================================
-        // CONFIRMACION
-        //======================================================
-        String signo =
-                diferencia > 0
-                        ? "+"
-                        : "";
-
-        int opcion =
-                JOptionPane.showConfirmDialog(
-                        this,
-                        "¿Desea aplicar este ajuste?\n\n"
-                        + "Producto: "
-                        + productoSeleccionado
-                        + "\n"
-                        + "Stock anterior: "
-                        + formatearCantidad(
-                                stockSistema
-                        )
-                        + "\n"
-                        + "Stock físico: "
-                        + formatearCantidad(
-                                stockFisico
-                        )
-                        + "\n"
-                        + "Diferencia: "
-                        + signo
-                        + formatearCantidad(
-                                diferencia
-                        )
-                        + "\n"
-                        + "Motivo: "
-                        + comboMotivo
-                                .getSelectedItem(),
-                        "Confirmar Ajuste",
-                        JOptionPane.YES_NO_OPTION,
-                        JOptionPane.QUESTION_MESSAGE
-                );
-
-        if (opcion
-                != JOptionPane.YES_OPTION) {
-
+        BigDecimal diferencia = fisico.subtract(stockSistemaExacto);
+        if (diferencia.signum() == 0) {
+            JOptionPane.showMessageDialog(this, "No hay diferencia de stock.");
             return;
         }
+        String motivo = comboMotivo.getSelectedItem().toString();
+        if (!mostrarConfirmacionAjuste(fisico, diferencia, motivo)) return;
 
-        confirmado =
-                true;
+        btnAplicar.setEnabled(false);
+        try {
+            ResultadoOperacion resultado = ajusteService.aplicarAjuste(
+                    depositoPrincipal.getIdDeposito(), objetoSeleccionado.getIdProducto(),
+                    stockSistemaExacto, fisico, motivo, txtObservaciones.getText().trim());
+            if (!resultado.isExitoso()) {
+                JOptionPane.showMessageDialog(this, resultado.getMensaje(),
+                        "No se pudo aplicar el ajuste", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            confirmado = true;
+            mostrarExitoAjuste(resultado.getMensaje(), fisico, diferencia, motivo);
+            dispose();
+        } finally {
+            btnAplicar.setEnabled(true);
+        }
+    }
 
-        //======================================================
-        // POR AHORA SOLO VISUAL
-        //======================================================
-        JOptionPane.showMessageDialog(
-                this,
-                "Ajuste preparado correctamente.\n\n"
-                + "Stock anterior: "
-                + formatearCantidad(
-                        stockSistema
-                )
-                + "\n"
-                + "Stock nuevo: "
-                + formatearCantidad(
-                        stockFisico
-                )
-                + "\n"
-                + "Diferencia: "
-                + signo
-                + formatearCantidad(
-                        diferencia
-                )
-                + "\n\n"
-                + "Más adelante este cambio se guardará en MySQL\n"
-                + "y se registrará en el historial de movimientos.",
-                "Ajuste Registrado",
-                JOptionPane.INFORMATION_MESSAGE
-        );
+    //==========================================================
+    // ICONOS VECTORIALES - SIN LIBRERIAS NI IMAGENES EXTERNAS
+    //==========================================================
+    private Icon icono(String tipo, Color color, int tam) {
+        return new Icon() {
+            @Override public int getIconWidth() { return tam; }
+            @Override public int getIconHeight() { return tam; }
+            @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.translate(x, y);
+                    g2.scale(tam / 24.0, tam / 24.0);
+                    g2.setColor(color);
+                    g2.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    switch (tipo) {
+                        case "buscar" -> {
+                            g2.drawOval(3, 3, 13, 13);
+                            g2.drawLine(15, 15, 22, 22);
+                        }
+                        case "check" -> {
+                            g2.drawOval(2, 2, 20, 20);
+                            g2.drawLine(6, 12, 10, 16);
+                            g2.drawLine(10, 16, 18, 8);
+                        }
+                        case "cerrar" -> {
+                            g2.drawLine(5, 5, 19, 19);
+                            g2.drawLine(19, 5, 5, 19);
+                        }
+                        case "limpiar" -> {
+                            g2.drawRoundRect(5, 3, 14, 18, 2, 2);
+                            g2.drawLine(8, 8, 16, 8);
+                            g2.drawLine(8, 12, 16, 12);
+                        }
+                        case "caja" -> {
+                            g2.drawRect(3, 7, 18, 14);
+                            g2.drawLine(3, 7, 7, 3);
+                            g2.drawLine(21, 7, 17, 3);
+                            g2.drawLine(7, 3, 17, 3);
+                            g2.drawLine(12, 7, 12, 21);
+                        }
+                        case "codigo" -> {
+                            g2.drawLine(3, 5, 3, 19);
+                            g2.drawLine(7, 5, 7, 19);
+                            g2.drawLine(12, 5, 12, 19);
+                            g2.drawLine(16, 5, 16, 19);
+                            g2.drawLine(21, 5, 21, 19);
+                        }
+                        case "etiqueta" -> {
+                            Path2D.Double ruta = new Path2D.Double();
+                            ruta.moveTo(3, 4); ruta.lineTo(15, 4); ruta.lineTo(22, 12);
+                            ruta.lineTo(15, 20); ruta.lineTo(3, 20); ruta.closePath();
+                            g2.draw(ruta);
+                            g2.fillOval(14, 10, 4, 4);
+                        }
+                        case "conteo" -> {
+                            g2.drawRoundRect(4, 3, 16, 19, 3, 3);
+                            g2.drawLine(8, 8, 16, 8);
+                            g2.drawLine(8, 12, 16, 12);
+                            g2.drawLine(8, 16, 13, 16);
+                        }
+                        case "nota" -> {
+                            g2.drawRoundRect(4, 2, 16, 20, 2, 2);
+                            g2.drawLine(8, 8, 16, 8);
+                            g2.drawLine(8, 12, 16, 12);
+                            g2.drawLine(8, 16, 13, 16);
+                        }
+                        default -> {
+                            g2.drawOval(2, 2, 20, 20);
+                            g2.drawLine(12, 5, 12, 19);
+                            g2.drawLine(5, 12, 19, 12);
+                        }
+                    }
+                } finally { g2.dispose(); }
+            }
+        };
+    }
 
-        dispose();
+    //==========================================================
+    // DIALOGOS SERENA SOFT - CONFIRMACION Y EXITO
+    //==========================================================
+    private JPanel crearCabeceraMensaje(String titulo, String subtitulo, boolean exito) {
+        JPanel cabecera = new JPanel(new BorderLayout(13, 0));
+        cabecera.setOpaque(false);
+        JLabel simbolo = new JLabel(icono(exito ? "check" : "ajuste",
+                exito ? VERDE : AZUL_SERENA, 42));
+        cabecera.add(simbolo, BorderLayout.WEST);
+        JPanel textos = new JPanel();
+        textos.setOpaque(false);
+        textos.setLayout(new BoxLayout(textos, BoxLayout.Y_AXIS));
+        JLabel tituloLabel = new JLabel(titulo);
+        tituloLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        tituloLabel.setForeground(AZUL_OSCURO);
+        JLabel subtituloLabel = new JLabel(subtitulo);
+        subtituloLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        subtituloLabel.setForeground(TEXTO_SECUNDARIO);
+        textos.add(tituloLabel);
+        textos.add(Box.createVerticalStrut(5));
+        textos.add(subtituloLabel);
+        cabecera.add(textos, BorderLayout.CENTER);
+        return cabecera;
+    }
+
+    private JPanel crearPanelMensaje(String titulo, String subtitulo,
+                                    String[][] datos, boolean exito) {
+        JPanel cuerpo = new JPanel(new BorderLayout(0, 16));
+        cuerpo.setBackground(Color.WHITE);
+        cuerpo.setBorder(new EmptyBorder(18, 20, 15, 20));
+        cuerpo.add(crearCabeceraMensaje(titulo, subtitulo, exito), BorderLayout.NORTH);
+
+        JPanel detalle = new JPanel(new GridBagLayout());
+        detalle.setBackground(new Color(244, 247, 252));
+        detalle.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDE), new EmptyBorder(10, 12, 10, 12)));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(5, 7, 5, 7);
+        c.anchor = GridBagConstraints.WEST;
+        for (int i = 0; i < datos.length; i++) {
+            c.gridy = i;
+            c.gridx = 0;
+            c.weightx = 0;
+            JLabel clave = new JLabel(datos[i][0]);
+            clave.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            clave.setForeground(TEXTO_SECUNDARIO);
+            detalle.add(clave, c);
+            c.gridx = 1;
+            c.weightx = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            JLabel valor = new JLabel(datos[i][1]);
+            valor.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            valor.setForeground(datos[i][0].equals("Diferencia:")
+                    ? (datos[i][1].startsWith("+") ? VERDE : ROJO) : AZUL_OSCURO);
+            detalle.add(valor, c);
+            c.fill = GridBagConstraints.NONE;
+        }
+        cuerpo.add(detalle, BorderLayout.CENTER);
+        return cuerpo;
+    }
+
+    private String[][] datosAjuste(BigDecimal fisico, BigDecimal diferencia, String motivo) {
+        return new String[][] {
+            {"Producto:", productoSeleccionado},
+            {"Depósito:", depositoPrincipal.getNombre()},
+            {"Stock anterior:", formatearCantidad(stockSistemaExacto)},
+            {"Conteo físico:", formatearCantidad(fisico)},
+            {"Diferencia:", (diferencia.signum() > 0 ? "+" : "") + formatearCantidad(diferencia)},
+            {"Motivo:", motivo}
+        };
+    }
+
+    private boolean mostrarConfirmacionAjuste(BigDecimal fisico,
+                                              BigDecimal diferencia, String motivo) {
+        JPanel contenido = crearPanelMensaje("Confirmar ajuste de inventario",
+                "Verificá los datos antes de actualizar el stock.",
+                datosAjuste(fisico, diferencia, motivo), false);
+        Object[] opciones = {"CONFIRMAR AJUSTE", "CANCELAR"};
+        int respuesta = JOptionPane.showOptionDialog(this, contenido, "Confirmar ajuste",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                null, opciones, opciones[1]);
+        return respuesta == 0;
+    }
+
+    private void mostrarExitoAjuste(String mensaje, BigDecimal fisico,
+                                    BigDecimal diferencia, String motivo) {
+        String[][] datos = datosAjuste(fisico, diferencia, motivo);
+        String[][] datosFinales = new String[datos.length + 1][2];
+        datosFinales[0] = new String[]{"Resultado:", mensaje};
+        System.arraycopy(datos, 0, datosFinales, 1, datos.length);
+        JPanel contenido = crearPanelMensaje("¡Ajuste registrado correctamente!",
+                "El inventario se actualizó y el movimiento quedó registrado.",
+                datosFinales, true);
+        JOptionPane.showOptionDialog(this, contenido, "Ajuste confirmado",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE,
+                null, new Object[]{"ACEPTAR"}, "ACEPTAR");
+    }
+
+    private BigDecimal obtenerStockFisicoExacto() {
+        try {
+            String texto = txtStockFisico.getText().trim();
+            if (texto.isEmpty()) return null;
+            // Admite 1234,5 / 1234.5 / 1.234,5; sin separadores ambiguos.
+            if (texto.contains(",")) texto = texto.replace(".", "").replace(',', '.');
+            return new BigDecimal(texto);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String formatearCantidad(BigDecimal cantidad) {
+        return new java.text.DecimalFormat("#,##0.###").format(cantidad);
     }
 
     //==========================================================
@@ -1414,6 +1410,8 @@ public class DialogoAjusteStock extends JDialog {
 
         stockSistema =
                 0;
+        stockSistemaExacto = BigDecimal.ZERO;
+        objetoSeleccionado = null;
 
         txtProducto.setText(
                 ""
@@ -1560,10 +1558,21 @@ public class DialogoAjusteStock extends JDialog {
                 )
         );
 
-        label.setForeground(
-                TEXTO
-        );
-
+        label.setForeground(TEXTO);
+        String tipo = switch (texto) {
+            case "Producto" -> "buscar";
+            case "Código" -> "codigo";
+            case "Marca" -> "etiqueta";
+            case "Categoría" -> "etiqueta";
+            case "Stock del Sistema" -> "caja";
+            case "Stock Físico Contado" -> "conteo";
+            case "Diferencia" -> "ajuste";
+            case "Motivo" -> "nota";
+            case "Observaciones" -> "nota";
+            default -> "etiqueta";
+        };
+        label.setIcon(icono(tipo, AZUL_SERENA, 15));
+        label.setIconTextGap(6);
         return label;
     }
 
@@ -1624,12 +1633,12 @@ public class DialogoAjusteStock extends JDialog {
                 false
         );
 
-        boton.setCursor(
-                new Cursor(
-                        Cursor.HAND_CURSOR
-                )
-        );
-
+        boton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        String tipo = texto.contains("BUSCAR") ? "buscar"
+                : texto.contains("LIMPIAR") ? "limpiar"
+                : texto.contains("CANCELAR") ? "cerrar" : "check";
+        boton.setIcon(icono(tipo, texto.contains("LIMPIAR") ? TEXTO : Color.WHITE, 16));
+        boton.setIconTextGap(8);
         return boton;
     }
 
@@ -1769,6 +1778,30 @@ public class DialogoAjusteStock extends JDialog {
         });
 
         return boton;
+    }
+
+    //==========================================================
+    // ESTILO VISUAL UNIFICADO - SOLO PRESENTACIÓN
+    //==========================================================
+    private void aplicarEstiloVisualSerena() {
+        personalizarBoton(btnBuscarProducto, "buscar", Color.WHITE);
+        personalizarBoton(btnLimpiar, "limpiar", TEXTO);
+        personalizarBoton(btnCancelar, "cerrar", Color.WHITE);
+        personalizarBoton(btnAplicar, "check", Color.WHITE);
+        btnBuscarProducto.setPreferredSize(new Dimension(118, 40));
+        btnAplicar.setPreferredSize(new Dimension(180, 40));
+        txtStockFisico.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDE, 1),
+                new EmptyBorder(4, 10, 4, 10)));
+    }
+
+    private void personalizarBoton(JButton boton, String tipo, Color colorIcono) {
+        boton.setIcon(icono(tipo, colorIcono, 16));
+        boton.setIconTextGap(8);
+        boton.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        boton.setFocusPainted(false);
+        boton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        boton.setMargin(new Insets(7, 10, 7, 10));
     }
 
     //==========================================================
