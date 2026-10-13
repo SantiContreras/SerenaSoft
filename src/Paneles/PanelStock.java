@@ -11,6 +11,7 @@ import Dialogos.DialogoEntradaStock;
 import Dialogos.DialogoModificarStock;
 import Dialogos.DialogoSalidaStock;
 import Dialogos.DialogoTipoEntrada;
+import Dialogos.DialogoDetalleMovimiento;
 import Diseños.BotonAccion;
 import Diseños.PanelRedondeado;
 import Diseños.TextFieldRedondeado;
@@ -50,6 +51,15 @@ import javax.swing.table.DefaultTableCellRenderer;
 import rojeru_san.rsbutton.RSButtonMetro;
 
 import Dao.StockProductoDao;
+import Dao.ProductoDao;
+import Dao.AjusteStockDao;
+import model.AjusteStock;
+import model.AjusteStockDetalle;
+import java.time.format.DateTimeFormatter;
+import javax.swing.Icon;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 
 import model.StockProducto;
 import model.Producto;
@@ -125,6 +135,7 @@ public class PanelStock extends javax.swing.JPanel {
     //==========================================================
     private JLabel lblTotalArticulos;
     private JLabel lblTotalStock;
+    private JLabel lblActivos;
     private JLabel lblValorInventario;
 
     //==========================================================
@@ -168,6 +179,9 @@ public class PanelStock extends javax.swing.JPanel {
             = new StockProductoDao();
 
     private List<StockProducto> stockCargado;
+    private final ProductoDao productoDao = new ProductoDao();
+    private final AjusteStockDao ajusteStockDao = new AjusteStockDao();
+    private final java.util.Map<String,Integer> idsPorCodigo = new java.util.HashMap<>();
 
     //==========================================================
     // CONSTRUCTOR
@@ -186,9 +200,9 @@ public class PanelStock extends javax.swing.JPanel {
 
         construirPanel();
 
-        cargarStock();
-
         configurarEventos();
+
+        actualizarStock();
     }
 
     //==========================================================
@@ -205,15 +219,15 @@ public class PanelStock extends javax.swing.JPanel {
         txtBuscar.setFont(
                 new Font(
                         "Segoe UI",
-                        Font.PLAIN,
-                        13
+                        Font.BOLD,
+                        15
                 )
         );
 
         txtBuscar.setPreferredSize(
                 new Dimension(
-                        300,
-                        36
+                        360,
+                        46
                 )
         );
 
@@ -228,19 +242,21 @@ public class PanelStock extends javax.swing.JPanel {
         //======================================================
         lblTotalArticulos
                 = crearValorKPI(
-                        "156",
+                        "0",
                         AZUL_OSCURO
                 );
 
+        lblActivos = crearValorKPI("0", AZUL_PRINCIPAL);
+
         lblTotalStock
                 = crearValorKPI(
-                        "1.258",
+                        "0",
                         AZUL_OSCURO
                 );
 
         lblValorInventario
                 = crearValorKPI(
-                        "$ 2.456.780",
+                        "$ 0",
                         VERDE
                 );
 
@@ -282,6 +298,14 @@ public class PanelStock extends javax.swing.JPanel {
                         "ACTUALIZAR",
                         165
                 );
+
+        btnEntrada.setIcon(icono("plus", Color.WHITE));
+        btnSalida.setIcon(icono("minus", Color.WHITE));
+        btnAjuste.setIcon(icono("adjust", Color.WHITE));
+        btnModificar.setIcon(icono("edit", Color.WHITE));
+        btnDarBaja.setIcon(icono("cross", Color.WHITE));
+        btnActualizar.setIcon(icono("refresh", Color.WHITE));
+        btnBuscar.setIcon(icono("search", Color.WHITE));
 
         inicializarTablaStock();
 
@@ -425,7 +449,7 @@ public class PanelStock extends javax.swing.JPanel {
         //======================================================
         tablaStock
                 .getColumnModel()
-                .getColumn(8)
+                .getColumn(9)
                 .setCellRenderer(
                         new RendererEstado()
                 );
@@ -477,6 +501,8 @@ public class PanelStock extends javax.swing.JPanel {
                 .getColumnModel()
                 .getColumn(8)
                 .setPreferredWidth(120);
+
+        tablaStock.getColumnModel().getColumn(9).setPreferredWidth(120);
 
         scrollStock
                 = new JScrollPane(
@@ -621,8 +647,7 @@ public class PanelStock extends javax.swing.JPanel {
         JPanel listado
                 = crearPanelListado();
 
-        JPanel inferior
-                = crearPanelInferior();
+        // El detalle y el historial se muestran en un diálogo independiente.
 
         //======================================================
         // ALINEACION
@@ -643,9 +668,7 @@ public class PanelStock extends javax.swing.JPanel {
                 Component.LEFT_ALIGNMENT
         );
 
-        inferior.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
+
 
         //======================================================
         // TAMAÑOS
@@ -674,16 +697,11 @@ public class PanelStock extends javax.swing.JPanel {
         listado.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        450
+                        620
                 )
         );
 
-        inferior.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        330
-                )
-        );
+
 
         //======================================================
         // AGREGAR
@@ -728,9 +746,7 @@ public class PanelStock extends javax.swing.JPanel {
                 )
         );
 
-        contenido.add(
-                inferior
-        );
+
 
         contenido.add(
                 Box.createVerticalStrut(
@@ -835,9 +851,9 @@ public class PanelStock extends javax.swing.JPanel {
                 )
         );
 
-        titulo.setForeground(
-                AZUL_OSCURO
-        );
+        titulo.setForeground(AZUL_OSCURO);
+        titulo.setIcon(icono("adjust", AZUL_PRINCIPAL));
+        titulo.setIconTextGap(12);
 
         JLabel subtitulo
                 = new JLabel(
@@ -939,7 +955,7 @@ public class PanelStock extends javax.swing.JPanel {
         panel.setLayout(
                 new GridLayout(
                         1,
-                        3,
+                        4,
                         0,
                         0
                 )
@@ -947,17 +963,19 @@ public class PanelStock extends javax.swing.JPanel {
 
         panel.add(
                 crearKPI(
-                        "ARTÍCULOS",
+                        "PRODUCTOS REGISTRADOS",
                         lblTotalArticulos,
-                        "Total registrados"
+                        "Incluye productos sin existencias"
                 )
         );
+
+        panel.add(crearKPI("PRODUCTOS ACTIVOS", lblActivos, "Disponibles para operar"));
 
         panel.add(
                 crearKPI(
                         "STOCK TOTAL",
                         lblTotalStock,
-                        "Unidades disponibles"
+                        "Existencias (distintas unidades)"
                 )
         );
 
@@ -1037,6 +1055,8 @@ public class PanelStock extends javax.swing.JPanel {
                 TEXTO_SECUNDARIO
         );
 
+        lblTitulo.setIcon(icono("adjust", AZUL_PRINCIPAL));
+        lblTitulo.setIconTextGap(6);
         panel.add(
                 lblTitulo
         );
@@ -1163,7 +1183,7 @@ public class PanelStock extends javax.swing.JPanel {
 
         JLabel titulo
                 = crearTituloSeccion(
-                        "LISTADO DE STOCK"
+                        "LISTADO DE STOCK  ·  DOBLE CLIC PARA VER DETALLE E HISTORIAL"
                 );
 
         titulo.setBorder(
@@ -1410,7 +1430,7 @@ public class PanelStock extends javax.swing.JPanel {
 
         JLabel titulo
                 = crearTituloSeccion(
-                        "HISTORIAL DE MOVIMIENTOS"
+                        "HISTORIAL DE AJUSTES CONFIRMADOS"
                 );
 
         titulo.setBorder(
@@ -1462,124 +1482,90 @@ public class PanelStock extends javax.swing.JPanel {
 // CARGAR STOCK REAL
 //==========================================================
     private void cargarStock() {
-
         modeloStock.setRowCount(0);
+        idsPorCodigo.clear();
+        List<Producto> productos = productoDao.listarTodos();
+        stockCargado = stockProductoDao.listarTodos();
+        if (productos == null) productos = java.util.Collections.emptyList();
+        if (stockCargado == null) stockCargado = java.util.Collections.emptyList();
 
-        stockCargado
-                = stockProductoDao.listarTodos();
-
-        BigDecimal stockTotal
-                = BigDecimal.ZERO;
-
-        BigDecimal valorInventario
-                = BigDecimal.ZERO;
-
-        int articulos
-                = 0;
-
-        for (StockProducto stock : stockCargado) {
-
-            if (stock == null
-                    || stock.getProducto() == null
-                    || stock.getDeposito() == null) {
-
-                continue;
+        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal valor = BigDecimal.ZERO;
+        int activos = 0;
+        java.util.Set<Integer> productosConFila = new java.util.HashSet<>();
+        for (Producto p : productos) {
+            if (p != null) {
+                idsPorCodigo.put(p.getCodigo(), p.getIdProducto());
+                if (p.isActivo()) activos++;
             }
-
-            Producto producto
-                    = stock.getProducto();
-
-            Deposito deposito
-                    = stock.getDeposito();
-
-            BigDecimal cantidad
-                    = stock.getCantidad() != null
-                    ? stock.getCantidad()
-                    : BigDecimal.ZERO;
-
-            BigDecimal minimo
-                    = producto.getStockMinimo() != null
-                    ? producto.getStockMinimo()
-                    : BigDecimal.ZERO;
-
-            BigDecimal precioCompra
-                    = producto.getPrecioCompra() != null
-                    ? producto.getPrecioCompra()
-                    : BigDecimal.ZERO;
-
-            BigDecimal precioVenta
-                    = producto.getPrecioVenta() != null
-                    ? producto.getPrecioVenta()
-                    : BigDecimal.ZERO;
-
-            String marca
-                    = producto.getMarca() != null
-                    ? producto.getMarca().getNombre()
-                    : "-";
-
-            String categoria
-                    = producto.getCategoria() != null
-                    ? producto.getCategoria().getNombre()
-                    : "-";
-
-            String estado
-                    = calcularEstadoStock(
-                            cantidad,
-                            minimo
-                    );
-
-            modeloStock.addRow(
-                    new Object[]{
-                        producto.getCodigo(),
-                        producto.getNombre(),
-                        marca,
-                        categoria,
-                        deposito.getNombre(),
-                        formatearCantidad(cantidad),
-                        formatearCantidad(minimo),
-                        formatearDinero(precioCompra),
-                        formatearDinero(precioVenta),
-                        estado
-                    }
-            );
-
-            articulos++;
-
-            stockTotal
-                    = stockTotal.add(
-                            cantidad
-                    );
-
-            valorInventario
-                    = valorInventario.add(
-                            cantidad.multiply(
-                                    precioCompra
-                            )
-                    );
         }
-
-        //======================================================
-        // KPI
-        //======================================================
-        lblTotalArticulos.setText(
-                String.valueOf(
-                        articulos
-                )
-        );
-
-        lblTotalStock.setText(
-                formatearCantidad(
-                        stockTotal
-                )
-        );
-
-        lblValorInventario.setText(
-                formatearDinero(
-                        valorInventario
-                )
-        );
-
+        for (StockProducto stock : stockCargado) {
+            if (stock == null || stock.getProducto() == null) continue;
+            Producto p = stock.getProducto();
+            Deposito d = stock.getDeposito();
+            productosConFila.add(p.getIdProducto());
+            BigDecimal cantidad = stock.getCantidad() == null ? BigDecimal.ZERO : stock.getCantidad();
+            total = total.add(cantidad);
+            valor = valor.add(cantidad.multiply(p.getPrecioCompra() == null ? BigDecimal.ZERO : p.getPrecioCompra()));
+            agregarFilaStock(p, d == null ? "Sin depósito" : d.getNombre(), cantidad);
+        }
+        // Productos sin registro de stock también deben aparecer.
+        for (Producto p : productos) {
+            if (p != null && !productosConFila.contains(p.getIdProducto())) {
+                agregarFilaStock(p, "Sin depósito", BigDecimal.ZERO);
+            }
+        }
+        lblTotalArticulos.setText(String.valueOf(productos.size()));
+        lblActivos.setText(String.valueOf(activos));
+        lblTotalStock.setText(formatearCantidad(total));
+        lblValorInventario.setText(formatearDinero(valor));
         limpiarDetalle();
+    }
+
+    private void agregarFilaStock(Producto p, String deposito, BigDecimal cantidad) {
+        BigDecimal minimo = p.getStockMinimo() == null ? BigDecimal.ZERO : p.getStockMinimo();
+        BigDecimal compra = p.getPrecioCompra() == null ? BigDecimal.ZERO : p.getPrecioCompra();
+        BigDecimal venta = p.getPrecioVenta() == null ? BigDecimal.ZERO : p.getPrecioVenta();
+        modeloStock.addRow(new Object[]{
+            p.getCodigo(), p.getNombre(),
+            p.getMarca() == null ? "-" : p.getMarca().getNombre(),
+            p.getCategoria() == null ? "-" : p.getCategoria().getNombre(),
+            deposito, formatearCantidad(cantidad), formatearCantidad(minimo),
+            formatearDinero(compra), formatearDinero(venta),
+            p.isActivo() ? calcularEstadoStock(cantidad, minimo) : "INACTIVO"
+        });
+    }
+
+    // Historial de ajustes confirmados, asociado al producto y depósito seleccionados.
+    private void cargarHistorialAjustes() {
+        modeloHistorial.setRowCount(0);
+        int fila = tablaStock.getSelectedRow();
+        if (fila < 0) return;
+        Integer idProducto = idsPorCodigo.get(valorTabla(fila, 0));
+        String deposito = valorTabla(fila, 4);
+        if (idProducto == null) return;
+        try {
+            List<AjusteStock> ajustes = ajusteStockDao.listarPorEstado("CONFIRMADO");
+            DateTimeFormatter formato = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            for (AjusteStock a : ajustes) {
+                if (a.getDeposito() == null || !deposito.equals(a.getDeposito().getNombre())) continue;
+                if (a.getDetalles() == null) continue;
+                for (AjusteStockDetalle d : a.getDetalles()) {
+                    if (d.getProducto() == null || d.getProducto().getIdProducto() != idProducto) continue;
+                    BigDecimal dif = d.getDiferencia() == null ? BigDecimal.ZERO : d.getDiferencia();
+                    String usuario = a.getUsuario() == null ? "-" : a.getUsuario().getNombreCompleto();
+                    modeloHistorial.addRow(new Object[]{
+                        a.getFecha() == null ? "-" : a.getFecha().format(formato),
+                        "AJUSTE", (dif.signum() > 0 ? "+" : "") + formatearCantidad(dif),
+                        a.getMotivo() == null ? deposito : a.getMotivo() + " · " + deposito,
+                        usuario
+                    });
+                }
+            }
+        } catch (java.sql.SQLException ex) {
+            JOptionPane.showMessageDialog(this, "No se pudo consultar el historial de ajustes: " + ex.getMessage(),
+                    "Historial", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
 //==========================================================
@@ -1628,7 +1614,8 @@ public class PanelStock extends javax.swing.JPanel {
         BigDecimal normalizada
                 = cantidad.stripTrailingZeros();
 
-        return normalizada.toPlainString();
+        return NumberFormat.getNumberInstance(new Locale("es", "AR"))
+                .format(normalizada);
     }
 
 //==========================================================
@@ -1693,7 +1680,7 @@ public class PanelStock extends javax.swing.JPanel {
                 if (e.getClickCount() == 2
                         && tablaStock.getSelectedRow() != -1) {
 
-                    abrirModificar();
+                    abrirDetalleMovimiento();
                 }
             }
         });
@@ -1761,12 +1748,16 @@ public class PanelStock extends javax.swing.JPanel {
         //======================================================
         btnAjuste.addActionListener(e -> {
 
-            Window ventana = SwingUtilities.getWindowAncestor(this);
-
+            Frame ventana = obtenerFrame();
+            if (ventana == null) {
+                JOptionPane.showMessageDialog(this, "No se encontró la ventana principal.");
+                return;
+            }
             DialogoAjusteStock dialogo
-                    = new DialogoAjusteStock((Frame) ventana);
+                    = new DialogoAjusteStock(ventana);
 
             dialogo.setVisible(true);
+            actualizarStock();
 
         });
         //======================================================
@@ -1788,22 +1779,31 @@ public class PanelStock extends javax.swing.JPanel {
         //======================================================
         // ACTUALIZAR
         //======================================================
-        btnActualizar.addActionListener(e -> {
+        btnActualizar.addActionListener(e -> actualizarStock());
+    }
 
-            cargarStock();
-
-            lblTotalArticulos.setText(
-                    "156"
-            );
-
-            lblTotalStock.setText(
-                    "1.258"
-            );
-
-            lblValorInventario.setText(
-                    "$ 2.456.780"
-            );
-        });
+    /** Abre la ficha del producto y su historial en una ventana independiente. */
+    private void abrirDetalleMovimiento() {
+        int fila = tablaStock.getSelectedRow();
+        if (fila < 0) {
+            JOptionPane.showMessageDialog(this, "Seleccioná un producto de la tabla.");
+            return;
+        }
+        String codigo = valorTabla(fila, 0);
+        Integer id = idsPorCodigo.get(codigo);
+        if (id == null) {
+            JOptionPane.showMessageDialog(this, "No se pudo identificar el producto.");
+            return;
+        }
+        DialogoDetalleMovimiento dialogo = new DialogoDetalleMovimiento(
+                SwingUtilities.getWindowAncestor(this), id,
+                codigo, valorTabla(fila, 1), valorTabla(fila, 2),
+                valorTabla(fila, 3), valorTabla(fila, 4),
+                valorTabla(fila, 5), valorTabla(fila, 6),
+                valorTabla(fila, 7), valorTabla(fila, 8),
+                valorTabla(fila, 9));
+        dialogo.setLocationRelativeTo(this);
+        dialogo.setVisible(true);
     }
 
     //==========================================================
@@ -1828,6 +1828,8 @@ public class PanelStock extends javax.swing.JPanel {
         dialogo.setVisible(
                 true
         );
+
+        actualizarStock();
     }
 
     //==========================================================
@@ -1835,14 +1837,13 @@ public class PanelStock extends javax.swing.JPanel {
 //==========================================================
     private void abrirSalida() {
 
-        Window ventana
-                = SwingUtilities.getWindowAncestor(
-                        this
-                );
-
+        Frame ventana = obtenerFrame();
+        if (ventana == null) {
+            JOptionPane.showMessageDialog(this, "No se encontró la ventana principal.");
+            return;
+        }
         DialogoSalidaStock dialogo
-                = new DialogoSalidaStock(
-                        (Frame) ventana);
+                = new DialogoSalidaStock(ventana);
 
         dialogo.setLocationRelativeTo(
                 ventana
@@ -1851,6 +1852,8 @@ public class PanelStock extends javax.swing.JPanel {
         dialogo.setVisible(
                 true
         );
+
+        actualizarStock();
     }
 
     //==========================================================
@@ -1885,6 +1888,8 @@ public class PanelStock extends javax.swing.JPanel {
         dialogo.setVisible(
                 true
         );
+
+        actualizarStock();
     }
 
     //==========================================================
@@ -1919,6 +1924,8 @@ public class PanelStock extends javax.swing.JPanel {
         dialogo.setVisible(
                 true
         );
+
+        actualizarStock();
     }
 
     //==========================================================
@@ -1986,73 +1993,32 @@ public class PanelStock extends javax.swing.JPanel {
         lblDetalleStock.setText(
                 valorTabla(
                         fila,
-                        4
+                        5
                 )
         );
 
         lblDetalleMinimo.setText(
                 valorTabla(
                         fila,
-                        5
+                        6
                 )
         );
 
         lblDetalleEstado.setText(
                 valorTabla(
                         fila,
-                        8
+                        9
                 )
         );
 
-        cargarHistorialPrueba(
-                valorTabla(
-                        fila,
-                        1
-                )
-        );
+        // El historial requiere consultas de movimientos por ID de producto.
+        // No mostrar operaciones inventadas ni de otros artículos.
+        // El historial se consulta al abrir el diálogo.
     }
 
     //==========================================================
     // HISTORIAL PRUEBA
     //==========================================================
-    private void cargarHistorialPrueba(
-            String producto) {
-
-        modeloHistorial.setRowCount(
-                0
-        );
-
-        modeloHistorial.addRow(
-                new Object[]{
-                    "28/08/2026",
-                    "Entrada",
-                    "+20",
-                    "Compra proveedor",
-                    "Santiago"
-                }
-        );
-
-        modeloHistorial.addRow(
-                new Object[]{
-                    "28/08/2026",
-                    "Venta",
-                    "-2",
-                    "Venta N° 00000125",
-                    "Santiago"
-                }
-        );
-
-        modeloHistorial.addRow(
-                new Object[]{
-                    "27/08/2026",
-                    "Ajuste",
-                    "+1",
-                    "Corrección inventario",
-                    "Administrador"
-                }
-        );
-    }
-
     //==========================================================
     // LIMPIAR DETALLE
     //==========================================================
@@ -2120,121 +2086,85 @@ public class PanelStock extends javax.swing.JPanel {
 // FILTRAR TABLA
 //==========================================================
     private void filtrarTabla() {
-
-        String buscar
-                = txtBuscar
-                        .getText()
-                        .trim()
-                        .toLowerCase();
-
-        //======================================================
-        // SI BORRÓ LA BÚSQUEDA, VOLVER A MOSTRAR TODO
-        //======================================================
-        if (buscar.isEmpty()) {
-
-            cargarStock();
-
-            return;
+        if (tablaStock.getRowSorter() == null) {
+            tablaStock.setAutoCreateRowSorter(true);
         }
-
-        //======================================================
-        // RECARGAR DATOS COMPLETOS
-        //======================================================
-        cargarStock();
-
-        //======================================================
-        // SEPARAR PALABRAS
-        // Ejemplo: "jamon crudo"
-        //          -> "jamon" + "crudo"
-        //======================================================
-        String[] palabras
-                = buscar.split("\\s+");
-
-        //======================================================
-        // RECORRER DESDE ABAJO
-        //======================================================
-        for (int i = modeloStock.getRowCount() - 1;
-                i >= 0;
-                i--) {
-
-            String codigo
-                    = valorModelo(i, 0);
-
-            String producto
-                    = valorModelo(i, 1);
-
-            String marca
-                    = valorModelo(i, 2);
-
-            String categoria
-                    = valorModelo(i, 3);
-
-            String deposito
-                    = valorModelo(i, 4);
-
-            //==================================================
-            // UNIFICAR INFORMACIÓN DE LA FILA
-            //==================================================
-            String contenidoFila
-                    = codigo
-                    + " "
-                    + producto
-                    + " "
-                    + marca
-                    + " "
-                    + categoria
-                    + " "
-                    + deposito;
-
-            //==================================================
-            // TODAS LAS PALABRAS DEBEN APARECER
-            //==================================================
-            boolean coincide
-                    = true;
-
-            for (String palabra : palabras) {
-
-                if (!contenidoFila.contains(palabra)) {
-
-                    coincide
-                            = false;
-
-                    break;
+        javax.swing.table.TableRowSorter<DefaultTableModel> sorter =
+                (javax.swing.table.TableRowSorter<DefaultTableModel>) tablaStock.getRowSorter();
+        String texto = txtBuscar.getText().trim();
+        if (texto.isEmpty()) {
+            sorter.setRowFilter(null);
+        } else {
+            String[] palabras = texto.split("\\s+");
+            sorter.setRowFilter(new javax.swing.RowFilter<DefaultTableModel, Integer>() {
+                @Override
+                public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> entry) {
+                    StringBuilder fila = new StringBuilder();
+                    for (int col = 0; col <= 4; col++) {
+                        Object valor = entry.getValue(col);
+                        if (valor != null) fila.append(valor).append(' ');
+                    }
+                    String contenido = fila.toString().toLowerCase(java.util.Locale.ROOT);
+                    for (String palabra : palabras) {
+                        if (!contenido.contains(palabra.toLowerCase(java.util.Locale.ROOT))) return false;
+                    }
+                    return true;
                 }
-            }
-
-            //==================================================
-            // SI NO COINCIDE, SACARLA DEL MODELO
-            //==================================================
-            if (!coincide) {
-
-                modeloStock.removeRow(i);
-            }
+            });
         }
     }
 
-//==========================================================
-// OBTENER VALOR DEL MODELO COMO TEXTO
-//==========================================================
-    private String valorModelo(
-            int fila,
-            int columna) {
-
-        Object valor
-                = modeloStock.getValueAt(
-                        fila,
-                        columna
-                );
-
-        if (valor == null) {
-
-            return "";
+    private void actualizarStock() {
+        String codigoSeleccionado = null;
+        String depositoSeleccionado = null;
+        int fila = tablaStock.getSelectedRow();
+        if (fila >= 0) {
+            codigoSeleccionado = valorTabla(fila, 0);
+            depositoSeleccionado = valorTabla(fila, 4);
         }
+        try {
+            cargarStock();
+            filtrarTabla();
+            if (codigoSeleccionado != null) {
+                for (int i = 0; i < tablaStock.getRowCount(); i++) {
+                    if (codigoSeleccionado.equals(valorTabla(i, 0))
+                            && depositoSeleccionado.equals(valorTabla(i, 4))) {
+                        tablaStock.setRowSelectionInterval(i, i);
+                        tablaStock.scrollRectToVisible(tablaStock.getCellRect(i, 0, true));
+                        break;
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "No se pudo actualizar el stock: " + ex.getMessage(),
+                    "Serena Soft", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
-        return valor
-                .toString()
-                .trim()
-                .toLowerCase();
+    // Íconos vectoriales, independientes de fuentes y archivos externos.
+    private Icon icono(String tipo, Color color) {
+        return new Icon() {
+            public int getIconWidth() { return 19; }
+            public int getIconHeight() { return 19; }
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D d = (Graphics2D) g.create();
+                d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                d.translate(x, y);
+                d.setColor(color);
+                d.setStroke(new java.awt.BasicStroke(2.2f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+                switch (tipo) {
+                    case "plus": d.drawLine(9, 3, 9, 16); d.drawLine(3, 9, 16, 9); break;
+                    case "minus": d.drawLine(3, 9, 16, 9); break;
+                    case "cross": d.drawLine(4, 4, 15, 15); d.drawLine(15, 4, 4, 15); break;
+                    case "search": d.drawOval(2, 2, 10, 10); d.drawLine(11, 11, 17, 17); break;
+                    case "edit": d.drawLine(4, 14, 13, 5); d.drawLine(7, 16, 16, 7); d.drawLine(3, 16, 7, 16); break;
+                    case "refresh": d.drawArc(3, 3, 13, 13, 35, 285); d.drawLine(15, 3, 16, 9); d.drawLine(16, 9, 11, 8); break;
+                    default: d.drawRect(4, 4, 11, 11); break;
+                }
+                d.dispose();
+            }
+        };
     }
 
     //==========================================================
@@ -2281,6 +2211,8 @@ public class PanelStock extends javax.swing.JPanel {
                 AZUL_OSCURO
         );
 
+        label.setIcon(icono("adjust", AZUL_PRINCIPAL));
+        label.setIconTextGap(9);
         return label;
     }
 
@@ -2416,13 +2348,8 @@ public class PanelStock extends javax.swing.JPanel {
                 )
         );
 
-        boton.setBackground(
-                GRIS_METAL
-        );
-
-        boton.setColorHover(
-                GRIS_METAL_HOVER
-        );
+        boton.setBackground(new Color(22, 112, 151));
+        boton.setColorHover(new Color(17, 137, 178));
 
         boton.setColorText(
                 Color.WHITE
@@ -2470,9 +2397,8 @@ public class PanelStock extends javax.swing.JPanel {
          * Normalmente queda gris metálico.
          * Recién al pasar el mouse mostramos rojo.
          */
-        boton.setColorHover(
-                ROJO
-        );
+        boton.setBackground(ROJO);
+        boton.setColorHover(new Color(215, 65, 65));
 
         return boton;
     }
@@ -2652,6 +2578,7 @@ public class PanelStock extends javax.swing.JPanel {
 
                     break;
 
+                case "INACTIVO":
                 case "Sin Stock":
 
                     label.setBackground(
