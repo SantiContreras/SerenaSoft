@@ -14,6 +14,10 @@ import model.StockProducto;
 import java.awt.*;
 import java.awt.event.*;
 import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import Configuracion.conexion;
 import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -38,11 +42,11 @@ public class DialogoDetalleMovimiento extends JDialog {
         @Override public boolean isCellEditable(int r,int c) { return false; }
     };
     private final DefaultTableModel modeloMovimientos = new DefaultTableModel(
-            new String[]{"Fecha y hora", "Movimiento", "Diferencia", "Depósito", "Usuario", "Motivo"},0) {
+            new String[]{"Fecha y hora", "Movimiento", "Diferencia", "Stock anterior", "Stock posterior", "Depósito", "Usuario", "Motivo"},0) {
         @Override public boolean isCellEditable(int r,int c) { return false; }
     };
     private final JLabel lblConteo = new JLabel("0 movimientos");
-    private final JLabel lblAviso = new JLabel("Operaciones confirmadas registradas en el sistema. Las entradas manuales requieren integrar su registro de origen.");
+    private final JLabel lblAviso = new JLabel("Los saldos no registrados históricamente se muestran como —.");
     private final JTable tablaDepositos = new JTable(modeloDepositos);
     private final JTable tablaMovimientos = new JTable(modeloMovimientos);
     private final DateTimeFormatter fechaFormato = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -54,18 +58,19 @@ public class DialogoDetalleMovimiento extends JDialog {
         this.idProducto = idProducto;
         this.depositoInicial = deposito;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setMinimumSize(new Dimension(850,570));
-        setSize(1060,690);
+        setMinimumSize(new Dimension(860,520));
+        Dimension pantalla = Toolkit.getDefaultToolkit().getScreenSize();
+        setSize(Math.min(1090, pantalla.width - 70), Math.min(635, pantalla.height - 100));
         setLayout(new BorderLayout());
         getContentPane().setBackground(BG);
 
         JPanel cabecera = new JPanel(new BorderLayout(12,5));
         cabecera.setBackground(NAVY);
-        cabecera.setBorder(new EmptyBorder(17,23,17,23));
+        cabecera.setBorder(new EmptyBorder(11,20,11,20));
         JLabel titulo = new JLabel("  DETALLE Y MOVIMIENTOS DEL PRODUCTO");
         titulo.setIcon(icon("box",Color.WHITE));
         titulo.setForeground(Color.WHITE);
-        titulo.setFont(new Font("Segoe UI",Font.BOLD,20));
+        titulo.setFont(new Font("Segoe UI",Font.BOLD,18));
         JLabel sub = new JLabel(codigo+"  ·  "+producto);
         sub.setForeground(new Color(212,226,247));
         sub.setFont(new Font("Segoe UI",Font.PLAIN,14));
@@ -74,12 +79,12 @@ public class DialogoDetalleMovimiento extends JDialog {
         add(cabecera,BorderLayout.NORTH);
 
         JPanel cuerpo = new JPanel();
-        cuerpo.setLayout(new BoxLayout(cuerpo,BoxLayout.Y_AXIS));
+        cuerpo.setLayout(new BorderLayout(0,10));
         cuerpo.setBackground(BG);
-        cuerpo.setBorder(new EmptyBorder(14,17,14,17));
+        cuerpo.setBorder(new EmptyBorder(10,14,10,14));
 
         JPanel ficha = tarjeta("INFORMACIÓN DEL PRODUCTO", "box");
-        JPanel datos = new JPanel(new GridLayout(3,4,12,12));
+        JPanel datos = new JPanel(new GridLayout(3,4,10,7));
         datos.setOpaque(false);
         datos.setBorder(new EmptyBorder(8,4,8,4));
         datos.add(dato("CÓDIGO",codigo));
@@ -90,15 +95,15 @@ public class DialogoDetalleMovimiento extends JDialog {
         datos.add(dato("STOCK EN DEPÓSITO",stock));
         datos.add(dato("STOCK MÍNIMO",minimo));
         JPanel estadoPanel = dato("ESTADO",estado);
-        lblEstado.setText(estado);
-        lblEstado.setForeground("Disponible".equalsIgnoreCase(estado)?GREEN:("Bajo Stock".equalsIgnoreCase(estado)?ORANGE:RED));
+        // El estado se colorea sobre la etiqueta visible de la ficha.
+        JLabel estadoValor = (JLabel) estadoPanel.getComponent(1);
+        estadoValor.setForeground("Disponible".equalsIgnoreCase(estado)?GREEN:("Bajo Stock".equalsIgnoreCase(estado)?RED:ORANGE));
         datos.add(estadoPanel);
         datos.add(dato("PRECIO DE COMPRA",compra));
         datos.add(dato("PRECIO DE VENTA",venta));
         ficha.add(datos,BorderLayout.CENTER);
-        ficha.setMaximumSize(new Dimension(Integer.MAX_VALUE,215));
-        cuerpo.add(ficha);
-        cuerpo.add(Box.createVerticalStrut(12));
+        ficha.setPreferredSize(new Dimension(900,184));
+        cuerpo.add(ficha, BorderLayout.NORTH);
 
         JPanel historial = tarjeta("HISTORIAL DE MOVIMIENTOS DEL PRODUCTO", "history");
         JPanel filtros = new JPanel(new FlowLayout(FlowLayout.LEFT,12,8));
@@ -122,27 +127,26 @@ public class DialogoDetalleMovimiento extends JDialog {
         historial.add(encabezadoHistorial,BorderLayout.NORTH);
         prepararTabla(tablaMovimientos);
         tablaMovimientos.getColumnModel().getColumn(1).setCellRenderer(new TipoRenderer());
+        tablaMovimientos.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        int[] anchos = {135,150,95,105,105,145,165,195};
+        for (int i=0;i<anchos.length;i++) tablaMovimientos.getColumnModel().getColumn(i).setPreferredWidth(anchos[i]);
         JScrollPane scrollM = new JScrollPane(tablaMovimientos);
         scrollM.setBorder(new EmptyBorder(0,10,0,10));
         historial.add(scrollM,BorderLayout.CENTER);
         lblAviso.setForeground(new Color(115,92,40));
         lblAviso.setFont(new Font("Segoe UI",Font.PLAIN,11));
-        lblAviso.setBorder(new EmptyBorder(7,13,9,10));
+        lblAviso.setBorder(new EmptyBorder(5,13,6,10));
         historial.add(lblAviso,BorderLayout.SOUTH);
-        historial.setMaximumSize(new Dimension(Integer.MAX_VALUE,Integer.MAX_VALUE));
-        historial.setPreferredSize(new Dimension(950,340));
-        cuerpo.add(historial);
-        JScrollPane scrollPrincipal = new JScrollPane(cuerpo);
-        scrollPrincipal.setBorder(null);
-        scrollPrincipal.getVerticalScrollBar().setUnitIncrement(18);
-        add(scrollPrincipal,BorderLayout.CENTER);
+        cuerpo.add(historial,BorderLayout.CENTER);
+        add(cuerpo,BorderLayout.CENTER);
 
-        JPanel pie = new JPanel(new FlowLayout(FlowLayout.RIGHT,12,10));
+        JPanel pie = new JPanel(new FlowLayout(FlowLayout.RIGHT,10,5));
         pie.setBackground(Color.WHITE);
         JButton actualizar = boton("ACTUALIZAR",BLUE,"refresh");
         JButton cerrar = boton("CERRAR",new Color(87,98,112),"close");
         actualizar.addActionListener(e -> cargarDatos());
         cerrar.addActionListener(e -> dispose());
+        pie.setBorder(new EmptyBorder(1,12,1,18));
         pie.add(actualizar);
         pie.add(cerrar);
         add(pie,BorderLayout.SOUTH);
@@ -197,14 +201,33 @@ public class DialogoDetalleMovimiento extends JDialog {
         header.setFont(new Font("Segoe UI",Font.BOLD,12));
         for(int i=0;i<t.getColumnCount();i++) t.getColumnModel().getColumn(i).setHeaderRenderer(header);
     }
+    private Icon iconoRecurso(String ruta, Icon respaldo) {
+        java.net.URL url = getClass().getResource(ruta);
+        if (url == null) return respaldo;
+        Image imagen = new ImageIcon(url).getImage().getScaledInstance(19,19,Image.SCALE_SMOOTH);
+        return new ImageIcon(imagen);
+    }
+
     private JButton boton(String texto,Color fondo,String icono) {
-        JButton b = new JButton(texto,icon(icono,Color.WHITE));
+        JButton b = new JButton(texto, icono.equals("refresh")
+                ? iconoRecurso("/img/actualizar1.png", icon(icono,Color.WHITE))
+                : icon(icono,Color.WHITE));
         b.setBackground(fondo);
         b.setForeground(Color.WHITE);
         b.setFont(new Font("Segoe UI",Font.BOLD,12));
         b.setOpaque(true);
         b.setFocusPainted(false);
-        b.setBorder(new EmptyBorder(11,18,11,18));
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(fondo.darker(),1),new EmptyBorder(6,14,6,14)));
+        b.setPreferredSize(new Dimension("ACTUALIZAR".equals(texto)?150:120,36));
+        b.setIconTextGap(9);
+        b.setContentAreaFilled(false);
+        b.setOpaque(true);
+        b.setRolloverEnabled(true);
+        b.addMouseListener(new MouseAdapter() {
+            @Override public void mouseEntered(MouseEvent e) { b.setBackground(fondo.brighter()); }
+            @Override public void mouseExited(MouseEvent e) { b.setBackground(fondo); }
+        });
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return b;
     }
@@ -232,61 +255,77 @@ public class DialogoDetalleMovimiento extends JDialog {
     }
     private void cargarMovimientos() {
         modeloMovimientos.setRowCount(0);
-        String deposito = (String) comboDeposito.getSelectedItem();
-        if (deposito == null) return;
-        List<Object[]> filas = new ArrayList<>();
-        List<String> errores = new ArrayList<>();
-        try {
-            for (AjusteStock a : new AjusteStockDao().listarPorEstado("CONFIRMADO")) {
-                String dep = nombreDeposito(a.getDeposito());
-                if (!incluyeDeposito(deposito, dep) || a.getDetalles() == null) continue;
-                for (AjusteStockDetalle d : a.getDetalles()) {
-                    if (d.getProducto() == null || d.getProducto().getIdProducto() != idProducto) continue;
-                    BigDecimal dif = d.getDiferencia() == null ? BigDecimal.ZERO : d.getDiferencia();
-                    filas.add(new Object[]{fecha(a.getFecha()), "AJUSTE", cantidadConSigno(dif), dep,
-                        a.getUsuario() == null ? "-" : a.getUsuario().getNombreCompleto(),
-                        a.getMotivo() == null ? "-" : a.getMotivo()});
+        String filtro = (String) comboDeposito.getSelectedItem();
+        if (filtro == null) return;
+        // Historial unificado: los detalles anteriores a la auditoría conservan su
+        // información original. No se reconstruyen saldos de compras o salidas antiguas.
+        String sql = "SELECT m.fecha fecha, m.tipo_movimiento tipo, m.cantidad diferencia, "
+                + "m.stock_anterior anterior, m.stock_posterior posterior, "
+                + "d.nombre deposito, COALESCE(u.nombre_completo, CONCAT('Usuario #',m.id_usuario)) usuario, m.observaciones motivo, "
+                + "m.id_movimiento orden FROM movimiento_stock m "
+                + "JOIN deposito d ON d.id_deposito=m.id_deposito "
+        + "LEFT JOIN usuario u ON u.id_usuario=m.id_usuario "
+                + "WHERE m.id_producto=? "
+                + "UNION ALL "
+                + "SELECT c.fecha, 'COMPRA', cd.cantidad_stock, NULL, NULL, "
+                + "d.nombre, COALESCE(uc.nombre_completo, CONCAT('Usuario #',c.id_usuario)), CONCAT('Compra #',c.id_compra), cd.id_detalle "
+                + "FROM compra_detalle cd JOIN compra c ON c.id_compra=cd.id_compra "
+                + "JOIN deposito d ON d.id_deposito=c.id_deposito "
+        + "LEFT JOIN usuario uc ON uc.id_usuario=c.id_usuario "
+                + "WHERE cd.id_producto=? AND c.estado='CONFIRMADA' "
+                + "AND NOT EXISTS (SELECT 1 FROM movimiento_stock m "
+                + "WHERE m.tipo_movimiento='COMPRA' AND m.id_detalle_origen=cd.id_detalle) "
+                + "UNION ALL "
+                + "SELECT s.fecha, 'SALIDA', -sd.cantidad, NULL, NULL, "
+                + "d.nombre, COALESCE(us.nombre_completo, CONCAT('Usuario #',s.id_usuario)), CONCAT('Salida #',s.id_salida), sd.id_detalle "
+                + "FROM salida_stock_detalle sd JOIN salida_stock s ON s.id_salida=sd.id_salida "
+                + "JOIN deposito d ON d.id_deposito=s.id_deposito "
+        + "LEFT JOIN usuario us ON us.id_usuario=s.id_usuario "
+                + "WHERE sd.id_producto=? AND s.estado='CONFIRMADA' "
+                + "AND NOT EXISTS (SELECT 1 FROM movimiento_stock m "
+                + "WHERE m.tipo_movimiento='SALIDA' AND m.id_detalle_origen=sd.id_detalle) "
+                + "UNION ALL "
+                + "SELECT a.fecha, 'AJUSTE', ad.diferencia, ad.stock_sistema, ad.stock_fisico, "
+                + "d.nombre, COALESCE(ua.nombre_completo, CONCAT('Usuario #',a.id_usuario)), a.motivo, ad.id_detalle "
+                + "FROM ajuste_stock_detalle ad JOIN ajuste_stock a ON a.id_ajuste=ad.id_ajuste "
+                + "JOIN deposito d ON d.id_deposito=a.id_deposito "
+        + "LEFT JOIN usuario ua ON ua.id_usuario=a.id_usuario "
+                + "WHERE ad.id_producto=? AND a.estado='CONFIRMADO' "
+                + "AND NOT EXISTS (SELECT 1 FROM movimiento_stock m "
+                + "WHERE m.tipo_movimiento='AJUSTE' AND m.id_detalle_origen=ad.id_detalle) "
+                + "ORDER BY fecha DESC, orden DESC";
+        try (Connection cn = conexion.getConexion();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            for (int i=1;i<=4;i++) ps.setInt(i,idProducto);
+            try (ResultSet rs = ps.executeQuery()) {
+                int conteo=0;
+                while (rs.next()) {
+                    String dep=rs.getString("deposito");
+                    if (!incluyeDeposito(filtro,dep)) continue;
+                    String tipo=rs.getString("tipo");
+                    BigDecimal diferencia=rs.getBigDecimal("diferencia");
+                    BigDecimal anterior=rs.getBigDecimal("anterior");
+                    BigDecimal posterior=rs.getBigDecimal("posterior");
+                    String etiqueta="COMPRA".equals(tipo)?"COMPRA / ENTRADA":tipo;
+                    String motivo=rs.getString("motivo");
+                    modeloMovimientos.addRow(new Object[]{
+                        fecha(rs.getTimestamp("fecha")), etiqueta, cantidadConSigno(diferencia),
+                        anterior==null?"—":formatear(anterior),
+                        posterior==null?"—":formatear(posterior), dep,
+                        rs.getString("usuario"),
+                        motivo==null||motivo.isBlank()?"-":motivo
+                    });
+                    conteo++;
                 }
+                lblConteo.setText(conteo+" movimientos");
+                lblAviso.setText("— = saldo histórico no registrado. Los ajustes antiguos conservan sus saldos reales.");
             }
-        } catch (Exception ex) { errores.add("ajustes: " + ex.getMessage()); }
-        try {
-            for (Compra c : new CompraService().listarTodos()) {
-                if (!"CONFIRMADA".equalsIgnoreCase(c.getEstado()) || c.getDetalles() == null) continue;
-                String dep = nombreDeposito(c.getDeposito());
-                if (!incluyeDeposito(deposito, dep)) continue;
-                for (CompraDetalle d : c.getDetalles()) {
-                    if (d.getProducto() == null || d.getProducto().getIdProducto() != idProducto) continue;
-                    BigDecimal n = d.getCantidadStock();
-                    filas.add(new Object[]{fecha(c.getFecha()), "COMPRA / ENTRADA", cantidadConSigno(n), dep,
-                        c.getUsuario() == null ? "-" : c.getUsuario().getNombreCompleto(),
-                        "Compra #" + c.getIdCompra()});
-                }
-            }
-        } catch (Exception ex) { errores.add("compras: " + ex.getMessage()); }
-        try {
-            for (SalidaStock s : new SalidaStockService().listarTodas()) {
-                if (!"CONFIRMADA".equalsIgnoreCase(s.getEstado()) || s.getDetalles() == null) continue;
-                String dep = nombreDeposito(s.getDeposito());
-                if (!incluyeDeposito(deposito, dep)) continue;
-                for (SalidaStockDetalle d : s.getDetalles()) {
-                    if (d.getProducto() == null || d.getProducto().getIdProducto() != idProducto) continue;
-                    BigDecimal n = d.getCantidad();
-                    filas.add(new Object[]{fechaPorMetodo(s), "SALIDA", n == null ? "0" : "-" + formatear(n.abs()), dep,
-                        s.getUsuario() == null ? "-" : s.getUsuario().getNombreCompleto(),
-                        "Salida #" + s.getIdSalida()});
-                }
-            }
-        } catch (Exception ex) { errores.add("salidas: " + ex.getMessage()); }
-        filas.sort((x,y) -> {
-            try { return java.time.LocalDateTime.parse(String.valueOf(y[0]), fechaFormato)
-                    .compareTo(java.time.LocalDateTime.parse(String.valueOf(x[0]), fechaFormato)); }
-            catch (Exception ex) { return 0; }
-        });
-        for (Object[] f : filas) modeloMovimientos.addRow(f);
-        lblConteo.setText(filas.size() + " movimientos");
-        lblAviso.setText(errores.isEmpty()
-                ? "Compras, salidas y ajustes confirmados. Entradas manuales pendientes de integración."
-                : "No se pudo consultar: " + String.join("; ", errores));
+        } catch (Exception ex) {
+            lblConteo.setText("0 movimientos");
+            lblAviso.setText("Error al consultar movimientos: "+ex.getMessage());
+            JOptionPane.showMessageDialog(this,"No se pudo cargar el historial: "+ex.getMessage(),
+                    "Serena Soft",JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private boolean incluyeDeposito(String filtro, String nombre) {

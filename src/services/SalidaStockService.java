@@ -1,6 +1,7 @@
 package services;
 import Configuracion.conexion;
 import Dao.StockProductoDao;
+import Dao.MovimientoStockDao;
 import model.StockProducto;
 
 import java.sql.Connection;
@@ -562,6 +563,12 @@ public ResultadoOperacion confirmarSalida(
                         + "."
                 );
             }
+            BigDecimal anterior = stock.getCantidad();
+            new MovimientoStockDao().registrar(cn, idProducto,
+                    salida.getDeposito().getIdDeposito(),
+                    salida.getUsuario().getIdUsuario(), "SALIDA", detalle.getIdDetalle(),
+                    cantidadSalida.negate(), anterior, anterior.subtract(cantidadSalida),
+                    salida.getMotivo());
         }
 
 
@@ -1262,6 +1269,11 @@ public ResultadoOperacion confirmarSalida(
                         throw new SQLException("No se pudo guardar el detalle de " + id);
                     if (!stockProductoDao.descontarStock(cn, stock.getIdStock(), item.getCantidad()))
                         throw new SQLException("No se pudo descontar el stock de " + id);
+                    BigDecimal anterior = stock.getCantidad();
+                    new MovimientoStockDao().registrar(cn, id, idDeposito,
+                            salida.getUsuario().getIdUsuario(), "SALIDA", item.getIdDetalle(),
+                            item.getCantidad().negate(), anterior,
+                            anterior.subtract(item.getCantidad()), salida.getMotivo());
                 }
                 if (!salidaStockDao.cambiarEstadoSiCoincide(
                         salida.getIdSalida(), "BORRADOR", "CONFIRMADA", cn))

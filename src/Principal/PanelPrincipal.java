@@ -35,6 +35,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.SwingConstants;
 import model.Usuario;
 import sesion.SesionUsuario;
+import Paneles.PanelClientes;
 
 /**
  *
@@ -46,12 +47,10 @@ public class PanelPrincipal extends javax.swing.JFrame {
 
     private JLabel lblTitulo;
     private JLabel lblSubtitulo;
-    
+
     private String usuarioLogueado;
 
     private JLabel lblUsuarioLogueado;
-    
-    
 
     private JLabel lblFecha;
 
@@ -74,141 +73,131 @@ public class PanelPrincipal extends javax.swing.JFrame {
     private RSButtonRound btnProveedores;
     private RSButtonRound btnInicio;
 
-   //==========================================================
+    //==========================================================
 // CONSTRUCTOR PRINCIPAL
 //==========================================================
-public PanelPrincipal(String usuario) {
+    public PanelPrincipal(String usuario) {
 
-    initComponents();
+        initComponents();
 
-    this.usuarioLogueado = usuario;
+        this.usuarioLogueado = usuario;
 
-    setBackground(new Color(236, 240, 245));
+        setBackground(new Color(236, 240, 245));
 
-    setSize(1200, 700);
+        setSize(1200, 700);
 
-    setLocationRelativeTo(null);
+        setLocationRelativeTo(null);
 
-    //======================================================
-    // HEADER
-    //======================================================
-    construirHeader();
+        //======================================================
+        // HEADER
+        //======================================================
+        construirHeader();
 
-    panelHeader.setColorPrimario(
-            new Color(8, 32, 82)
-    );
+        panelHeader.setColorPrimario(
+                new Color(8, 32, 82)
+        );
 
-    panelHeader.setColorSecundario(
-            new Color(18, 55, 125)
-    );
+        panelHeader.setColorSecundario(
+                new Color(18, 55, 125)
+        );
 
-    //======================================================
-    // MENU USUARIO
-    //======================================================
-    crearMenuUsuario();
+        //======================================================
+        // MENU USUARIO
+        //======================================================
+        crearMenuUsuario();
 
-    menuUsuario =
-            new MenuUsuarioPopup(this);
+        menuUsuario
+                = new MenuUsuarioPopup(this);
 
-    configurarEventos();
+        configurarEventos();
 
-    //======================================================
-    // COLORES
-    //======================================================
-    panelContenido.setBackground(
-            new Color(245, 247, 250)
-    );
+        //======================================================
+        // COLORES
+        //======================================================
+        panelContenido.setBackground(
+                new Color(245, 247, 250)
+        );
 
-    panelBody.setBackground(
-            new Color(245, 247, 250)
-    );
+        panelBody.setBackground(
+                new Color(245, 247, 250)
+        );
 
-    panelContenido.setLayout(
-            new BorderLayout()
-    );
+        panelContenido.setLayout(
+                new BorderLayout()
+        );
 
+        //======================================================
+        // PANTALLA INICIAL
+        //======================================================
+        mostrarPanel(
+                new PanelDashboard()
+        );
 
-    //======================================================
-    // PANTALLA INICIAL
-    //======================================================
-    mostrarPanel(
-            new PanelDashboard()
-    );
+        panelDerecho.setVisible(false);
 
-    panelDerecho.setVisible(false);
-    
-    cargarUsuarioLogueado();
-}
-
-// =========================================================
-// CARGAR DATOS DEL USUARIO LOGUEADO
-// =========================================================
+        cargarUsuarioLogueado();
+    }
 
 // =========================================================
 // CARGAR DATOS DEL USUARIO LOGUEADO
 // =========================================================
+// =========================================================
+// CARGAR DATOS DEL USUARIO LOGUEADO
+// =========================================================
+    private void cargarUsuarioLogueado() {
 
-private void cargarUsuarioLogueado() {
+        Usuario usuario
+                = SesionUsuario.getUsuarioActual();
 
-    Usuario usuario =
-            SesionUsuario.getUsuarioActual();
+        // =====================================================
+        // SIN USUARIO
+        // =====================================================
+        if (usuario == null) {
 
+            lblUsuarioLogueado.setText(
+                    "Sin usuario"
+            );
 
-    // =====================================================
-    // SIN USUARIO
-    // =====================================================
+            btnAdministrador.setText(
+                    "Sin rol ▼"
+            );
 
-    if (usuario == null) {
+            return;
+        }
 
+        // =====================================================
+        // NOMBRE DEL USUARIO
+        // =====================================================
         lblUsuarioLogueado.setText(
-                "Sin usuario"
+                usuario.getNombreCompleto()
         );
 
-        btnAdministrador.setText(
-                "Sin rol ▼"
-        );
+        // =====================================================
+        // ROL DEL USUARIO
+        // =====================================================
+        if (usuario.getRol() != null) {
 
-        return;
+            btnAdministrador.setText(
+                    usuario.getRol().getNombre()
+                    + " ▼"
+            );
+
+        } else {
+
+            btnAdministrador.setText(
+                    "Sin rol ▼"
+            );
+        }
     }
-
-
-    // =====================================================
-    // NOMBRE DEL USUARIO
-    // =====================================================
-
-    lblUsuarioLogueado.setText(
-            usuario.getNombreCompleto()
-    );
-
-
-    // =====================================================
-    // ROL DEL USUARIO
-    // =====================================================
-
-    if (usuario.getRol() != null) {
-
-        btnAdministrador.setText(
-                usuario.getRol().getNombre()
-                + " ▼"
-        );
-
-    } else {
-
-        btnAdministrador.setText(
-                "Sin rol ▼"
-        );
-    }
-}
-
 
 //==========================================================
 // CONSTRUCTOR SIN PARAMETROS
 // SOLO PARA COMPATIBILIDAD / PRUEBAS
 //==========================================================
-public PanelPrincipal() {
+    public PanelPrincipal() {
 
-    this("Usuario");
-}
+        this("Usuario");
+    }
 
     /**
      * This method is called from within the constructor to initialize the form.
@@ -570,11 +559,8 @@ public PanelPrincipal() {
         });
 
         btnClientes.addActionListener(e -> {
-
-            // Después conectamos PanelClientes
-            // mostrarPanel(new PanelClientes());
+            mostrarPanel(new PanelClientes());
         });
-
         btnStock.addActionListener(e -> {
 
             abrirPanelStock();
@@ -914,21 +900,21 @@ public PanelPrincipal() {
 
         return boton;
     }
-    
+
     private void agregarBotonMenu(
-        JPanel panel,
-        RSButtonRound boton) {
+            JPanel panel,
+            RSButtonRound boton) {
 
-    panel.add(
-            boton
-    );
+        panel.add(
+                boton
+        );
 
-    panel.add(
-            Box.createHorizontalStrut(
-                    6
-            )
-    );
-}
+        panel.add(
+                Box.createHorizontalStrut(
+                        6
+                )
+        );
+    }
 
     private RSButtonRound crearBotonProveedores(String texto, String icono) {
         RSButtonRound b = new RSButtonRound();

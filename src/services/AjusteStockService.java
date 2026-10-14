@@ -5,6 +5,7 @@ import Dao.AjusteStockDao;
 import Dao.DepositoDao;
 import Dao.ProductoDao;
 import Dao.StockProductoDao;
+import Dao.MovimientoStockDao;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -86,6 +87,10 @@ public class AjusteStockService {
                 } else if (!stockDao.actualizarCantidad(cn, stock.getIdStock(), stockFisico)) {
                     throw new SQLException("No se pudo actualizar el stock.");
                 }
+                new MovimientoStockDao().registrar(cn, idProducto, idDeposito,
+                        SesionUsuario.getUsuarioActual().getIdUsuario(), "AJUSTE",
+                        detalle.getIdDetalle(), diferencia, actual, stockFisico,
+                        motivo.trim());
                 if (!ajusteDao.cambiarEstadoSiCoincide(idAjuste, "BORRADOR", "CONFIRMADO", cn))
                     throw new SQLException("No se pudo confirmar el ajuste.");
                 cn.commit();
