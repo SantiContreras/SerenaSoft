@@ -18,6 +18,7 @@ import javax.swing.table.*;
 public class PanelClientes extends JPanel {
     private static final Color NAVY=new Color(15,49,107), BLUE=new Color(17,94,184), BG=new Color(239,244,250), INK=new Color(19,43,80), GREEN=new Color(18,153,82), RED=new Color(210,58,61);
     private static final Font FONT=new Font("Segoe UI",Font.PLAIN,13);
+    private static final Font BUTTON_FONT=new Font("Segoe UI Semibold",Font.BOLD,12);
     private final ClienteService service=new ClienteService();
     private final JTextField buscar=new JTextField();
     private final JComboBox<String> estado=new JComboBox<>(new String[]{"Todos","Activos","Inactivos"});
@@ -60,10 +61,18 @@ public class PanelClientes extends JPanel {
         JLabel sub=new JLabel("Gestión de clientes para ventas y cuenta corriente");sub.setFont(new Font("Segoe UI",Font.PLAIN,11));sub.setForeground(INK);
         JPanel txt=new JPanel(new GridLayout(2,1,0,1));txt.setOpaque(false);txt.add(title);txt.add(sub);
         JPanel brand=new JPanel(new BorderLayout(12,0));brand.setOpaque(false);
-        JLabel icon=new JLabel(new GlyphIcon("users",new Color(10,53,116),42));brand.add(icon,BorderLayout.WEST);brand.add(txt,BorderLayout.CENTER);
+        JLabel icon=new JLabel(resourceIcon("/img/clientes_panel.png",42,42,new GlyphIcon("users",new Color(10,53,116),42)));brand.add(icon,BorderLayout.WEST);brand.add(txt,BorderLayout.CENTER);
         p.add(brand,BorderLayout.WEST);
         JPanel actions=new JPanel(new FlowLayout(FlowLayout.RIGHT,7,3));actions.setOpaque(false);
         JButton nuevo=button("NUEVO",new Color(0,172,91),"plus"), actualizar=button("ACTUALIZAR",Color.WHITE,"refresh"), imprimir=button("IMPRIMIR",Color.WHITE,"print");
+        nuevo.setIcon(resourceIcon("/img/nuevo_cliente.png",20,20,new GlyphIcon("plus",Color.WHITE,19)));
+        detalle.setIcon(resourceIcon("/img/ver_detalle_cliente.png",20,20,new GlyphIcon("eye",Color.WHITE,19)));
+        cambiar.setIcon(resourceIcon("/img/desactivar_cliente.png",19,19,new GlyphIcon("ban",Color.WHITE,18)));
+        actualizar.setIcon(resourceIcon("/img/actualizar_cliente.png",20,20,new GlyphIcon("refresh",NAVY,19)));
+        imprimir.setIcon(resourceIcon("/img/imprimir_clientes.png",21,21,new GlyphIcon("print",NAVY,19)));
+        imprimir.setDisabledIcon(imprimir.getIcon());
+        imprimir.setToolTipText("Imprimir la lista de clientes filtrados");
+        actualizar.setToolTipText("Volver a consultar los clientes en la base de datos");
         actions.add(nuevo);actions.add(modificar);actions.add(detalle);actions.add(cambiar);actions.add(actualizar);actions.add(imprimir);
         nuevo.addActionListener(e->abrirNuevo());modificar.addActionListener(e->abrir(false));detalle.addActionListener(e->abrir(true));cambiar.addActionListener(e->cambiarEstado());actualizar.addActionListener(e->cargar());
         imprimir.addActionListener(e->{try{tabla.print(JTable.PrintMode.FIT_WIDTH,new java.text.MessageFormat("Serena Soft - Clientes"),null);}catch(Exception ex){error(ex);}});
@@ -72,16 +81,16 @@ public class PanelClientes extends JPanel {
     private JPanel filtros(){
         JPanel p=card(new GridBagLayout());p.setBorder(new CompoundBorder(new LineBorder(new Color(215,226,240)),new EmptyBorder(9,12,9,12)));
         GridBagConstraints g=new GridBagConstraints();g.gridx=0;g.weightx=1;g.fill=GridBagConstraints.HORIZONTAL;g.insets=new Insets(2,0,2,0);int y=0;
-        JLabel t=section("FILTROS");g.gridy=y++;p.add(t,g);
+        JLabel t=section("FILTROS");t.setIcon(resourceIcon("/img/filtro_clientes.png",24,24,new GlyphIcon("search",NAVY,22)));t.setIconTextGap(8);g.gridy=y++;p.add(t,g);
         buscar.setFont(FONT);buscar.setToolTipText("Nombre, razón social, documento, teléfono o email");buscar.setPreferredSize(new Dimension(220,36));g.gridy=y++;p.add(buscar,g);
-        JLabel hint=new JLabel("Nombre, documento o teléfono");hint.setFont(new Font("Segoe UI",Font.PLAIN,11));hint.setForeground(new Color(99,114,135));g.gridy=y++;p.add(hint,g);
-        for(Object[] entry:new Object[][]{{"Estado",estado},{"Tipo de cliente",tipo},{"Condición IVA",iva}}){g.gridy=y++;p.add(new JLabel((String)entry[0]),g);JComboBox<?> cb=(JComboBox<?>)entry[1];cb.setFont(FONT);cb.setPreferredSize(new Dimension(220,31));g.gridy=y++;p.add(cb,g);}
+        JLabel hint=new JLabel("Nombre, documento o teléfono");hint.setFont(new Font("Segoe UI",Font.PLAIN,11));hint.setForeground(new Color(43,87,153));g.gridy=y++;p.add(hint,g);
+        for(Object[] entry:new Object[][]{{"Estado",estado},{"Tipo de cliente",tipo},{"Condición IVA",iva}}){g.gridy=y++;JLabel etiqueta=new JLabel((String)entry[0]);etiqueta.setForeground(NAVY);etiqueta.setFont(new Font("Segoe UI",Font.BOLD,12));p.add(etiqueta,g);JComboBox<?> cb=(JComboBox<?>)entry[1];cb.setFont(FONT);cb.setPreferredSize(new Dimension(220,31));g.gridy=y++;p.add(cb,g);}
         JPanel buttons=new JPanel(new GridLayout(1,2,7,0));buttons.setOpaque(false);JButton aplicar=button("BUSCAR",BLUE,"search"),limpiar=button("LIMPIAR",new Color(225,232,241),"clear");buttons.add(aplicar);buttons.add(limpiar);g.gridy=y++;g.insets=new Insets(8,0,2,0);p.add(buttons,g);
         aplicar.addActionListener(e->filtrar());limpiar.addActionListener(e->{buscar.setText("");estado.setSelectedIndex(0);tipo.setSelectedIndex(0);iva.setSelectedIndex(0);filtrar();});return p;
     }
     private JPanel resumen(){
         JPanel p=card(new BorderLayout(0,5));p.setBorder(new CompoundBorder(new LineBorder(new Color(215,226,240)),new EmptyBorder(9,12,9,12)));
-        p.add(section("RESUMEN"),BorderLayout.NORTH);
+        JLabel tituloResumen=section("RESUMEN");tituloResumen.setIcon(resourceIcon("/img/estadistica_clientes.png",25,25,new GlyphIcon("users",NAVY,23)));tituloResumen.setIconTextGap(9);p.add(tituloResumen,BorderLayout.NORTH);
         JPanel stats=new JPanel(new GridLayout(4,1,0,1));stats.setOpaque(false);
         stats.add(stat("Total de clientes",total,NAVY));stats.add(stat("Activos",activos,GREEN));stats.add(stat("Inactivos",inactivos,RED));stats.add(stat("Con cuenta corriente",corriente,BLUE));
         JPanel top=new JPanel(new BorderLayout());top.setOpaque(false);top.add(stats,BorderLayout.NORTH);p.add(top,BorderLayout.CENTER);return p;
@@ -129,6 +138,15 @@ public class PanelClientes extends JPanel {
             model.addRow(new Object[]{c.getIdCliente(),doc,c.getNombreMostrar(),safe(c.getTipoCliente()),safe(c.getCondicionIva()),safe(c.getTelefono()),safe(c.getLocalidad()),c.isActivo()?"Activo":"Inactivo"});}
         paginaLabel.setText("  "+(pagina+1)+" / "+totalPaginas()+"  ");actualizarAcciones();
     }
+    /** Iconos del proyecto (src/img). Si falta un recurso, conserva el icono Java2D. */
+    private static Icon resourceIcon(String path,int width,int height,Icon fallback){
+        java.net.URL url=PanelClientes.class.getResource(path);
+        if(url==null)return fallback;
+        ImageIcon original=new ImageIcon(url);
+        if(original.getIconWidth()<=0)return fallback;
+        Image scaled=original.getImage().getScaledInstance(width,height,Image.SCALE_SMOOTH);
+        return new ImageIcon(scaled);
+    }
     private static JPanel card(LayoutManager lm){JPanel p=new JPanel(lm);p.setBackground(Color.WHITE);return p;}
     private static JLabel section(String s){JLabel l=new JLabel(s);l.setForeground(NAVY);l.setFont(new Font("Segoe UI",Font.BOLD,16));return l;}
     private static JButton smallButton(String s){JButton b=button(s,Color.WHITE,"none");b.setIcon(null);b.setFont(new Font("Segoe UI",Font.BOLD,13));b.setPreferredSize(new Dimension(34,30));return b;}
@@ -138,15 +156,16 @@ public class PanelClientes extends JPanel {
         Color foreground=light?NAVY:Color.WHITE;
         JButton b=new StyledButton(text,bg,light);
         if(!"none".equals(glyph))b.setIcon(new GlyphIcon(glyph,foreground,17));
-        b.setFont(new Font("Segoe UI",Font.BOLD,11));b.setForeground(foreground);
+        b.setFont(BUTTON_FONT);b.setForeground(foreground);
         b.setDisabledIcon(b.getIcon());
+        b.setToolTipText(text);
         b.setFocusPainted(false);b.setBorderPainted(false);b.setContentAreaFilled(false);
         b.setOpaque(false);b.setRolloverEnabled(true);
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.setHorizontalAlignment(SwingConstants.CENTER);b.setIconTextGap(7);
         b.setMargin(new Insets(0,9,0,9));
-        int width=switch(text){case "NUEVO"->94;case "MODIFICAR"->110;case "VER DETALLE"->120;case "DESACTIVAR","ACTIVAR"->115;case "ACTUALIZAR"->116;case "IMPRIMIR"->100;default->99;};
-        b.setPreferredSize(new Dimension(width,42));
+        int width=switch(text){case "NUEVO"->94;case "MODIFICAR"->110;case "VER DETALLE"->125;case "DESACTIVAR","ACTIVAR"->115;case "ACTUALIZAR"->122;case "IMPRIMIR"->106;default->99;};
+        b.setPreferredSize(new Dimension(width+8,42));
         return b;
     }
     /** Pinta el fondo sin depender del Look & Feel instalado en NetBeans. */
@@ -171,11 +190,11 @@ public class PanelClientes extends JPanel {
             // Pintamos texto e icono de forma consistente aun sin selección.
             Graphics2D textG=(Graphics2D)g.create();
             textG.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            String label=getText();FontMetrics fm=textG.getFontMetrics(getFont());
+            String label=getText();textG.setFont(getFont());FontMetrics fm=textG.getFontMetrics();
             Icon icon=getIcon();int iw=icon==null?0:icon.getIconWidth();int gap=icon==null?0:getIconTextGap();
             int totalWidth=iw+gap+fm.stringWidth(label);int x=(getWidth()-totalWidth)/2;
             if(icon!=null){icon.paintIcon(this,textG,x,(getHeight()-icon.getIconHeight())/2);x+=iw+gap;}
-            textG.setFont(getFont());textG.setColor(light?NAVY:Color.WHITE);
+            textG.setColor(light?NAVY:Color.WHITE);
             textG.drawString(label,x,(getHeight()-fm.getHeight())/2+fm.getAscent());textG.dispose();
         }
     }
@@ -187,11 +206,27 @@ public class PanelClientes extends JPanel {
             d.setStroke(new BasicStroke(Math.max(1.8f,size/9f),BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));int s=size;
             switch(kind){
                 case "plus":d.drawLine(s/2,s/5,s/2,s*4/5);d.drawLine(s/5,s/2,s*4/5,s/2);break;
-                case "edit":d.drawLine(s/4,s*3/4,s*3/4,s/4);d.drawLine(s/4,s*3/4,s/5,s*4/5);break;
-                case "eye":d.drawOval(s/6,s/3,s*2/3,s/3);d.fillOval(s*9/20,s*9/20,s/10,s/10);break;
+                case "edit":
+                    d.rotate(-Math.PI/4,s/2.0,s/2.0);
+                    d.fillRoundRect(s*2/5,s/7,s/5,s*3/5,2,2);
+                    d.fillPolygon(new int[]{s*2/5,s*3/5,s/2},new int[]{s*3/4,s*3/4,s*9/10},3);
+                    break;
+                case "eye":
+                    java.awt.geom.Path2D eye=new java.awt.geom.Path2D.Double();
+                    eye.moveTo(s/9.0,s/2.0);eye.quadTo(s/2.0,-s/10.0,s*8/9.0,s/2.0);
+                    eye.quadTo(s/2.0,s*11/10.0,s/9.0,s/2.0);d.draw(eye);
+                    d.fillOval(s*2/5,s*2/5,s/5,s/5);break;
                 case "ban":d.drawOval(s/6,s/6,s*2/3,s*2/3);d.drawLine(s/4,s*3/4,s*3/4,s/4);break;
-                case "refresh":d.drawArc(s/5,s/5,s*3/5,s*3/5,45,275);d.drawLine(s*4/5,s/4,s*4/5,s/2);break;
-                case "print":d.drawRect(s/5,s/3,s*3/5,s/3);d.drawRect(s/3,s/8,s/3,s/4);d.drawRect(s/3,s*3/5,s/3,s/4);break;
+                case "refresh":
+                    d.drawArc(s/6,s/6,s*2/3,s*2/3,35,295);
+                    d.fillPolygon(new int[]{s*5/6,s*5/6,s*3/5},new int[]{s/6,s*2/5,s/4},3);break;
+                case "print":
+                    d.drawRoundRect(s/7,s*7/20,s*5/7,s*2/5,2,2);
+                    d.drawRect(s/4,s/10,s/2,s*7/20);
+                    d.setColor(comp.isEnabled()?color:color);d.fillOval(s*7/10,s/2,Math.max(2,s/10),Math.max(2,s/10));
+                    d.setColor(color);d.fillRect(s/4,s*13/20,s/2,s/4);
+                    d.setColor(Color.WHITE);d.setStroke(new BasicStroke(1.0f));
+                    d.drawLine(s/3,s*3/4,s*2/3,s*3/4);break;
                 case "search":d.drawOval(s/7,s/7,s/2,s/2);d.drawLine(s*3/5,s*3/5,s*6/7,s*6/7);break;
                 case "clear":d.drawLine(s/4,s/4,s*3/4,s*3/4);d.drawLine(s*3/4,s/4,s/4,s*3/4);break;
                 case "users":d.fillOval(s/4,s/7,s/3,s/3);d.fillRoundRect(s/10,s/2,s*3/5,s*2/5,9,9);d.fillOval(s*3/5,s/5,s/4,s/4);d.fillRoundRect(s*3/5,s/2,s/3,s/3,9,9);break;
@@ -212,7 +247,7 @@ public class PanelClientes extends JPanel {
     }
     private static String safe(String s){return s==null?"":s;}
     private Cliente selected(){int row=tabla.getSelectedRow();if(row<0)return null;int m=tabla.convertRowIndexToModel(row);return pagina*porPagina+m>=0&&pagina*porPagina+m<visibles.size()?visibles.get(pagina*porPagina+m):null;}
-    private void actualizarAcciones(){Cliente c=selected();modificar.setEnabled(c!=null);detalle.setEnabled(c!=null);cambiar.setEnabled(c!=null);if(c!=null){cambiar.setText(c.isActivo()?"DESACTIVAR":"ACTIVAR");cambiar.setBackground(c.isActivo()?RED:GREEN);cambiar.setIcon(new GlyphIcon(c.isActivo()?"ban":"plus",Color.WHITE,16));}}
+    private void actualizarAcciones(){Cliente c=selected();modificar.setEnabled(c!=null);detalle.setEnabled(c!=null);cambiar.setEnabled(c!=null);if(c!=null){cambiar.setText(c.isActivo()?"DESACTIVAR":"ACTIVAR");cambiar.setBackground(c.isActivo()?RED:GREEN);cambiar.setIcon(c.isActivo()?resourceIcon("/img/desactivar_cliente.png",19,19,new GlyphIcon("ban",Color.WHITE,18)):new GlyphIcon("plus",Color.WHITE,18));}}
     private void abrirNuevo(){abrirDialogo(null,false);}
     private void abrir(boolean soloLectura){Cliente c=selected();if(c==null)return;abrirDialogo(c,soloLectura);}
     private void abrirDialogo(Cliente c,boolean readOnly){Window w=SwingUtilities.getWindowAncestor(this);DialogoCliente d=new DialogoCliente(w,c,service,readOnly);d.setVisible(true);if(d.guardado)cargar();}
@@ -229,29 +264,84 @@ public class PanelClientes extends JPanel {
         private final JCheckBox corriente=new JCheckBox("Permite cuenta corriente"),activo=new JCheckBox("Cliente activo",true);
         private final JTabbedPane tabs=new JTabbedPane(JTabbedPane.LEFT);
         DialogoCliente(Window owner,Cliente c,ClienteService s,boolean read){super(owner,c==null?"Serena Soft · Nuevo cliente":"Serena Soft · Cliente",ModalityType.APPLICATION_MODAL);original=c;service=s;readOnly=read;
-            setLayout(new BorderLayout());setDefaultCloseOperation(DISPOSE_ON_CLOSE);setSize(980,610);setMinimumSize(new Dimension(740,520));setLocationRelativeTo(owner);
-            JPanel head=new JPanel(new BorderLayout());head.setBackground(NAVY);head.setBorder(new EmptyBorder(14,22,14,22));JLabel title=new JLabel("♟  CLIENTE  ·  "+(c==null?"Nuevo cliente":read?"Detalle de cliente":"Modificar cliente"));title.setForeground(Color.WHITE);title.setFont(new Font("Segoe UI",Font.BOLD,21));head.add(title);add(head,BorderLayout.NORTH);
-            tabs.setFont(new Font("Segoe UI",Font.BOLD,13));tabs.setBackground(BG);tabs.addTab("Datos generales",general());tabs.addTab("Datos comerciales",comercial());tabs.addTab("Cuenta corriente",cuenta());add(tabs,BorderLayout.CENTER);
-            JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,12,10));footer.setBackground(Color.WHITE);JButton save=button("▣  GUARDAR",GREEN),cancel=button(read?"CERRAR":"✕  CANCELAR",new Color(100,118,137));footer.add(save);footer.add(cancel);add(footer,BorderLayout.SOUTH);cancel.addActionListener(e->dispose());save.addActionListener(e->guardar());save.setVisible(!read);
-            corriente.addActionListener(e->syncCredito());if(c!=null)llenar(c);else syncCredito();if(read)bloquear(this);
+            setLayout(new BorderLayout());setDefaultCloseOperation(DISPOSE_ON_CLOSE);setSize(920,590);setMinimumSize(new Dimension(790,530));setLocationRelativeTo(owner);
+            JPanel head=new JPanel(new BorderLayout());head.setBackground(NAVY);head.setBorder(new EmptyBorder(14,22,14,22));JLabel title=new JLabel("CLIENTE  ·  "+(c==null?"Nuevo cliente":read?"Detalle de cliente":"Modificar cliente"));title.setForeground(Color.WHITE);title.setFont(new Font("Segoe UI",Font.BOLD,21));head.add(title);add(head,BorderLayout.NORTH);
+            tabs.setFont(new Font("Segoe UI",Font.BOLD,13));tabs.setBackground(BG);
+            tabs.setForeground(NAVY);tabs.setBorder(BorderFactory.createEmptyBorder(2,2,2,2));tabs.addTab("Datos generales",general());tabs.addTab("Datos comerciales",comercial());tabs.addTab("Cuenta corriente",cuenta());add(tabs,BorderLayout.CENTER);
+            JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,12,10));footer.setBackground(Color.WHITE);JButton save=button("GUARDAR",GREEN,"plus"),cancel=button(read?"CERRAR":"CANCELAR",new Color(100,118,137),"clear");footer.add(save);footer.add(cancel);add(footer,BorderLayout.SOUTH);cancel.addActionListener(e->dispose());save.addActionListener(e->guardar());save.setVisible(!read);
+            corriente.addActionListener(e->syncCredito());
+            tipoDoc.addActionListener(e->actualizarTipoDocumento());
+            if(c!=null)llenar(c);else {iva.setSelectedItem("CONSUMIDOR FINAL");provincia.setSelectedItem("Chaco");syncCredito();}
+            actualizarTipoDocumento();
+            if(read)bloquear(this);
+            getRootPane().setDefaultButton(save);
+            getRootPane().registerKeyboardAction(e->dispose(),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
+            if(c==null)SwingUtilities.invokeLater(()->nombre.requestFocusInWindow());
         }
-        private JPanel general(){JPanel p=page();p.add(section("▣  DATOS PERSONALES / FISCALES"));p.add(row(field("Tipo de documento",tipoDoc),field("Nro. documento",documento),field("Condición IVA",iva)));
+        private JPanel general(){JPanel p=page();p.add(section("DATOS PERSONALES / FISCALES"));p.add(Box.createVerticalStrut(7));p.add(row(field("Tipo de documento",tipoDoc),field("Nro. documento",documento),field("Condición IVA",iva)));
             p.add(row(field("Razón social / Empresa",razon)));p.add(row(field("Nombre",nombre),field("Apellido",apellido),field("Tipo de cliente",tipo)));
-            p.add(Box.createVerticalStrut(10));p.add(section("⌖  CONTACTO Y UBICACIÓN"));p.add(row(field("Teléfono",telefono),field("Email",email)));p.add(row(field("Dirección",direccion)));p.add(row(field("Localidad",localidad),field("Provincia",provincia)));return wrap(p);}
-        private JPanel comercial(){JPanel p=page();p.add(section("▣  DATOS COMERCIALES"));JLabel hint=new JLabel("Los datos fiscales, el tipo de cliente y la razón social se editan en Datos generales.");hint.setForeground(new Color(96,110,130));p.add(Box.createVerticalStrut(14));p.add(hint);p.add(Box.createVerticalStrut(18));p.add(section("Preparado para Ventas"));JLabel info=new JLabel("La vinculación con ventas, comprobantes e historial se incorporará al desarrollar ese módulo.");info.setForeground(new Color(96,110,130));p.add(info);return wrap(p);}
-        private JPanel cuenta(){JPanel p=page();p.add(section("⚙  ESTADO Y CONFIGURACIÓN"));p.add(row(field("Estado del cliente",activo)));p.add(row(field("Cuenta corriente",corriente)));p.add(row(field("Límite de crédito ($)",limite)));JLabel hint=new JLabel("La gestión de saldos y cobros se habilitará con el módulo de Ventas y Caja.");hint.setForeground(new Color(96,110,130));p.add(hint);return wrap(p);}
+            p.add(Box.createVerticalStrut(10));p.add(section("CONTACTO Y UBICACIÓN"));p.add(row(field("Teléfono",telefono),field("Email",email)));p.add(row(field("Dirección",direccion)));p.add(row(field("Localidad",localidad),field("Provincia",provincia)));return wrap(p);}
+        private JPanel comercial(){JPanel p=page();p.add(section("DATOS COMERCIALES"));JLabel hint=new JLabel("Los datos fiscales, el tipo de cliente y la razón social se editan en Datos generales.");hint.setForeground(new Color(96,110,130));p.add(Box.createVerticalStrut(14));p.add(hint);p.add(Box.createVerticalStrut(18));p.add(section("Preparado para Ventas"));JLabel info=new JLabel("La vinculación con ventas, comprobantes e historial se incorporará al desarrollar ese módulo.");info.setForeground(new Color(96,110,130));p.add(info);return wrap(p);}
+        private JPanel cuenta(){JPanel p=page();p.add(section("ESTADO Y CONFIGURACIÓN"));p.add(row(field("Estado del cliente",activo)));p.add(row(field("Cuenta corriente",corriente)));p.add(row(field("Límite de crédito ($)",limite)));JLabel hint=new JLabel("La gestión de saldos y cobros se habilitará con el módulo de Ventas y Caja.");hint.setForeground(new Color(96,110,130));p.add(hint);return wrap(p);}
         private JPanel page(){JPanel p=new JPanel();p.setLayout(new BoxLayout(p,BoxLayout.Y_AXIS));p.setBackground(Color.WHITE);p.setBorder(new EmptyBorder(18,24,18,24));return p;}
-        private JPanel wrap(JPanel p){JPanel outer=new JPanel(new BorderLayout());outer.setBackground(Color.WHITE);outer.add(new JScrollPane(p,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),BorderLayout.CENTER);return outer;}
+        private JPanel wrap(JPanel p){JPanel outer=new JPanel(new BorderLayout());outer.setBackground(Color.WHITE);
+            JScrollPane scroll=new JScrollPane(p,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+            scroll.setBorder(BorderFactory.createEmptyBorder());scroll.getVerticalScrollBar().setUnitIncrement(16);
+            outer.add(scroll,BorderLayout.CENTER);return outer;}
         private JPanel row(JPanel... fields){JPanel r=new JPanel(new GridLayout(1,fields.length,12,0));r.setOpaque(false);r.setMaximumSize(new Dimension(Integer.MAX_VALUE,76));r.setAlignmentX(Component.LEFT_ALIGNMENT);for(JPanel f:fields)r.add(f);return r;}
-        private JPanel field(String label,JComponent input){JPanel p=new JPanel(new BorderLayout(0,5));p.setOpaque(false);p.setBorder(new EmptyBorder(7,0,5,0));JLabel l=new JLabel(label);l.setForeground(NAVY);l.setFont(new Font("Segoe UI",Font.BOLD,12));p.add(l,BorderLayout.NORTH);input.setFont(FONT);input.setPreferredSize(new Dimension(160,32));p.add(input,BorderLayout.CENTER);return p;}
+        private JPanel field(String label,JComponent input){JPanel p=new JPanel(new BorderLayout(0,5));p.setOpaque(false);p.setBorder(new EmptyBorder(7,0,5,0));JLabel l=new JLabel(label);l.setForeground(NAVY);l.setFont(new Font("Segoe UI",Font.BOLD,12));p.add(l,BorderLayout.NORTH);input.setFont(FONT);input.setPreferredSize(new Dimension(160,35));
+            if(input instanceof JTextField){((JTextField)input).setMargin(new Insets(3,9,3,9));}
+            if(input instanceof JComboBox){((JComboBox<?>)input).setBackground(Color.WHITE);}p.add(input,BorderLayout.CENTER);return p;}
+        private void actualizarTipoDocumento(){
+            String d=(String)tipoDoc.getSelectedItem();
+            documento.setToolTipText("CUIT".equals(d)||"CUIL".equals(d)?"Ingresá el número con 11 dígitos (con o sin guiones)":"Número de documento del cliente");
+        }
+        private void validarFormulario(){
+            boolean empresa=!val(razon).isBlank();
+            if(!empresa && (val(nombre).isBlank()||val(apellido).isBlank())){
+                tabs.setSelectedIndex(0);nombre.requestFocusInWindow();
+                throw new IllegalArgumentException("Ingresá nombre y apellido, o completá la razón social de la empresa.");
+            }
+            String td=(String)tipoDoc.getSelectedItem(),nd=val(documento);
+            if((td==null||td.isBlank())!=nd.isBlank()){
+                tabs.setSelectedIndex(0);tipoDoc.requestFocusInWindow();
+                throw new IllegalArgumentException("Completá tanto el tipo como el número de documento, o dejá ambos vacíos.");
+            }
+            if(!nd.isBlank() && !nd.matches("[A-Za-z0-9./ -]{4,30}")){
+                tabs.setSelectedIndex(0);documento.requestFocusInWindow();
+                throw new IllegalArgumentException("El número de documento tiene un formato inválido.");
+            }
+            if(("CUIT".equals(td)||"CUIL".equals(td))&&!nd.isBlank()&&nd.replaceAll("[^0-9]","").length()!=11){
+                tabs.setSelectedIndex(0);documento.requestFocusInWindow();
+                throw new IllegalArgumentException("El CUIT/CUIL debe contener 11 dígitos.");
+            }
+            if(!val(email).isBlank()&&!val(email).matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")){
+                tabs.setSelectedIndex(0);email.requestFocusInWindow();
+                throw new IllegalArgumentException("Revisá el formato del correo electrónico.");
+            }
+            if(corriente.isSelected()){
+                BigDecimal valor;
+                try{valor=credito();}catch(NumberFormatException ex){
+                    tabs.setSelectedIndex(2);limite.requestFocusInWindow();
+                    throw new IllegalArgumentException("El límite de crédito debe ser un importe válido.");
+                }
+                if(valor.signum()<0){
+                    tabs.setSelectedIndex(2);limite.requestFocusInWindow();
+                    throw new IllegalArgumentException("El límite de crédito no puede ser negativo.");
+                }
+            }
+        }
         private void syncCredito(){limite.setEnabled(corriente.isSelected()&&!readOnly);if(!corriente.isSelected()&&!readOnly)limite.setText("0");}
         private void llenar(Cliente c){nombre.setText(safe(c.getNombre()));apellido.setText(safe(c.getApellido()));razon.setText(safe(c.getRazonSocial()));documento.setText(safe(c.getNroDocumento()));telefono.setText(safe(c.getTelefono()));email.setText(safe(c.getEmail()));direccion.setText(safe(c.getDireccion()));localidad.setText(safe(c.getLocalidad()));select(tipoDoc,c.getTipoDocumento());select(iva,c.getCondicionIva());select(tipo,c.getTipoCliente());select(provincia,c.getProvincia());corriente.setSelected(c.isPermiteCuentaCorriente());limite.setText(c.getLimiteCredito()==null?"0":c.getLimiteCredito().toPlainString());activo.setSelected(c.isActivo());syncCredito();}
         private void select(JComboBox<String> cb,String v){if(v==null||v.isBlank())return;boolean found=false;for(int i=0;i<cb.getItemCount();i++)if(v.equalsIgnoreCase(cb.getItemAt(i))){cb.setSelectedIndex(i);found=true;break;}if(!found){cb.addItem(v);cb.setSelectedItem(v);}}
         private void bloquear(Container c){for(Component component:c.getComponents()){if(component instanceof JTextField)((JTextField)component).setEditable(false);if(component instanceof JComboBox)((JComboBox<?>)component).setEnabled(false);if(component instanceof JCheckBox)((JCheckBox)component).setEnabled(false);if(component instanceof Container)bloquear((Container)component);}}
         private static String val(JTextField t){return t.getText().trim();}
         private BigDecimal credito(){String s=val(limite).replace("$","").replace(" ","");if(s.isEmpty())return BigDecimal.ZERO;if(s.contains(","))s=s.replace(".","").replace(",",".");return new BigDecimal(s);}
-        private void guardar(){try{Cliente c=new Cliente();if(original!=null)c.setIdCliente(original.getIdCliente());c.setNombre(val(nombre));c.setApellido(val(apellido));c.setRazonSocial(val(razon));c.setTipoDocumento((String)tipoDoc.getSelectedItem());c.setNroDocumento(val(documento));c.setCondicionIva((String)iva.getSelectedItem());c.setTipoCliente((String)tipo.getSelectedItem());c.setTelefono(val(telefono));c.setEmail(val(email));c.setDireccion(val(direccion));c.setLocalidad(val(localidad));c.setProvincia((String)provincia.getSelectedItem());c.setActivo(activo.isSelected());c.setPermiteCuentaCorriente(corriente.isSelected());c.setLimiteCredito(corriente.isSelected()?credito():BigDecimal.ZERO);
-            if(original==null)service.crear(c);else service.modificar(c);guardado=true;JOptionPane.showMessageDialog(this,"Cliente guardado correctamente.","Serena Soft",JOptionPane.INFORMATION_MESSAGE);dispose();
+        private void guardar(){try{validarFormulario();Cliente c=new Cliente();if(original!=null)c.setIdCliente(original.getIdCliente());c.setNombre(val(nombre));c.setApellido(val(apellido));c.setRazonSocial(val(razon));c.setTipoDocumento((String)tipoDoc.getSelectedItem());c.setNroDocumento(val(documento));c.setCondicionIva((String)iva.getSelectedItem());c.setTipoCliente((String)tipo.getSelectedItem());c.setTelefono(val(telefono));c.setEmail(val(email));c.setDireccion(val(direccion));c.setLocalidad(val(localidad));c.setProvincia((String)provincia.getSelectedItem());c.setActivo(activo.isSelected());c.setPermiteCuentaCorriente(corriente.isSelected());c.setLimiteCredito(corriente.isSelected()?credito():BigDecimal.ZERO);
+            if(original==null)service.crear(c);else service.modificar(c);
+            guardado=true;
+            JOptionPane.showMessageDialog(this,original==null?"Cliente registrado correctamente.":"Datos del cliente actualizados correctamente.","Serena Soft",JOptionPane.INFORMATION_MESSAGE);
+            dispose();
         }catch(Exception ex){JOptionPane.showMessageDialog(this,ex.getMessage(),"Revisar datos",JOptionPane.WARNING_MESSAGE);}}
     }
 }
