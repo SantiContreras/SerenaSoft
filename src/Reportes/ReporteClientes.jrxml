@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="ReporteClientes" pageWidth="842" pageHeight="595" orientation="Landscape" columnWidth="786" leftMargin="28" rightMargin="28" topMargin="22" bottomMargin="22" whenNoDataType="AllSectionsNoDetail">
+
+<parameter name="TITULO" class="java.lang.String"/>
+<parameter name="SUBTITULO" class="java.lang.String"/>
+<parameter name="USUARIO" class="java.lang.String"/>
+<parameter name="FECHA" class="java.lang.String"/>
+<parameter name="TOTAL" class="java.lang.String"/>
+<parameter name="FILTROS" class="java.lang.String"/>
+<field name="id" class="java.lang.String"/>
+<field name="documento" class="java.lang.String"/>
+<field name="cliente" class="java.lang.String"/>
+<field name="tipo" class="java.lang.String"/>
+<field name="iva" class="java.lang.String"/>
+<field name="telefono" class="java.lang.String"/>
+<field name="localidad" class="java.lang.String"/>
+<field name="estado" class="java.lang.String"/>
+<title><band height="86">
+<rectangle><reportElement x="0" y="0" width="786" height="83" backcolor="#10346F" mode="Opaque"/><graphicElement><pen lineWidth="0.0"/></graphicElement></rectangle>
+<textField isBlankWhenNull="true"><reportElement x="12" y="6" width="500" height="31" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="23" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$P{TITULO}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="12" y="36" width="500" height="20" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="11" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$P{SUBTITULO}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="12" y="57" width="500" height="22" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="13" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["REPORTE GENERAL DE CLIENTES"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="527" y="14" width="255" height="21" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="9" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["Emisión: " + $P{FECHA}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="527" y="38" width="255" height="21" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="9" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["Usuario: " + $P{USUARIO}]]></textFieldExpression></textField>
+</band></title>
+<pageHeader><band height="37">
+<textField isBlankWhenNull="true"><reportElement x="0" y="1" width="786" height="21"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="9" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$P{FILTROS}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="0" y="22" width="786" height="15"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="9" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["Clientes incluidos: " + $P{TOTAL}]]></textFieldExpression></textField>
+</band></pageHeader>
+<columnHeader><band height="29">
+<textField isBlankWhenNull="true"><reportElement x="0" y="0" width="30" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["ID"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="30" y="0" width="111" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["DOCUMENTO"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="141" y="0" width="192" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["CLIENTE / RAZÓN SOCIAL"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="333" y="0" width="75" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["TIPO"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="408" y="0" width="121" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["COND. IVA"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="529" y="0" width="90" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["TELÉFONO"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="619" y="0" width="100" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["LOCALIDAD"]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="719" y="0" width="67" height="29" mode="Opaque" backcolor="#10346F" forecolor="#FFFFFF"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="true"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["ESTADO"]]></textFieldExpression></textField>
+</band></columnHeader>
+<detail><band height="25">
+<textField isBlankWhenNull="true"><reportElement x="0" y="0" width="30" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{id}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="30" y="0" width="111" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{documento}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="141" y="0" width="192" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{cliente}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="333" y="0" width="75" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{tipo}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="408" y="0" width="121" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{iva}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="529" y="0" width="90" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{telefono}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="619" y="0" width="100" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{localidad}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="719" y="0" width="67" height="25"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="8" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA[$F{estado}]]></textFieldExpression></textField>
+<line><reportElement x="0" y="24" width="786" height="1" forecolor="#DDE8F4"/></line>
+</band></detail>
+<pageFooter><band height="28">
+<line><reportElement x="0" y="1" width="786" height="1" forecolor="#B9CDE4"/></line>
+<textField isBlankWhenNull="true"><reportElement x="0" y="3" width="560" height="22"/><textElement textAlignment="Left" verticalAlignment="Middle"><font fontName="SansSerif" size="9" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["SERENA SOFT · Gestión de Ventas | Total de clientes del reporte: " + $P{TOTAL}]]></textFieldExpression></textField>
+<textField isBlankWhenNull="true"><reportElement x="660" y="3" width="126" height="22"/><textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="SansSerif" size="9" isBold="false"/><paragraph leftIndent="5" rightIndent="3"/></textElement><textFieldExpression><![CDATA["Página " + $V{PAGE_NUMBER}]]></textFieldExpression></textField>
+</band></pageFooter></jasperReport>

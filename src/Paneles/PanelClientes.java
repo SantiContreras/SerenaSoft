@@ -20,7 +20,7 @@ public class PanelClientes extends JPanel {
     private static final Font FONT=new Font("Segoe UI",Font.PLAIN,13);
     private static final Font BUTTON_FONT=new Font("Segoe UI Semibold",Font.BOLD,12);
     private final ClienteService service=new ClienteService();
-    private final JTextField buscar=new JTextField();
+    private final JTextField buscar=new ModernSearchField("Nombre, documento o teléfono...");
     private final JComboBox<String> estado=new JComboBox<>(new String[]{"Todos","Activos","Inactivos"});
     private final JComboBox<String> tipo=new JComboBox<>(new String[]{"Todos","MINORISTA","MAYORISTA"});
     private final JComboBox<String> iva=new JComboBox<>(new String[]{"Todas","CONSUMIDOR FINAL","RESPONSABLE INSCRIPTO","MONOTRIBUTISTA","EXENTO","NO RESPONSABLE"});
@@ -38,10 +38,10 @@ public class PanelClientes extends JPanel {
         setLayout(new BorderLayout(0,10));setBackground(BG);setBorder(new EmptyBorder(10,12,10,12));
         add(header(),BorderLayout.NORTH);
         JPanel body=new JPanel(new BorderLayout(14,0));body.setOpaque(false);
-        JPanel side=new JPanel(new BorderLayout(0,9));side.setOpaque(false);side.setPreferredSize(new Dimension(254,100));
+        JPanel side=new JPanel(new BorderLayout(0,9));side.setOpaque(false);side.setPreferredSize(new Dimension(286,100));
         JPanel sideContent=new JPanel();sideContent.setOpaque(false);sideContent.setLayout(new BoxLayout(sideContent,BoxLayout.Y_AXIS));
         JPanel filterCard=filtros(),summaryCard=resumen();
-        filterCard.setMaximumSize(new Dimension(Integer.MAX_VALUE,310));
+        filterCard.setMaximumSize(new Dimension(Integer.MAX_VALUE,365));
         summaryCard.setMaximumSize(new Dimension(Integer.MAX_VALUE,216));
         sideContent.add(filterCard);sideContent.add(Box.createVerticalStrut(9));sideContent.add(summaryCard);
         JScrollPane sideScroll=new JScrollPane(sideContent,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -61,7 +61,7 @@ public class PanelClientes extends JPanel {
         JLabel sub=new JLabel("Gestión de clientes para ventas y cuenta corriente");sub.setFont(new Font("Segoe UI",Font.PLAIN,11));sub.setForeground(INK);
         JPanel txt=new JPanel(new GridLayout(2,1,0,1));txt.setOpaque(false);txt.add(title);txt.add(sub);
         JPanel brand=new JPanel(new BorderLayout(12,0));brand.setOpaque(false);
-        JLabel icon=new JLabel(resourceIcon("/img/clientes_panel.png",42,42,new GlyphIcon("users",new Color(10,53,116),42)));brand.add(icon,BorderLayout.WEST);brand.add(txt,BorderLayout.CENTER);
+        JLabel icon=new JLabel(resourceIcon("/img/clientes2.png",42,42,new GlyphIcon("users",new Color(10,53,116),42)));brand.add(icon,BorderLayout.WEST);brand.add(txt,BorderLayout.CENTER);
         p.add(brand,BorderLayout.WEST);
         JPanel actions=new JPanel(new FlowLayout(FlowLayout.RIGHT,7,3));actions.setOpaque(false);
         JButton nuevo=button("NUEVO",new Color(0,172,91),"plus"), actualizar=button("ACTUALIZAR",Color.WHITE,"refresh"), imprimir=button("IMPRIMIR",Color.WHITE,"print");
@@ -75,19 +75,79 @@ public class PanelClientes extends JPanel {
         actualizar.setToolTipText("Volver a consultar los clientes en la base de datos");
         actions.add(nuevo);actions.add(modificar);actions.add(detalle);actions.add(cambiar);actions.add(actualizar);actions.add(imprimir);
         nuevo.addActionListener(e->abrirNuevo());modificar.addActionListener(e->abrir(false));detalle.addActionListener(e->abrir(true));cambiar.addActionListener(e->cambiarEstado());actualizar.addActionListener(e->cargar());
-        imprimir.addActionListener(e->{try{tabla.print(JTable.PrintMode.FIT_WIDTH,new java.text.MessageFormat("Serena Soft - Clientes"),null);}catch(Exception ex){error(ex);}});
+        imprimir.addActionListener(e->imprimirJasper());
         p.add(actions,BorderLayout.EAST);return p;
     }
     private JPanel filtros(){
-        JPanel p=card(new GridBagLayout());p.setBorder(new CompoundBorder(new LineBorder(new Color(215,226,240)),new EmptyBorder(9,12,9,12)));
-        GridBagConstraints g=new GridBagConstraints();g.gridx=0;g.weightx=1;g.fill=GridBagConstraints.HORIZONTAL;g.insets=new Insets(2,0,2,0);int y=0;
-        JLabel t=section("FILTROS");t.setIcon(resourceIcon("/img/filtro_clientes.png",24,24,new GlyphIcon("search",NAVY,22)));t.setIconTextGap(8);g.gridy=y++;p.add(t,g);
-        buscar.setFont(FONT);buscar.setToolTipText("Nombre, razón social, documento, teléfono o email");buscar.setPreferredSize(new Dimension(220,36));g.gridy=y++;p.add(buscar,g);
-        JLabel hint=new JLabel("Nombre, documento o teléfono");hint.setFont(new Font("Segoe UI",Font.PLAIN,11));hint.setForeground(new Color(43,87,153));g.gridy=y++;p.add(hint,g);
-        for(Object[] entry:new Object[][]{{"Estado",estado},{"Tipo de cliente",tipo},{"Condición IVA",iva}}){g.gridy=y++;JLabel etiqueta=new JLabel((String)entry[0]);etiqueta.setForeground(NAVY);etiqueta.setFont(new Font("Segoe UI",Font.BOLD,12));p.add(etiqueta,g);JComboBox<?> cb=(JComboBox<?>)entry[1];cb.setFont(FONT);cb.setPreferredSize(new Dimension(220,31));g.gridy=y++;p.add(cb,g);}
-        JPanel buttons=new JPanel(new GridLayout(1,2,7,0));buttons.setOpaque(false);JButton aplicar=button("BUSCAR",BLUE,"search"),limpiar=button("LIMPIAR",new Color(225,232,241),"clear");buttons.add(aplicar);buttons.add(limpiar);g.gridy=y++;g.insets=new Insets(8,0,2,0);p.add(buttons,g);
-        aplicar.addActionListener(e->filtrar());limpiar.addActionListener(e->{buscar.setText("");estado.setSelectedIndex(0);tipo.setSelectedIndex(0);iva.setSelectedIndex(0);filtrar();});return p;
+        JPanel p=card(new GridBagLayout());
+        p.setBorder(new CompoundBorder(new LineBorder(new Color(215,226,240)),new EmptyBorder(13,14,16,14)));
+        GridBagConstraints g=new GridBagConstraints();
+        g.gridx=0;g.weightx=1;g.fill=GridBagConstraints.HORIZONTAL;
+        g.insets=new Insets(0,0,0,0);int y=0;
+        JLabel t=section("FILTROS");
+        t.setIcon(resourceIcon("/img/filtro_clientes.png",24,24,new GlyphIcon("search",NAVY,22)));
+        t.setIconTextGap(9);g.gridy=y++;g.insets=new Insets(0,0,14,0);p.add(t,g);
+
+        JLabel searchLabel=new JLabel("BUSCAR CLIENTE");
+        searchLabel.setForeground(NAVY);searchLabel.setFont(new Font("Segoe UI",Font.BOLD,11));
+        g.gridy=y++;g.insets=new Insets(0,0,6,0);p.add(searchLabel,g);
+        buscar.setFont(new Font("Segoe UI",Font.PLAIN,13));
+        buscar.setToolTipText("Buscar por nombre, razón social, documento, teléfono o email");
+        buscar.setPreferredSize(new Dimension(242,42));
+        buscar.setBorder(new CompoundBorder(new LineBorder(new Color(193,210,232),1,true),new EmptyBorder(0,11,0,9)));
+        buscar.setBackground(Color.WHITE);buscar.setForeground(INK);buscar.setCaretColor(BLUE);
+        g.gridy=y++;g.insets=new Insets(0,0,13,0);p.add(buscar,g);
+
+        for(Object[] entry:new Object[][]{{"ESTADO",estado},{"TIPO DE CLIENTE",tipo},{"CONDICIÓN IVA",iva}}){
+            JLabel etiqueta=new JLabel((String)entry[0]);
+            etiqueta.setForeground(NAVY);etiqueta.setFont(new Font("Segoe UI",Font.BOLD,11));
+            g.gridy=y++;g.insets=new Insets(0,0,5,0);p.add(etiqueta,g);
+            JComboBox<?> cb=(JComboBox<?>)entry[1];
+            cb.setFont(new Font("Segoe UI",Font.PLAIN,12));cb.setForeground(INK);
+            cb.setBackground(Color.WHITE);cb.setOpaque(true);
+            cb.setPreferredSize(new Dimension(242,38));
+            cb.setBorder(new LineBorder(new Color(193,210,232),1,true));
+            cb.setRenderer(new ModernComboRenderer());
+            g.gridy=y++;g.insets=new Insets(0,0,13,0);p.add(cb,g);
+        }
+        JPanel buttons=new JPanel(new GridLayout(1,2,10,0));buttons.setOpaque(false);
+        JButton aplicar=button("BUSCAR",new Color(0,105,225),"search");
+        JButton limpiar=button("LIMPIAR",new Color(230,239,249),"clear");
+        aplicar.setPreferredSize(new Dimension(112,42));limpiar.setPreferredSize(new Dimension(112,42));
+        buttons.add(aplicar);buttons.add(limpiar);
+        g.gridy=y++;g.insets=new Insets(0,0,0,0);p.add(buttons,g);
+        p.setMinimumSize(new Dimension(268,350));
+        aplicar.addActionListener(e->filtrar());
+        limpiar.addActionListener(e->{buscar.setText("");estado.setSelectedIndex(0);tipo.setSelectedIndex(0);iva.setSelectedIndex(0);filtrar();});
+        return p;
     }
+
+    private static final class ModernComboRenderer extends DefaultListCellRenderer {
+        @Override public Component getListCellRendererComponent(JList<?> list,Object value,int index,boolean selected,boolean focus){
+            JLabel l=(JLabel)super.getListCellRendererComponent(list,value,index,selected,focus);
+            l.setFont(new Font("Segoe UI",Font.PLAIN,12));
+            l.setBorder(new EmptyBorder(6,11,6,4));
+            l.setForeground(selected&&index>=0?Color.WHITE:INK);
+            l.setBackground(selected&&index>=0?BLUE:Color.WHITE);
+            return l;
+        }
+    }
+
+    private static final class ModernSearchField extends JTextField {
+        private final String placeholder;
+        ModernSearchField(String placeholder){this.placeholder=placeholder;}
+        @Override protected void paintComponent(Graphics g){
+            super.paintComponent(g);
+            if(getText().isEmpty()&&!isFocusOwner()){
+                Graphics2D d=(Graphics2D)g.create();
+                d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                d.setColor(new Color(133,148,169));d.setFont(getFont().deriveFont(11f));
+                FontMetrics fm=d.getFontMetrics();
+                d.drawString(placeholder,12,(getHeight()-fm.getHeight())/2+fm.getAscent());d.dispose();
+            }
+        }
+    }
+
     private JPanel resumen(){
         JPanel p=card(new BorderLayout(0,5));p.setBorder(new CompoundBorder(new LineBorder(new Color(215,226,240)),new EmptyBorder(9,12,9,12)));
         JLabel tituloResumen=section("RESUMEN");tituloResumen.setIcon(resourceIcon("/img/estadistica_clientes.png",25,25,new GlyphIcon("users",NAVY,23)));tituloResumen.setIconTextGap(9);p.add(tituloResumen,BorderLayout.NORTH);
@@ -233,6 +293,65 @@ public class PanelClientes extends JPanel {
                 default:d.fillOval(s/3,s/3,s/3,s/3);
             }d.dispose();}
     }
+    /** Reporte A4 apaisado: imprime todos los clientes que cumplen los filtros, no solo la página visible. */
+    // Compilar una sola vez por ejecución: las impresiones siguientes reutilizan el reporte.
+    private static volatile net.sf.jasperreports.engine.JasperReport reporteClientesCache;
+
+    private static net.sf.jasperreports.engine.JasperReport obtenerReporteClientes() throws Exception {
+        net.sf.jasperreports.engine.JasperReport r = reporteClientesCache;
+        if (r != null) return r;
+        synchronized (PanelClientes.class) {
+            if (reporteClientesCache != null) return reporteClientesCache;
+            try (java.io.InputStream in = PanelClientes.class.getResourceAsStream("/reportes/ReporteClientes.jrxml")) {
+                if (in != null) {
+                    reporteClientesCache = net.sf.jasperreports.engine.JasperCompileManager.compileReport(in);
+                } else {
+                    java.io.File archivo = new java.io.File("src/reportes/ReporteClientes.jrxml");
+                    if (!archivo.isFile()) throw new java.io.FileNotFoundException("No se encontró ReporteClientes.jrxml en src/reportes/");
+                    reporteClientesCache = net.sf.jasperreports.engine.JasperCompileManager.compileReport(archivo.getPath());
+                }
+            }
+            return reporteClientesCache;
+        }
+    }
+
+    private void imprimirJasper(){
+        if(visibles.isEmpty()){
+            JOptionPane.showMessageDialog(this,"No hay clientes para imprimir con los filtros actuales.",
+                    "Serena Soft · Reportes",JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        try{
+            net.sf.jasperreports.engine.JasperReport reporte=obtenerReporteClientes();
+            java.util.List<java.util.Map<String,?>> filas=new java.util.ArrayList<>();
+            for(Cliente c:visibles){
+                java.util.Map<String,Object> f=new java.util.HashMap<>();
+                f.put("id",String.valueOf(c.getIdCliente()));
+                f.put("documento",(safe(c.getTipoDocumento())+" "+safe(c.getNroDocumento())).trim());
+                f.put("cliente",safe(c.getNombreMostrar()));
+                f.put("tipo",safe(c.getTipoCliente()));
+                f.put("iva",safe(c.getCondicionIva()));
+                f.put("telefono",safe(c.getTelefono()));
+                f.put("localidad",safe(c.getLocalidad()));
+                f.put("estado",c.isActivo()?"Activo":"Inactivo");
+                filas.add(f);
+            }
+            java.util.Map<String,Object> parametros=new java.util.HashMap<>();
+            parametros.put("TITULO","SERENA SOFT");
+            parametros.put("SUBTITULO","Sistema de Gestión de Ventas");
+            parametros.put("USUARIO",System.getProperty("serenasoft.usuario","No especificado"));
+            parametros.put("FECHA",new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date()));
+            parametros.put("TOTAL",String.valueOf(visibles.size()));
+            parametros.put("FILTROS", "Estado: "+estado.getSelectedItem()+"   |   Tipo: "+tipo.getSelectedItem()+"   |   IVA: "+iva.getSelectedItem());
+            net.sf.jasperreports.engine.JasperPrint print=net.sf.jasperreports.engine.JasperFillManager.fillReport(
+                reporte,parametros,new net.sf.jasperreports.engine.data.JRMapCollectionDataSource(filas));
+            net.sf.jasperreports.view.JasperViewer.viewReport(print,false);
+        }catch(Exception ex){
+            JOptionPane.showMessageDialog(this,"No se pudo generar el reporte Jasper:\n"+ex.getMessage(),
+                "Serena Soft · Reportes",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void cargar(){try{todos=service.listar("",true);filtrar();}catch(Exception e){error(e);}}
     private void filtrar(){if(model==null)return;String q=buscar.getText().trim().toLowerCase(Locale.ROOT);visibles=new ArrayList<>();int a=0,i=0,cc=0;
         for(Cliente c:todos){if(c.isActivo())a++;else i++;if(c.isPermiteCuentaCorriente())cc++;
