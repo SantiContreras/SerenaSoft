@@ -33,14 +33,17 @@ public class DialogoNuevoArticulo extends JDialog {
     public DialogoNuevoArticulo(Window parent) {
         super(parent, "Nuevo artículo · Serena Soft", ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setMinimumSize(new Dimension(850, 640));
-        setSize(1060, 790);
+        setMinimumSize(new Dimension(730, 460));
+        Rectangle pantalla = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getMaximumWindowBounds();
+        setSize(Math.min(950, pantalla.width - 48),
+                Math.min(650, pantalla.height - 55));
         setLayout(new BorderLayout());
         getContentPane().setBackground(BG);
         add(header(), BorderLayout.NORTH);
         JPanel content = new JPanel();
         content.setBackground(BG);
-        content.setBorder(new EmptyBorder(18, 24, 22, 24));
+        content.setBorder(new EmptyBorder(12, 16, 14, 16));
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         addSection(content, "01", "Identificación del artículo", "Información principal y lectura con escáner", identification());
         addSection(content, "02", "Clasificación y proveedor", "Organización del catálogo comercial", classification());
@@ -75,11 +78,11 @@ public class DialogoNuevoArticulo extends JDialog {
     private JPanel header() {
         JPanel p = new JPanel(new BorderLayout(16, 0));
         p.setBackground(NAVY);
-        p.setBorder(new EmptyBorder(21, 27, 21, 27));
+        p.setBorder(new EmptyBorder(12, 20, 12, 20));
         JLabel emblem = new JLabel("▣", SwingConstants.CENTER);
         emblem.setFont(new Font("Segoe UI Symbol", Font.BOLD, 30));
         emblem.setForeground(WHITE);
-        emblem.setPreferredSize(new Dimension(54, 56));
+        emblem.setPreferredSize(new Dimension(42, 44));
         emblem.setOpaque(true);
         emblem.setBackground(BLUE);
         p.add(emblem, BorderLayout.WEST);
@@ -87,7 +90,7 @@ public class DialogoNuevoArticulo extends JDialog {
         words.setOpaque(false);
         words.setLayout(new BoxLayout(words, BoxLayout.Y_AXIS));
         JLabel title = new JLabel("NUEVO ARTÍCULO");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 25));
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
         title.setForeground(WHITE);
         JLabel subtitle = new JLabel("Registrá un producto en el catálogo de Serena Soft");
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -102,13 +105,13 @@ public class DialogoNuevoArticulo extends JDialog {
         return p;
     }
     private void addSection(JPanel root, String index, String title, String subtitle, JPanel body) {
-        JPanel card = new JPanel(new BorderLayout(0, 17));
+        JPanel card = new JPanel(new BorderLayout(0, 10));
         card.setBackground(new Color(248, 251, 255));
-        card.setBorder(BorderFactory.createCompoundBorder(new LineBorder(LINE, 1, true), new EmptyBorder(19, 22, 21, 22)));
+        card.setBorder(BorderFactory.createCompoundBorder(new LineBorder(LINE, 1, true), new EmptyBorder(13, 16, 14, 16)));
         JPanel top = new JPanel(new BorderLayout(12, 0)); top.setOpaque(false);
         JLabel number = new JLabel(index, SwingConstants.CENTER);
         number.setOpaque(true); number.setBackground(NAVY); number.setForeground(WHITE);
-        number.setFont(new Font("Segoe UI", Font.BOLD, 13)); number.setPreferredSize(new Dimension(39, 39));
+        number.setFont(new Font("Segoe UI", Font.BOLD, 13)); number.setPreferredSize(new Dimension(34, 34));
         top.add(number, BorderLayout.WEST);
         JPanel names = new JPanel(); names.setOpaque(false); names.setLayout(new BoxLayout(names, BoxLayout.Y_AXIS));
         JLabel heading = new JLabel(title); heading.setForeground(NAVY); heading.setFont(new Font("Segoe UI", Font.BOLD, 17));
@@ -118,7 +121,7 @@ public class DialogoNuevoArticulo extends JDialog {
         card.add(top, BorderLayout.NORTH); card.add(body, BorderLayout.CENTER);
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, card.getPreferredSize().height));
-        root.add(card); root.add(Box.createVerticalStrut(14));
+        root.add(card); root.add(Box.createVerticalStrut(9));
     }
     private JPanel grid(int cols) {
         JPanel p = new JPanel(new GridLayout(0, cols, 17, 14)); p.setOpaque(false); return p;
@@ -194,14 +197,15 @@ public class DialogoNuevoArticulo extends JDialog {
     }
     private JPanel footer() {
         JPanel p = new JPanel(new BorderLayout()); p.setBackground(WHITE);
-        p.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, LINE), new EmptyBorder(13, 24, 13, 24)));
+        p.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, LINE), new EmptyBorder(9, 14, 9, 14)));
         JLabel hint = new JLabel("* Campo obligatorio     ·     Los datos aún no se guardan en MySQL");
         hint.setForeground(MUTED); hint.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        p.add(hint, BorderLayout.WEST);
+        // El texto informativo se muestra como tooltip para reservar ancho a los botones.
+        p.setToolTipText(hint.getText());
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 9, 0)); actions.setOpaque(false);
-        JButton clear = button("↺  LIMPIAR", new Color(234, 240, 247), TEXT);
+        JButton clear = button("LIMPIAR", new Color(220, 233, 251), NAVY);
         JButton cancel = button("CANCELAR", new Color(79, 91, 109), WHITE);
-        JButton save = button("✓  VALIDAR ARTÍCULO", GREEN, WHITE);
+        JButton save = button("VALIDAR ARTÍCULO", GREEN, WHITE);
         clear.addActionListener(e -> clear()); cancel.addActionListener(e -> dispose());
         save.addActionListener(e -> validateDraft());
         actions.add(clear); actions.add(cancel); actions.add(save);
@@ -274,10 +278,30 @@ public class DialogoNuevoArticulo extends JDialog {
         c.setFont(new Font("Segoe UI", Font.BOLD, 12)); c.setFocusPainted(false); return c;
     }
     private static JButton button(String title, Color bg, Color fg) {
-        JButton b = new JButton(title); b.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        b.setForeground(fg); b.setBackground(bg); b.setFocusPainted(false);
-        b.setBorder(new EmptyBorder(12, 18, 12, 18)); b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        b.setOpaque(true); return b;
+        JButton b = new JButton(title) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                        RenderingHints.VALUE_ANTIALIAS_ON);
+                Color base = getModel().isPressed() ? bg.darker() :
+                        getModel().isRollover() ? bg.brighter() : bg;
+                g2.setColor(base);
+                g2.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 9, 9);
+                g2.setColor(bg.darker());
+                g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 9, 9);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        b.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        b.setForeground(fg);
+        b.setBackground(bg);
+        b.setContentAreaFilled(false);
+        b.setOpaque(false);
+        b.setFocusPainted(false);
+        b.setBorder(new EmptyBorder(10, 14, 10, 14));
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
     }
 
     /** Vista previa informativa. La asignación definitiva debe hacerse al guardar,
