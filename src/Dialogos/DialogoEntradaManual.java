@@ -44,6 +44,8 @@ import model.UnidadMedida;
 import services.CompraService;
 import services.ResultadoOperacion;
 import Dao.StockProductoDao;
+import model.ProductoPresentacion;
+import services.ProductoPresentacionService;
 import java.awt.GridLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -60,6 +62,9 @@ public class DialogoEntradaManual extends JDialog {
     private final ProveedorDao proveedorDao = new ProveedorDao();
     private final DepositoDao depositoDao = new DepositoDao();
     private final StockProductoDao stockProductoDao = new StockProductoDao();
+    private final ProductoPresentacionService presentacionService = new ProductoPresentacionService();
+    private final List<ProductoPresentacion> presentacionesDisponibles = new ArrayList<>();
+    private boolean cargandoPresentaciones = false;
     //==========================================================
     // DATOS DE LA COMPRA
     //==========================================================
@@ -98,6 +103,10 @@ public class DialogoEntradaManual extends JDialog {
 
     private JSpinner spnCantidad;
     private JTextField txtCosto;
+    private JTextField txtPrecioVenta;
+    private JLabel lblCostoStock;
+    private JLabel lblMargenVenta;
+    private final java.util.Map<Integer, BigDecimal> preciosVentaPendientes = new java.util.HashMap<>();
 
     private JLabel lblSubtotalItem;
 
@@ -406,6 +415,9 @@ public class DialogoEntradaManual extends JDialog {
 
         txtCosto
                 = new JTextField();
+        txtPrecioVenta = new JTextField();
+        lblCostoStock = new JLabel("$ 0,00");
+        lblMargenVenta = new JLabel("—");
 
         lblSubtotalItem
                 = new JLabel("$ 0,00");
@@ -479,6 +491,7 @@ public class DialogoEntradaManual extends JDialog {
         aplicarEstiloCampo(txtFecha);
         aplicarEstiloCampo(txtBuscarProducto);
         aplicarEstiloCampo(txtCosto);
+        aplicarEstiloCampo(txtPrecioVenta);
     }
 
     //==========================================================
@@ -840,7 +853,7 @@ public class DialogoEntradaManual extends JDialog {
         panelProducto.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        360
+                        425
                 )
         );
 
@@ -1724,6 +1737,26 @@ public class DialogoEntradaManual extends JDialog {
                 c
         );
 
+        // PRECIOS: fila compacta, sin ampliar la ventana ni tapar la tabla.
+        JPanel panelPrecios = new JPanel(new java.awt.GridLayout(1, 3, 14, 0));
+        panelPrecios.setOpaque(false);
+        txtPrecioVenta.setPreferredSize(new Dimension(130, 34));
+        lblCostoStock.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblMargenVenta.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        panelPrecios.add(crearBloqueVerticalProducto(
+                "PRECIO DE VENTA / UNIDAD STOCK", txtPrecioVenta));
+        panelPrecios.add(crearBloqueVerticalProducto(
+                "COSTO / UNIDAD STOCK", lblCostoStock));
+        panelPrecios.add(crearBloqueVerticalProducto(
+                "MARGEN BRUTO SOBRE VENTA", lblMargenVenta));
+        c.gridx = 0;
+        c.gridy = 5;
+        c.gridwidth = 4;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.insets = new Insets(3, 5, 5, 5);
+        panel.add(panelPrecios, c);
+
         //======================================================
         // 6. PARTE INFERIOR
         //
@@ -1903,7 +1936,7 @@ public class DialogoEntradaManual extends JDialog {
         );
 
         c.gridx = 0;
-        c.gridy = 5;
+        c.gridy = 6;
         c.gridwidth = 4;
         c.weightx = 1;
         c.fill = GridBagConstraints.HORIZONTAL;
@@ -2279,6 +2312,17 @@ public class DialogoEntradaManual extends JDialog {
         //======================================================
         // COSTO
         //======================================================
+        // Recalcular inmediatamente al escribir, sin esperar Tab.
+        javax.swing.JFormattedTextField editorCantidad =
+                ((JSpinner.DefaultEditor) spnCantidad.getEditor()).getTextField();
+        // El editor del spinner se recrea al cambiar presentación; se conecta
+        // también desde configurarSpinnerSegunUnidad().
+        conectarEditorCantidad(editorCantidad);
+        txtPrecioVenta.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { actualizarPrecios(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { actualizarPrecios(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { actualizarPrecios(); }
+        });
         txtCosto.getDocument()
                 .addDocumentListener(
                         new javax.swing.event.DocumentListener() {
@@ -2288,6 +2332,7 @@ public class DialogoEntradaManual extends JDialog {
                             javax.swing.event.DocumentEvent e) {
 
                         actualizarSubtotalItem();
+                        actualizarPrecios();
                     }
 
                     @Override
@@ -2295,6 +2340,7 @@ public class DialogoEntradaManual extends JDialog {
                             javax.swing.event.DocumentEvent e) {
 
                         actualizarSubtotalItem();
+                        actualizarPrecios();
                     }
 
                     @Override
@@ -2302,6 +2348,7 @@ public class DialogoEntradaManual extends JDialog {
                             javax.swing.event.DocumentEvent e) {
 
                         actualizarSubtotalItem();
+                        actualizarPrecios();
                     }
                 });
 
@@ -2310,7 +2357,7 @@ public class DialogoEntradaManual extends JDialog {
         //======================================================
         cmbFormaCompra.addActionListener(e -> {
 
-            if (productoSeleccionado != null) {
+            if (productoSeleccionado != null && !cargandoPresentaciones) {
                 aplicarFormaCompraSeleccionada();
             }
 
@@ -2348,7 +2395,8 @@ public class DialogoEntradaManual extends JDialog {
                     if (fila != -1) {
 
                         modeloTabla.removeRow(fila);
-                        detalles.remove(fila);
+                        DetalleEntradaTemporal eliminado = detalles.remove(fila);
+                        preciosVentaPendientes.remove(eliminado.getProducto().getIdProducto());
                         actualizarTotalCompra();
                     }
 
@@ -2361,6 +2409,7 @@ public class DialogoEntradaManual extends JDialog {
 
             modeloTabla.setRowCount(0);
             detalles.clear();
+            preciosVentaPendientes.clear();
             actualizarTotalCompra();
             limpiarProductoSeleccionado();
 
@@ -2488,59 +2537,41 @@ public class DialogoEntradaManual extends JDialog {
                 + codigoVenta
         );
 
-        // Mostramos solamente opciones válidas para ESTE producto:
-        // 1) su presentación habitual (CAJA / PACK / BULTO / etc.)
-        // 2) su unidad directa de stock (UN / KG / LT / etc.)
-        // Nunca cargamos aquí todas las unidades del sistema.
+        // Presentaciones reales de producto_presentacion (no solo unidad predeterminada).
+        cargandoPresentaciones = true;
+        presentacionesDisponibles.clear();
         cmbFormaCompra.removeAllItems();
-
-        if (!"-".equals(
-                codigoCompra
-        )) {
-
-            cmbFormaCompra.addItem(
-                    codigoCompra
-            );
+        try {
+            presentacionesDisponibles.addAll(
+                    presentacionService.listarActivasPorProducto(producto.getIdProducto()));
+            for (ProductoPresentacion presentacion : presentacionesDisponibles) {
+                cmbFormaCompra.addItem(presentacion.getNombre()
+                        + " (x" + formatearCantidad(presentacion.getFactorConversion()) + ")");
+            }
+        } catch (java.sql.SQLException ex) {
+            cargandoPresentaciones = false;
+            JOptionPane.showMessageDialog(this,
+                    "No se pudieron cargar las presentaciones del producto:\n" + ex.getMessage(),
+                    "Presentaciones", JOptionPane.ERROR_MESSAGE);
+            limpiarProductoSeleccionado();
+            return;
         }
-
-        if (!"-".equals(
-                codigoVenta
-        )
-                && !codigoVenta.equalsIgnoreCase(
-                        codigoCompra
-                )) {
-
-            cmbFormaCompra.addItem(
-                    codigoVenta
-            );
+        cargandoPresentaciones = false;
+        if (presentacionesDisponibles.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Este producto no tiene presentaciones activas.\n"
+                    + "Configurá sus presentaciones antes de ingresarlo al stock.",
+                    "Sin presentaciones", JOptionPane.WARNING_MESSAGE);
+            limpiarProductoSeleccionado();
+            return;
         }
-
-        if (cmbFormaCompra.getItemCount() > 0) {
-
-            cmbFormaCompra.setSelectedIndex(
-                    0
-            );
-        }
-
-        if (producto.getPrecioCompra() != null) {
-
-            txtCosto.setText(
-                    producto
-                            .getPrecioCompra()
-                            .stripTrailingZeros()
-                            .toPlainString()
-            );
-
-        } else {
-
-            txtCosto.setText(
-                    "0"
-            );
-        }
-
+        cmbFormaCompra.setSelectedIndex(0);
         aplicarFormaCompraSeleccionada();
+        txtPrecioVenta.setText(producto.getPrecioVenta() == null
+                ? "0" : producto.getPrecioVenta().stripTrailingZeros().toPlainString());
         actualizarIngresoStock();
         actualizarSubtotalItem();
+        actualizarPrecios();
     }
 
     //==========================================================
@@ -2558,6 +2589,7 @@ public class DialogoEntradaManual extends JDialog {
             spnCantidad.setEditor(
                     new JSpinner.NumberEditor(spnCantidad, "0.000")
             );
+            conectarEditorCantidad(((JSpinner.DefaultEditor) spnCantidad.getEditor()).getTextField());
         } else {
             spnCantidad.setModel(
                     new SpinnerNumberModel(1, 1, 999999, 1)
@@ -2565,12 +2597,66 @@ public class DialogoEntradaManual extends JDialog {
             spnCantidad.setEditor(
                     new JSpinner.NumberEditor(spnCantidad, "0")
             );
+            conectarEditorCantidad(((JSpinner.DefaultEditor) spnCantidad.getEditor()).getTextField());
         }
     }
 
     //==========================================================
     // AGREGAR PRODUCTO
     //==========================================================
+    private void conectarEditorCantidad(javax.swing.JFormattedTextField editor) {
+        editor.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void actualizar() {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    try {
+                        spnCantidad.commitEdit();
+                        actualizarIngresoStock();
+                        actualizarSubtotalItem();
+                    } catch (java.text.ParseException | IllegalArgumentException ex) {
+                        // Mientras el usuario escribe, el valor puede estar incompleto.
+                    }
+                });
+            }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { actualizar(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { actualizar(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { actualizar(); }
+        });
+    }
+
+    private void actualizarPrecios() {
+        if (productoSeleccionado == null) {
+            lblCostoStock.setText("—");
+            lblMargenVenta.setText("—");
+            return;
+        }
+        BigDecimal costo = obtenerCosto();
+        BigDecimal factor = obtenerFactorCompraActual();
+        BigDecimal venta = obtenerPrecioVenta();
+        if (costo == null || factor == null || factor.signum() <= 0) {
+            lblCostoStock.setText("—");
+            lblMargenVenta.setText("—");
+            return;
+        }
+        BigDecimal unitario = costo.divide(factor, 2, RoundingMode.HALF_UP);
+        lblCostoStock.setText(formatearMoneda(unitario));
+        if (venta == null || venta.signum() <= 0) {
+            lblMargenVenta.setText("—");
+        } else {
+            BigDecimal margen = venta.subtract(unitario).multiply(new BigDecimal("100"))
+                    .divide(venta, 2, RoundingMode.HALF_UP);
+            lblMargenVenta.setText(margen.toPlainString().replace('.', ',') + " %");
+            lblMargenVenta.setForeground(margen.signum() < 0 ? ROJO : VERDE);
+        }
+    }
+
+    private BigDecimal obtenerPrecioVenta() {
+        try {
+            String texto = txtPrecioVenta.getText().trim().replace(" ", "");
+            if (texto.contains(",") && !texto.contains(".")) texto = texto.replace(',', '.');
+            return new BigDecimal(texto);
+        } catch (Exception ex) { return null; }
+    }
+
     private void agregarProductoTabla() {
 
         if (productoSeleccionado == null) {
@@ -2585,6 +2671,7 @@ public class DialogoEntradaManual extends JDialog {
             return;
         }
 
+        ProductoPresentacion presentacionElegida = obtenerPresentacionSeleccionada();
         String unidadCompraCodigo
                 = obtenerFormaCompraSeleccionada();
 
@@ -2617,10 +2704,7 @@ public class DialogoEntradaManual extends JDialog {
             return;
         }
 
-        UnidadMedida unidadUsada
-                = obtenerUnidadSegunForma(
-                        unidadCompraCodigo
-                );
+        UnidadMedida unidadUsada = presentacionElegida.getUnidadCompra();
 
         if (unidadUsada != null
                 && !unidadUsada.isPermiteDecimales()
@@ -2692,6 +2776,33 @@ public class DialogoEntradaManual extends JDialog {
                         factor
                 );
 
+        try {
+            cantidadStock = cantidadStock.setScale(3, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "La cantidad de stock supera los 3 decimales permitidos.",
+                    "Cantidad inválida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        UnidadMedida unidadStock = productoSeleccionado.getUnidadVenta();
+        if (unidadStock != null && !unidadStock.isPermiteDecimales()
+                && cantidadStock.stripTrailingZeros().scale() > 0) {
+            JOptionPane.showMessageDialog(this,
+                    "El stock en " + codigoUnidad(unidadStock) + " debe ser entero.",
+                    "Cantidad inválida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        for (DetalleEntradaTemporal previo : detalles) {
+            if (previo.getProducto().getIdProducto() == productoSeleccionado.getIdProducto()) {
+                JOptionPane.showMessageDialog(this,
+                        "Este producto ya está en el detalle.\n"
+                        + "El servicio de compras actual admite una sola línea por producto.\n"
+                        + "Eliminá la línea anterior antes de cargar otra presentación.",
+                        "Producto repetido", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+
         BigDecimal subtotal
                 = cantidadCompra
                         .multiply(
@@ -2719,6 +2830,20 @@ public class DialogoEntradaManual extends JDialog {
                         subtotal
                 );
 
+        BigDecimal nuevoPrecio = obtenerPrecioVenta();
+        if (nuevoPrecio == null || nuevoPrecio.signum() < 0
+                || nuevoPrecio.scale() > 2) {
+            JOptionPane.showMessageDialog(this,
+                    "Ingresá un precio de venta válido (hasta 2 decimales).",
+                    "Precio de venta", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        BigDecimal precioAnterior = productoSeleccionado.getPrecioVenta();
+        if (precioAnterior == null || nuevoPrecio.compareTo(precioAnterior) != 0) {
+            preciosVentaPendientes.put(productoSeleccionado.getIdProducto(), nuevoPrecio);
+        } else {
+            preciosVentaPendientes.remove(productoSeleccionado.getIdProducto());
+        }
         detalles.add(
                 detalle
         );
@@ -2728,7 +2853,7 @@ public class DialogoEntradaManual extends JDialog {
                     productoSeleccionado.getCodigo(),
                     productoSeleccionado.getNombre(),
                     formatearCantidad(cantidadCompra),
-                    unidadCompraCodigo,
+                    presentacionElegida.getNombre() + " [" + unidadCompraCodigo + "]",
                     formatearCantidad(cantidadStock)
                     + " "
                     + unidadVentaCodigo,
@@ -2840,8 +2965,13 @@ public class DialogoEntradaManual extends JDialog {
         lblUnidadCantidad.setText("-");
         lblCostoUnidad.setText("Costo");
         txtCosto.setText("");
+        txtPrecioVenta.setText("");
+        actualizarPrecios();
 
+        cargandoPresentaciones = true;
         cmbFormaCompra.removeAllItems();
+        presentacionesDisponibles.clear();
+        cargandoPresentaciones = false;
 
         spnFactorCompra.setModel(
                 new SpinnerNumberModel(
@@ -2872,161 +3002,50 @@ public class DialogoEntradaManual extends JDialog {
     // FORMA DE COMPRA
     //==========================================================
     private void aplicarFormaCompraSeleccionada() {
+        if (productoSeleccionado == null || cargandoPresentaciones) return;
+        ProductoPresentacion presentacion = obtenerPresentacionSeleccionada();
+        if (presentacion == null) return;
 
-        if (productoSeleccionado == null) {
-            return;
-        }
+        String forma = codigoUnidad(presentacion.getUnidadCompra());
+        BigDecimal factor = presentacion.getFactorConversion();
+        spnFactorCompra.setValue(factor.doubleValue());
+        // El factor procede de la BD: no debe poder cambiarse libremente.
+        spnFactorCompra.setEnabled(false);
+        boolean mostrarFactor = factor.compareTo(BigDecimal.ONE) != 0;
+        spnFactorCompra.setVisible(mostrarFactor);
+        lblFactorCompraTitulo.setVisible(mostrarFactor);
+        lblFactorCompraTitulo.setText("Contenido por " + presentacion.getNombre());
+        lblUnidadCantidad.setText(forma);
+        lblCostoUnidad.setText("Costo por " + presentacion.getNombre());
+        configurarSpinnerSegunUnidad(presentacion.getUnidadCompra());
 
-        String forma
-                = obtenerFormaCompraSeleccionada();
-
-        if (forma == null) {
-            return;
-        }
-
-        String codigoCompra
-                = codigoUnidad(
-                        productoSeleccionado
-                                .getUnidadCompra()
-                );
-
-        String codigoVenta
-                = codigoUnidad(
-                        productoSeleccionado
-                                .getUnidadVenta()
-                );
-
-        boolean compraDirectaStock
-                = forma.equalsIgnoreCase(
-                        codigoVenta
-                );
-
-        BigDecimal factor
-                = compraDirectaStock
-                        ? BigDecimal.ONE
-                        : obtenerFactor(
-                                productoSeleccionado
-                        );
-
-        spnFactorCompra.setValue(
-                factor.doubleValue()
-        );
-
-        // Si se compra directamente en UN/KG/LT, el factor siempre es 1.
-        // Si se compra CAJA/PACK/BULTO, el operador puede cambiarlo.
-        spnFactorCompra.setEnabled(
-                !compraDirectaStock
-        );
-
-        boolean mostrarContenidoPresentacion
-                = !compraDirectaStock;
-
-        lblFactorCompraTitulo.setVisible(
-                mostrarContenidoPresentacion
-        );
-
-        spnFactorCompra.setVisible(
-                mostrarContenidoPresentacion
-        );
-
-        if (mostrarContenidoPresentacion) {
-
-            lblFactorCompraTitulo.setText(
-                    "Unidades por " + forma
-            );
-        }
-
-        lblUnidadCantidad.setText(
-                forma
-        );
-
-        String textoCosto;
-
-        if ("UN".equalsIgnoreCase(forma)) {
-
-            textoCosto = "Costo por UNIDAD";
-
-        } else if ("KG".equalsIgnoreCase(forma)) {
-
-            textoCosto = "Costo por KG";
-
+        // PrecioCompra es el costo de la presentación predeterminada.
+        // Calculamos una sugerencia proporcional; el usuario puede reemplazarla
+        // por el costo real de factura de ESTA presentación.
+        BigDecimal costoBase = productoSeleccionado.getPrecioCompra();
+        BigDecimal factorBase = obtenerFactor(productoSeleccionado);
+        if (costoBase != null && factorBase.signum() > 0) {
+            BigDecimal sugerido = costoBase.multiply(factor)
+                    .divide(factorBase, 2, RoundingMode.HALF_UP);
+            txtCosto.setText(sugerido.stripTrailingZeros().toPlainString());
         } else {
-
-            textoCosto = "Costo por " + forma;
+            txtCosto.setText("0");
         }
-
-        lblCostoUnidad.setText(
-                textoCosto
-        );
-
-        configurarSpinnerSegunUnidad(
-                obtenerUnidadSegunForma(
-                        forma
-                )
-        );
-
+        txtCosto.setToolTipText("Costo sugerido según presentación predeterminada. "
+                + "Reemplazalo por el costo real de la factura.");
         actualizarIngresoStock();
         actualizarSubtotalItem();
     }
 
-    private String obtenerFormaCompraSeleccionada() {
-
-        Object item
-                = cmbFormaCompra
-                        .getSelectedItem();
-
-        if (item == null) {
-            return null;
-        }
-
-        String valor
-                = item
-                        .toString()
-                        .trim();
-
-        return valor.isEmpty()
-                ? null
-                : valor;
+    private ProductoPresentacion obtenerPresentacionSeleccionada() {
+        int indice = cmbFormaCompra.getSelectedIndex();
+        if (indice < 0 || indice >= presentacionesDisponibles.size()) return null;
+        return presentacionesDisponibles.get(indice);
     }
 
-    private UnidadMedida obtenerUnidadSegunForma(
-            String codigo) {
-
-        if (productoSeleccionado == null
-                || codigo == null) {
-
-            return null;
-        }
-
-        UnidadMedida compra
-                = productoSeleccionado
-                        .getUnidadCompra();
-
-        if (compra != null
-                && compra.getCodigo() != null
-                && compra.getCodigo()
-                        .equalsIgnoreCase(
-                                codigo
-                        )) {
-
-            return compra;
-        }
-
-        UnidadMedida venta
-                = productoSeleccionado
-                        .getUnidadVenta();
-
-        if (venta != null
-                && venta.getCodigo() != null
-                && venta.getCodigo()
-                        .equalsIgnoreCase(
-                                codigo
-                        )) {
-
-            return venta;
-        }
-
-        return null;
+    private String obtenerFormaCompraSeleccionada() {
+        ProductoPresentacion presentacion = obtenerPresentacionSeleccionada();
+        return presentacion == null ? null : codigoUnidad(presentacion.getUnidadCompra());
     }
 
     private BigDecimal obtenerFactorCompraActual() {
@@ -3046,7 +3065,7 @@ public class DialogoEntradaManual extends JDialog {
                             .toString()
                             .replace(",", ".")
             ).setScale(
-                    3,
+                    4,
                     RoundingMode.UNNECESSARY
             );
 
@@ -3214,7 +3233,8 @@ public class DialogoEntradaManual extends JDialog {
             // 8. CONFIRMAR COMPRA Y ACTUALIZAR STOCK
             //==================================================
             ResultadoOperacion confirmar
-                    = compraService.confirmarCompra(idCompra);
+                    = compraService.confirmarCompra(idCompra,
+                            new java.util.HashMap<>(preciosVentaPendientes));
 
             if (!confirmar.isExitoso()) {
 

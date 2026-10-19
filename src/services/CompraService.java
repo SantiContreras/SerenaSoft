@@ -28,6 +28,7 @@ import java.util.List;
 import Configuracion.conexion;
 import Dao.StockProductoDao;
 import Dao.MovimientoStockDao;
+import Dao.ProductoPresentacionDao;
 
 public class CompraService {
 
@@ -73,8 +74,12 @@ public class CompraService {
 // Si algo falla:
 // ROLLBACK completo.
 // =========================================================
+    public ResultadoOperacion confirmarCompra(long idCompra) {
+        return confirmarCompra(idCompra, java.util.Collections.emptyMap());
+    }
+
     public ResultadoOperacion confirmarCompra(
-            long idCompra) {
+            long idCompra, java.util.Map<Integer, BigDecimal> nuevosPreciosVenta) {
 
         // =====================================================
         // VALIDACIONES INICIALES
@@ -450,6 +455,14 @@ public class CompraService {
                     );
                 }
 
+                if (producto.getUnidadVenta() != null
+                        && !producto.getUnidadVenta().isPermiteDecimales()
+                        && tieneDecimales(cantidadStock)) {
+                    cn.rollback();
+                    return ResultadoOperacion.error(
+                            "La compra contiene unidades de stock fraccionarias: " + producto.getNombre());
+                }
+
                 // =================================================
                 // 9. SUMAR O CREAR STOCK
                 //
@@ -496,6 +509,23 @@ public class CompraService {
                         compra.getUsuario().getIdUsuario(), "COMPRA", detalle.getIdDetalle(),
                         cantidadStock, saldoAnterior, saldoAnterior.add(cantidadStock),
                         compra.getObservaciones());
+
+                // Actualizar ultimo costo de compra sin alterar el precio de venta.
+                // El costo del detalle corresponde a la presentacion recibida;
+                // producto.precio_compra corresponde a la presentacion original.
+                BigDecimal factorPredeterminado = producto.getFactorConversion();
+                if (factorPredeterminado == null || factorPredeterminado.signum() <= 0) {
+                    throw new SQLException("Factor predeterminado invalido para "
+                            + producto.getNombre());
+                }
+                BigDecimal costoPredeterminado = detalle.getCostoUnitario()
+                        .multiply(factorPredeterminado)
+                        .divide(factorConversion, 2, RoundingMode.HALF_UP);
+                if (!productoDao.actualizarPrecioCompra(
+                        idProducto, costoPredeterminado, cn)) {
+                    throw new SQLException("No se pudo actualizar el ultimo costo de "
+                            + producto.getNombre());
+                }
             }
 
             // =================================================
@@ -520,6 +550,34 @@ public class CompraService {
                         "La compra no pudo ser confirmada "
                         + "porque su estado cambió."
                 );
+            }
+
+            // Los precios se guardan en la MISMA transacción del stock.
+            // Se valida antes de actualizar para evitar precios inválidos.
+            if (nuevosPreciosVenta != null && !nuevosPreciosVenta.isEmpty()) {
+                java.util.Set<Integer> productosDeLaCompra = new java.util.HashSet<>();
+                for (CompraDetalle d : detalles) {
+                    productosDeLaCompra.add(d.getProducto().getIdProducto());
+                }
+                for (java.util.Map.Entry<Integer, BigDecimal> entrada : nuevosPreciosVenta.entrySet()) {
+                    if (!productosDeLaCompra.contains(entrada.getKey())) {
+                        throw new SQLException("Precio para un producto que no pertenece a la compra.");
+                    }
+                    BigDecimal precio = entrada.getValue();
+                    if (precio == null || precio.signum() < 0 || precio.scale() > 2) {
+                        throw new SQLException("Precio de venta inválido para producto " + entrada.getKey());
+                    }
+                }
+                try (java.sql.PreparedStatement ps = cn.prepareStatement(
+                        "UPDATE producto SET precio_venta = ? WHERE id_producto = ?")) {
+                    for (java.util.Map.Entry<Integer, BigDecimal> entrada : nuevosPreciosVenta.entrySet()) {
+                        ps.setBigDecimal(1, entrada.getValue());
+                        ps.setInt(2, entrada.getKey());
+                        if (ps.executeUpdate() != 1) {
+                            throw new SQLException("No se pudo actualizar el precio del producto " + entrada.getKey());
+                        }
+                    }
+                }
             }
 
             // =================================================
@@ -913,6 +971,15 @@ public class CompraService {
                     );
                 }
 
+                // La presentación debe existir y pertenecer al producto.
+                // Verificación dentro de la transacción actual.
+                if (!new ProductoPresentacionDao().existeActiva(
+                        idProducto, unidadCompra, factorConversion, cn)) {
+                    cn.rollback();
+                    return ResultadoOperacion.error(
+                            "La presentación o su factor no están configurados para este producto.");
+                }
+
                 // Si se usa la unidad de compra o de venta/stock
                 // configurada en el producto, respetamos su regla
                 // de decimales. Las presentaciones desconocidas
@@ -970,7 +1037,7 @@ public class CompraService {
 
                     factorConversion =
                             factorConversion.setScale(
-                                    3,
+                                    4,
                                     RoundingMode.UNNECESSARY
                             );
 
@@ -985,8 +1052,7 @@ public class CompraService {
                     cn.rollback();
 
                     return ResultadoOperacion.error(
-                            "La cantidad y el factor de conversión "
-                            + "admiten como máximo 3 decimales."
+                            "La cantidad admite 3 decimales y el factor 4."
                     );
                 }
 
@@ -1016,6 +1082,15 @@ public class CompraService {
                             "La conversión genera una cantidad de stock "
                             + "con más de 3 decimales."
                     );
+                }
+
+                // La unidad de stock UN no admite cantidades fraccionarias.
+                if (producto.getUnidadVenta() != null
+                        && !producto.getUnidadVenta().isPermiteDecimales()
+                        && tieneDecimales(cantidadStock)) {
+                    cn.rollback();
+                    return ResultadoOperacion.error(
+                            "La conversión genera unidades de stock fraccionarias.");
                 }
 
                 BigDecimal subtotalDetalle =
@@ -1207,6 +1282,13 @@ public class CompraService {
                     );
                 }
 
+                if (!new ProductoPresentacionDao().existeActiva(
+                        producto.getIdProducto(), unidadCompra, factorConversion, cn)) {
+                    cn.rollback();
+                    return ResultadoOperacion.error(
+                            "La presentación o su factor no están configurados para este producto.");
+                }
+
                 boolean permiteDecimalesCompra = false;
 
                 if (producto.getUnidadCompra() != null
@@ -1244,7 +1326,7 @@ public class CompraService {
 
                     factorConversion =
                             factorConversion.setScale(
-                                    3,
+                                    4,
                                     RoundingMode.UNNECESSARY
                             );
 
@@ -1259,8 +1341,7 @@ public class CompraService {
                     cn.rollback();
 
                     return ResultadoOperacion.error(
-                            "La cantidad y el factor de conversión "
-                            + "admiten como máximo 3 decimales."
+                            "La cantidad admite 3 decimales y el factor 4."
                     );
                 }
 
@@ -1290,6 +1371,13 @@ public class CompraService {
                             "La conversión genera una cantidad de stock "
                             + "con más de 3 decimales."
                     );
+                }
+
+                if (producto.getUnidadVenta() != null
+                        && !producto.getUnidadVenta().isPermiteDecimales()
+                        && tieneDecimales(cantidadStock)) {
+                    cn.rollback();
+                    return ResultadoOperacion.error("La conversión genera stock fraccionario.");
                 }
 
                 BigDecimal subtotal =

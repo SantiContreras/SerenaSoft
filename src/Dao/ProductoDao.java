@@ -166,6 +166,25 @@ public class ProductoDao {
     }
 
 
+
+    // =========================================================
+    // ACTUALIZAR ULTIMO COSTO DE COMPRA (MISMA TRANSACCION)
+    // =========================================================
+    public boolean actualizarPrecioCompra(int idProducto,
+            java.math.BigDecimal nuevoCosto, Connection cn) throws SQLException {
+        if (cn == null || idProducto <= 0 || nuevoCosto == null
+                || nuevoCosto.signum() < 0 || nuevoCosto.scale() > 2
+                || nuevoCosto.precision() - nuevoCosto.scale() > 13) {
+            throw new SQLException("Costo de compra invalido.");
+        }
+        String sql = "UPDATE producto SET precio_compra = ? WHERE id_producto = ?";
+        try (PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setBigDecimal(1, nuevoCosto);
+            ps.setInt(2, idProducto);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
     // =========================================================
     // BUSCAR POR ID
     // =========================================================
