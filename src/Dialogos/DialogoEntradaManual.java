@@ -1487,7 +1487,7 @@ public class DialogoEntradaManual extends JDialog {
         JPanel bloquePresentacion
                 = crearBloqueVerticalProducto(
                         "PRESENTACIÓN",
-                        cmbFormaCompra
+                        crearSelectorPresentaciones()
                 );
 
         cmbFormaCompra.setPreferredSize(
@@ -2450,6 +2450,31 @@ public class DialogoEntradaManual extends JDialog {
     //==========================================================
     // AGREGAR PRODUCTO
     //==========================================================
+    private JPanel crearSelectorPresentaciones() {
+        JPanel panel = new JPanel(new BorderLayout(6, 0));
+        panel.setOpaque(false);
+        panel.add(cmbFormaCompra, BorderLayout.CENTER);
+        JButton agregar = new JButton("+ NUEVA");
+        agregar.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        agregar.setBackground(new Color(0, 151, 92));
+        agregar.setForeground(Color.WHITE);
+        agregar.addActionListener(e -> {
+            if (productoSeleccionado == null || productoSeleccionado.getUnidadVenta() == null) {
+                JOptionPane.showMessageDialog(this, "Seleccioná primero un artículo.");
+                return;
+            }
+            Producto actual = productoSeleccionado;
+            DialogoPresentacionesProducto dlg = new DialogoPresentacionesProducto(
+                this, actual.getIdProducto(), actual.getNombre(),
+                actual.getUnidadVenta().getIdUnidad(),
+                actual.getUnidadVenta().getCodigo());
+            dlg.setVisible(true);
+            if (dlg.tieneCambios()) cargarProductoSeleccionado(actual);
+        });
+        panel.add(agregar, BorderLayout.EAST);
+        return panel;
+    }
+
     private void cargarProductoSeleccionado(Producto producto) {
 
         productoSeleccionado = producto;
@@ -2562,7 +2587,7 @@ public class DialogoEntradaManual extends JDialog {
                     "Este producto no tiene presentaciones activas.\n"
                     + "Configurá sus presentaciones antes de ingresarlo al stock.",
                     "Sin presentaciones", JOptionPane.WARNING_MESSAGE);
-            limpiarProductoSeleccionado();
+            // Conservar el producto seleccionado para habilitar "+ NUEVA".
             return;
         }
         cmbFormaCompra.setSelectedIndex(0);
@@ -2704,6 +2729,12 @@ public class DialogoEntradaManual extends JDialog {
             return;
         }
 
+        if (presentacionElegida == null || presentacionElegida.getUnidadCompra() == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Elegí una presentación válida del artículo antes de agregarlo.",
+                    "Presentación obligatoria", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         UnidadMedida unidadUsada = presentacionElegida.getUnidadCompra();
 
         if (unidadUsada != null
@@ -3019,14 +3050,12 @@ public class DialogoEntradaManual extends JDialog {
         lblCostoUnidad.setText("Costo por " + presentacion.getNombre());
         configurarSpinnerSegunUnidad(presentacion.getUnidadCompra());
 
-        // PrecioCompra es el costo de la presentación predeterminada.
-        // Calculamos una sugerencia proporcional; el usuario puede reemplazarla
-        // por el costo real de factura de ESTA presentación.
+        // producto.precio_compra representa costo por unidad de STOCK.
+        // El costo de la presentación se sugiere multiplicando por su factor.
         BigDecimal costoBase = productoSeleccionado.getPrecioCompra();
-        BigDecimal factorBase = obtenerFactor(productoSeleccionado);
-        if (costoBase != null && factorBase.signum() > 0) {
+        if (costoBase != null && costoBase.signum() >= 0) {
             BigDecimal sugerido = costoBase.multiply(factor)
-                    .divide(factorBase, 2, RoundingMode.HALF_UP);
+                    .setScale(2, RoundingMode.HALF_UP);
             txtCosto.setText(sugerido.stripTrailingZeros().toPlainString());
         } else {
             txtCosto.setText("0");
@@ -3049,30 +3078,10 @@ public class DialogoEntradaManual extends JDialog {
     }
 
     private BigDecimal obtenerFactorCompraActual() {
-
-        Object valor
-                = spnFactorCompra
-                        .getValue();
-
-        if (valor == null) {
-            return BigDecimal.ONE;
-        }
-
-        try {
-
-            return new BigDecimal(
-                    valor
-                            .toString()
-                            .replace(",", ".")
-            ).setScale(
-                    4,
-                    RoundingMode.UNNECESSARY
-            );
-
-        } catch (Exception ex) {
-
-            return null;
-        }
+        ProductoPresentacion seleccionada = obtenerPresentacionSeleccionada();
+        if (seleccionada == null) return null;
+        BigDecimal factor = seleccionada.getFactorConversion();
+        return factor != null && factor.signum() > 0 ? factor : null;
     }
 
     //==========================================================

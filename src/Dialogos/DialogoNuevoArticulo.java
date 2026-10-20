@@ -19,7 +19,7 @@ public class DialogoNuevoArticulo extends JDialog {
     private final JTextField costoVenta=field();
     private final JLabel unidadCosto=new JLabel("Costo por unidad de compra"), unidadPrecio=new JLabel("Precio por unidad de venta");
     private final JLabel ayudaConversion=new JLabel("Elegí las unidades para ver cómo se calcula el costo.");
-    private final JLabel ayudaMargen=new JLabel("Margen = (precio de venta - costo por unidad de venta) / costo por unidad de venta");
+    private final JLabel ayudaMargen=new JLabel("Recargo sobre costo = (precio de venta - costo unitario) / costo unitario.");
     private final JCheckBox pesoVariable=new JCheckBox("Compra por pieza de peso variable (registrar peso real al recibir)");
     private final JComboBox<String> rubro=combo(), categoria=combo(), marca=combo(), compra=combo(), venta=combo(), iva=combo();
     private final JCheckBox activo=new JCheckBox("Producto activo",true), controla=new JCheckBox("Controlar stock",true), pesable=new JCheckBox("Pesable"), descuento=new JCheckBox("Permitir descuentos"), sinStock=new JCheckBox("Venta sin stock");
@@ -77,13 +77,13 @@ public class DialogoNuevoArticulo extends JDialog {
         JPanel numeros=grid(2);
         numeros.add(cell(unidadCosto,costo));numeros.add(cell(unidadPrecio,precio));
         costoVenta.setEditable(false);costoVenta.setBackground(new Color(213,232,255));
-        numeros.add(cell("Costo calculado por unidad de venta",costoVenta));
+        numeros.add(cell("Costo equivalente por unidad de venta ($)",costoVenta));
         margen.setEditable(false);margen.setBackground(new Color(213,232,255));
-        numeros.add(cell("Margen sobre costo (%) · automático",margen));
+        numeros.add(cell("Recargo sobre costo (%) · automático",margen));
         numeros.add(cell("IVA",iva));numeros.add(cell("Stock mínimo (unidad de venta)",minimo));
         factor.setText("1");
         JPanel conversion=grid(1);
-        conversion.add(cell("Unidades de venta por unidad de compra *",factor));
+        conversion.add(cell("Cantidad de unidades de venta que trae cada unidad de compra *",factor));
         ayudaConversion.setForeground(NAVY);ayudaConversion.setFont(new Font("Segoe UI",Font.PLAIN,12));
         conversion.add(ayudaConversion);
         pesoVariable.setOpaque(false);pesoVariable.setForeground(NAVY);
@@ -91,10 +91,14 @@ public class DialogoNuevoArticulo extends JDialog {
         JLabel aclaracion=new JLabel("Si el proveedor vende una pieza de peso variable, cargá su peso exacto desde Nueva entrada.");
         aclaracion.setFont(new Font("Segoe UI",Font.PLAIN,12));aclaracion.setForeground(BLUE);
         conversion.add(aclaracion);
-        section(precios,"03  COSTOS, PRECIOS Y UNIDADES",numeros);
+        JLabel notaCosto=new JLabel("Costo opcional: si aún no compraste el artículo, dejalo vacío y se guardará en $0.");
+        notaCosto.setFont(new Font("Segoe UI",Font.PLAIN,12));notaCosto.setForeground(BLUE);
+        JPanel bloquePrecios=new JPanel(new BorderLayout(0,8));bloquePrecios.setOpaque(false);
+        bloquePrecios.add(numeros,BorderLayout.CENTER);bloquePrecios.add(notaCosto,BorderLayout.SOUTH);
+        section(precios,"03  PRECIOS DE COMPRA Y VENTA",bloquePrecios);
         section(precios,"CONVERSIÓN DE COMPRA A VENTA",conversion);
         ayudaMargen.setForeground(NAVY);ayudaMargen.setFont(new Font("Segoe UI",Font.PLAIN,12));
-        section(precios,"CÓMO SE CALCULA EL MARGEN",ayudaMargen);
+        section(precios,"CÓMO SE CALCULA LA GANANCIA",ayudaMargen);
         JLabel cero=new JLabel("  Stock inicial: 0  ·  Las cantidades se registran desde Nueva entrada de mercadería");
         cero.setFont(new Font("Segoe UI",Font.BOLD,13));cero.setForeground(NAVY);
         JPanel stockInfo=new JPanel(new BorderLayout());stockInfo.setBackground(new Color(221,237,255));
@@ -175,10 +179,10 @@ public class DialogoNuevoArticulo extends JDialog {
     private void actualizarCostos(){
         String uCompra=compra.getSelectedItem()==null?"unidad de compra":compra.getSelectedItem().toString();
         String uVenta=venta.getSelectedItem()==null?"unidad de venta":venta.getSelectedItem().toString();
-        unidadCosto.setText("Costo por " + uCompra + " (no costo total de factura)");
-        unidadPrecio.setText("Precio por " + uVenta);
+        unidadCosto.setText("Precio de compra por " + uCompra + " ($)");
+        unidadPrecio.setText("Precio de venta por " + uVenta + " ($) *");
         if(pesoVariable.isSelected()){
-            ayudaConversion.setText("Peso variable: el factor es orientativo. En cada entrada se usa el peso real recibido.");
+            ayudaConversion.setText("Peso variable: al recibir cada pieza se registra su peso real en Nueva entrada.");
         }else{
             ayudaConversion.setText("Ej.: caja de 12 unidades → factor 12; KG a KG → factor 1.");
         }
@@ -186,15 +190,70 @@ public class DialogoNuevoArticulo extends JDialog {
             BigDecimal f=decimal(factor.getText()), c=decimal(costo.getText()), v=decimal(precio.getText());
             if(f.signum()<=0){costoVenta.setText("Factor inválido");margen.setText("");return;}
             BigDecimal cv=c.divide(f,2,RoundingMode.HALF_UP);
-            costoVenta.setText(cv.toPlainString());
-            margen.setText(cv.signum()>0?v.subtract(cv).multiply(new BigDecimal("100")).divide(cv,2,RoundingMode.HALF_UP).toPlainString():"");
+            costoVenta.setText(c.signum()==0?"Costo pendiente":cv.toPlainString());
+            margen.setText(c.signum()>0 && cv.signum()>0?v.subtract(cv).multiply(new BigDecimal("100")).divide(cv,2,RoundingMode.HALF_UP).toPlainString():"Pendiente de costo");
         }catch(Exception e){costoVenta.setText("");margen.setText("");}
     }
     private static BigDecimal decimal(String value)throws Exception{String t=value.trim().replace("$","").replace(" ","");if(t.isEmpty())return BigDecimal.ZERO;if(t.contains(",")&&t.contains(".")){if(t.lastIndexOf(',')>t.lastIndexOf('.'))t=t.replace(".","").replace(',','.');else t=t.replace(",","");}else if(t.contains(","))t=t.replace(',','.');try{return new BigDecimal(t);}catch(NumberFormatException e){throw new Exception("Número inválido: "+value);}}
     private static void text(PreparedStatement ps,int n,String s)throws SQLException{if(s==null||s.trim().isEmpty())ps.setNull(n,Types.VARCHAR);else ps.setString(n,s.trim());}
     private static void integer(PreparedStatement ps,int n,Integer i)throws SQLException{if(i==null)ps.setNull(n,Types.INTEGER);else ps.setInt(n,i);}
-    private void guardar(){if(nombre.getText().isBlank()){JOptionPane.showMessageDialog(this,"Ingresá el nombre del producto.");return;}Integer cat=id(categoria),uc=id(compra),uv=id(venta);if(cat==null||uc==null||uv==null){JOptionPane.showMessageDialog(this,"Seleccioná categoría, unidad de compra y unidad de venta.");return;}try{BigDecimal pc=decimal(costo.getText()),pv=decimal(precio.getText()),pm=decimal(minimo.getText()),mg=decimal(margen.getText()),fc=decimal(factor.getText());if(pc.signum()<0||pv.signum()<0||pm.signum()<0)throw new Exception("Los precios y el stock mínimo no pueden ser negativos.");if(fc.signum()<=0)throw new Exception("El factor de conversión debe ser mayor que cero.");
-        if(pesoVariable.isSelected() && !pesable.isSelected())throw new Exception("Para compras de peso variable, marcá Pesable en Configuración.");if(pc.signum()>0 && pv.compareTo(pc.divide(fc,2,RoundingMode.HALF_UP))<0 && JOptionPane.showConfirmDialog(this,"El precio de venta es inferior al costo por unidad de venta. ¿Deseás continuar?","Advertencia de precio",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.YES_OPTION)return;try(Connection cn=conexion.getConexion()){cn.setAutoCommit(false);try{String catNombre;try(PreparedStatement ps=cn.prepareStatement("SELECT nombre FROM categoria WHERE id_categoria=? FOR UPDATE")){ps.setInt(1,cat);try(ResultSet rs=ps.executeQuery()){if(!rs.next())throw new SQLException("Categoría inexistente");catNombre=rs.getString(1);}}String code=prefijo(catNombre)+"-"+String.format("%03d",siguiente(cn,prefijo(catNombre)));String sql="INSERT INTO producto(codigo,codigo_interno,codigo_barra,nombre,descripcion,ubicacion,id_rubro,id_categoria,id_marca,id_unidad_compra,id_unidad_venta,factor_conversion,precio_compra,precio_venta,margen_porcentaje,id_iva,stock_minimo,controla_stock,permite_venta_sin_stock,es_pesable,permite_descuento,activo,observaciones) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";int productoId;try(PreparedStatement ps=cn.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){ps.setString(1,code);text(ps,2,interno.getText());text(ps,3,barra.getText());ps.setString(4,nombre.getText().trim());text(ps,5,descripcion.getText());text(ps,6,ubicacion.getText());integer(ps,7,id(rubro));ps.setInt(8,cat);integer(ps,9,id(marca));ps.setInt(10,uc);ps.setInt(11,uv);ps.setBigDecimal(12,fc);ps.setBigDecimal(13,pc);ps.setBigDecimal(14,pv);ps.setBigDecimal(15,mg);integer(ps,16,id(iva));ps.setBigDecimal(17,pm);ps.setBoolean(18,controla.isSelected());ps.setBoolean(19,sinStock.isSelected());ps.setBoolean(20,pesable.isSelected());ps.setBoolean(21,descuento.isSelected());ps.setBoolean(22,activo.isSelected());text(ps,23,observaciones.getText());ps.executeUpdate();try(ResultSet rs=ps.getGeneratedKeys()){if(!rs.next())throw new SQLException("No se obtuvo ID del producto");productoId=rs.getInt(1);}}if(idProveedor>0){try(PreparedStatement ps=cn.prepareStatement("INSERT INTO producto_proveedor(id_producto,id_proveedor,costo_ultimo,proveedor_principal) VALUES(?,?,?,1)")){ps.setInt(1,productoId);ps.setInt(2,idProveedor);ps.setBigDecimal(3,pc);ps.executeUpdate();}}cn.commit();guardado=true;codigo.setText(code);mostrarExito(code);dispose();}catch(Exception e){cn.rollback();throw e;}finally{cn.setAutoCommit(true);}}}catch(Exception e){error("No se pudo guardar el producto",e);}}
+    private void guardar(){if(nombre.getText().isBlank()){JOptionPane.showMessageDialog(this,"Ingresá el nombre del producto.");return;}Integer cat=id(categoria),uc=id(compra),uv=id(venta);if(cat==null||uc==null||uv==null){JOptionPane.showMessageDialog(this,"Seleccioná categoría, unidad de compra y unidad de venta.");return;}try{BigDecimal pc=decimal(costo.getText()),pv=decimal(precio.getText()),pm=decimal(minimo.getText()),fc=decimal(factor.getText());
+        // El margen es informativo y se calcula con números, nunca se interpreta su texto.
+        BigDecimal costoPorUnidad = pc.divide(fc.signum()>0?fc:BigDecimal.ONE, 2, RoundingMode.HALF_UP);
+        BigDecimal mg = pc.signum()>0 && costoPorUnidad.signum()>0
+                ? pv.subtract(costoPorUnidad).multiply(new BigDecimal("100"))
+                    .divide(costoPorUnidad,2,RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;if(pc.signum()<0||pv.signum()<0||pm.signum()<0)throw new Exception("Los precios y el stock mínimo no pueden ser negativos.");if(fc.signum()<=0)throw new Exception("El factor de conversión debe ser mayor que cero.");if(pv.signum()<=0)throw new Exception("Ingresá un precio de venta mayor que cero. El costo de compra puede quedar vacío si todavía no se conoce.");if(fc.scale()>4)throw new Exception("El factor admite como máximo 4 decimales.");if(pc.scale()>2||pv.scale()>2)throw new Exception("Los precios admiten como máximo 2 decimales.");if(pm.scale()>3)throw new Exception("El stock mínimo admite como máximo 3 decimales.");
+        // Una presentación de embalaje no debe crearse con factor 1 por descuido.
+        String unidadCompraTexto = String.valueOf(compra.getSelectedItem()).toUpperCase(java.util.Locale.ROOT);
+        boolean embalaje = unidadCompraTexto.contains("CAJA") || unidadCompraTexto.contains("PACK")
+                || unidadCompraTexto.contains("BULTO") || unidadCompraTexto.contains("DISPLAY")
+                || unidadCompraTexto.contains("PALLET") || unidadCompraTexto.contains("BANDEJA");
+        if (embalaje && fc.compareTo(BigDecimal.ONE)==0 && !pesoVariable.isSelected()) {
+            throw new Exception("La presentación " + compra.getSelectedItem()
+                    + " tiene contenido 1. Indicá cuántas unidades trae antes de guardar. "
+                    + "Si comprás unidades sueltas, seleccioná UNIDAD.");
+        }
+        if(!uc.equals(uv) && fc.compareTo(BigDecimal.ONE)==0 && !pesoVariable.isSelected()){
+            int respuesta=JOptionPane.showConfirmDialog(this,
+                "Seleccionaste unidades de compra y venta diferentes, pero el factor es 1.\n"
+                + "Eso significa que cada unidad de compra contiene exactamente 1 unidad de venta.\n\n"
+                + "Por ejemplo, una CAJA de 12 unidades debe tener factor 12.\n"
+                + "¿Confirmás que el factor 1 es correcto?",
+                "Verificar conversión de unidades",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+            if(respuesta!=JOptionPane.YES_OPTION)return;
+        }
+        if(pesoVariable.isSelected() && !pesable.isSelected())throw new Exception("Para compras de peso variable, marcá Pesable en Configuración.");if(pc.signum()>0 && pv.compareTo(pc.divide(fc,2,RoundingMode.HALF_UP))<0 && JOptionPane.showConfirmDialog(this,"El precio de venta es inferior al costo por unidad de venta. ¿Deseás continuar?","Advertencia de precio",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.YES_OPTION)return;try(Connection cn=conexion.getConexion()){cn.setAutoCommit(false);try{String catNombre;try(PreparedStatement ps=cn.prepareStatement("SELECT nombre FROM categoria WHERE id_categoria=? FOR UPDATE")){ps.setInt(1,cat);try(ResultSet rs=ps.executeQuery()){if(!rs.next())throw new SQLException("Categoría inexistente");catNombre=rs.getString(1);}}String code=prefijo(catNombre)+"-"+String.format("%03d",siguiente(cn,prefijo(catNombre)));String sql="INSERT INTO producto(codigo,codigo_interno,codigo_barra,nombre,descripcion,ubicacion,id_rubro,id_categoria,id_marca,id_unidad_compra,id_unidad_venta,factor_conversion,precio_compra,precio_venta,margen_porcentaje,id_iva,stock_minimo,controla_stock,permite_venta_sin_stock,es_pesable,permite_descuento,activo,observaciones) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";int productoId;try(PreparedStatement ps=cn.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){ps.setString(1,code);text(ps,2,interno.getText());text(ps,3,barra.getText());ps.setString(4,nombre.getText().trim());text(ps,5,descripcion.getText());text(ps,6,ubicacion.getText());integer(ps,7,id(rubro));ps.setInt(8,cat);integer(ps,9,id(marca));ps.setInt(10,uc);ps.setInt(11,uv);ps.setBigDecimal(12,fc);ps.setBigDecimal(13,costoPorUnidad);ps.setBigDecimal(14,pv);ps.setBigDecimal(15,pc.signum()==0?BigDecimal.ZERO:mg);integer(ps,16,id(iva));ps.setBigDecimal(17,pm);ps.setBoolean(18,controla.isSelected());ps.setBoolean(19,sinStock.isSelected());ps.setBoolean(20,pesable.isSelected());ps.setBoolean(21,descuento.isSelected());ps.setBoolean(22,activo.isSelected());text(ps,23,observaciones.getText());ps.executeUpdate();try(ResultSet rs=ps.getGeneratedKeys()){if(!rs.next())throw new SQLException("No se obtuvo ID del producto");productoId=rs.getInt(1);}}if(idProveedor>0){try(PreparedStatement ps=cn.prepareStatement("INSERT INTO producto_proveedor(id_producto,id_proveedor,costo_ultimo,proveedor_principal) VALUES(?,?,?,1)")){ps.setInt(1,productoId);ps.setInt(2,idProveedor);ps.setBigDecimal(3,pc);ps.executeUpdate();}}
+            // La presentación inicial debe guardarse en la MISMA transacción que el producto.
+            String nombreUnidadCompra;
+            try (PreparedStatement ps = cn.prepareStatement(
+                    "SELECT codigo FROM unidad_medida WHERE id_unidad=?")) {
+                ps.setInt(1, uc);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) throw new SQLException("No existe la unidad de compra seleccionada.");
+                    nombreUnidadCompra = rs.getString(1);
+                }
+            }
+            try (PreparedStatement ps = cn.prepareStatement(
+                    "INSERT INTO producto_presentacion " +
+                    "(id_producto,nombre,id_unidad_compra,factor_conversion,es_predeterminada,activo) " +
+                    "VALUES (?,?,?,?,1,1)")) {
+                ps.setInt(1, productoId);
+                ps.setString(2, "Original - " + nombreUnidadCompra);
+                ps.setInt(3, uc);
+                ps.setBigDecimal(4, fc);
+                if (ps.executeUpdate() != 1) {
+                    throw new SQLException("No se pudo crear la presentación inicial del producto.");
+                }
+            }
+            cn.commit();guardado=true;codigo.setText(code);mostrarExito(code);if(JOptionPane.showConfirmDialog(this,"¿Querés configurar ahora packs, cajas o bultos para este artículo?\nTambién podés agregarlos más adelante desde Entrada de mercadería.","Presentaciones",JOptionPane.YES_NO_OPTION,JOptionPane.QUESTION_MESSAGE)==JOptionPane.YES_OPTION){DialogoPresentacionesProducto dlg=new DialogoPresentacionesProducto(this,productoId,nombre.getText().trim(),uv,obtenerCodigoUnidad(uv));dlg.setVisible(true);}dispose();}catch(Exception e){cn.rollback();throw e;}finally{cn.setAutoCommit(true);}}}catch(Exception e){error("No se pudo guardar el producto",e);}}
+
+    private String obtenerCodigoUnidad(int idUnidad) throws SQLException {
+        try(Connection cn=conexion.getConexion();PreparedStatement ps=cn.prepareStatement("SELECT codigo FROM unidad_medida WHERE id_unidad=?")){
+            ps.setInt(1,idUnidad);
+            try(ResultSet rs=ps.executeQuery()){return rs.next()?rs.getString(1):"UN";}
+        }
+    }
 
     private void mostrarExito(String code){
         JDialog dialog=new JDialog(this,"Artículo registrado · Serena Soft",Dialog.ModalityType.APPLICATION_MODAL);

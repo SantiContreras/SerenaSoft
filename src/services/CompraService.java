@@ -24,6 +24,9 @@ import java.time.LocalDateTime;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 import Configuracion.conexion;
 import Dao.StockProductoDao;
@@ -75,11 +78,28 @@ public class CompraService {
 // ROLLBACK completo.
 // =========================================================
     public ResultadoOperacion confirmarCompra(long idCompra) {
-        return confirmarCompra(idCompra, java.util.Collections.emptyMap());
+        return confirmarCompra(idCompra, Collections.emptyMap());
     }
 
+    /**
+     * Confirma compra, stock, costo por unidad de stock y precios de venta
+     * explícitamente editados, todo en la misma transacción.
+     */
     public ResultadoOperacion confirmarCompra(
-            long idCompra, java.util.Map<Integer, BigDecimal> nuevosPreciosVenta) {
+            long idCompra,
+            Map<Integer, BigDecimal> preciosVentaPendientes) {
+
+        if (preciosVentaPendientes == null) {
+            return ResultadoOperacion.error("No se recibieron los precios de venta.");
+        }
+        for (Map.Entry<Integer, BigDecimal> entrada : preciosVentaPendientes.entrySet()) {
+            if (entrada.getKey() == null || entrada.getKey() <= 0
+                    || entrada.getValue() == null
+                    || entrada.getValue().compareTo(BigDecimal.ZERO) < 0
+                    || entrada.getValue().scale() > 2) {
+                return ResultadoOperacion.error("Hay un precio de venta inválido.");
+            }
+        }
 
         // =====================================================
         // VALIDACIONES INICIALES
@@ -291,6 +311,17 @@ public class CompraService {
                                     2,
                                     RoundingMode.HALF_UP
                             );
+
+            // Evitar modificar precios de productos ajenos a esta compra.
+            Set<Integer> productosEnCompra = new HashSet<>();
+            for (CompraDetalle detalle : detalles) {
+                productosEnCompra.add(detalle.getProducto().getIdProducto());
+            }
+            if (!productosEnCompra.containsAll(preciosVentaPendientes.keySet())) {
+                cn.rollback();
+                return ResultadoOperacion.error(
+                        "Se intentó actualizar el precio de un producto ajeno a la compra.");
+            }
 
             // =================================================
             // 6. ACTUALIZAR TOTALES DEFINITIVOS
@@ -510,21 +541,25 @@ public class CompraService {
                         cantidadStock, saldoAnterior, saldoAnterior.add(cantidadStock),
                         compra.getObservaciones());
 
-                // Actualizar ultimo costo de compra sin alterar el precio de venta.
-                // El costo del detalle corresponde a la presentacion recibida;
-                // producto.precio_compra corresponde a la presentacion original.
-                BigDecimal factorPredeterminado = producto.getFactorConversion();
-                if (factorPredeterminado == null || factorPredeterminado.signum() <= 0) {
-                    throw new SQLException("Factor predeterminado invalido para "
-                            + producto.getNombre());
-                }
-                BigDecimal costoPredeterminado = detalle.getCostoUnitario()
-                        .multiply(factorPredeterminado)
+                // El costo de compra del detalle es por presentación.
+                // En producto.precio_compra guardamos costo por unidad de stock.
+                BigDecimal costoPorUnidadStock = detalle.getCostoUnitario()
                         .divide(factorConversion, 2, RoundingMode.HALF_UP);
-                if (!productoDao.actualizarPrecioCompra(
-                        idProducto, costoPredeterminado, cn)) {
-                    throw new SQLException("No se pudo actualizar el ultimo costo de "
-                            + producto.getNombre());
+                BigDecimal precioVentaNuevo = preciosVentaPendientes.get(idProducto);
+                String sqlPrecio = "UPDATE producto SET precio_compra = ?, "
+                        + "precio_venta = COALESCE(?, precio_venta) WHERE id_producto = ?";
+                try (java.sql.PreparedStatement psPrecio = cn.prepareStatement(sqlPrecio)) {
+                    psPrecio.setBigDecimal(1, costoPorUnidadStock);
+                    if (precioVentaNuevo == null) {
+                        psPrecio.setNull(2, java.sql.Types.DECIMAL);
+                    } else {
+                        psPrecio.setBigDecimal(2, precioVentaNuevo);
+                    }
+                    psPrecio.setInt(3, idProducto);
+                    if (psPrecio.executeUpdate() != 1) {
+                        throw new SQLException("No se pudieron actualizar los precios de "
+                                + producto.getNombre());
+                    }
                 }
             }
 
@@ -550,34 +585,6 @@ public class CompraService {
                         "La compra no pudo ser confirmada "
                         + "porque su estado cambió."
                 );
-            }
-
-            // Los precios se guardan en la MISMA transacción del stock.
-            // Se valida antes de actualizar para evitar precios inválidos.
-            if (nuevosPreciosVenta != null && !nuevosPreciosVenta.isEmpty()) {
-                java.util.Set<Integer> productosDeLaCompra = new java.util.HashSet<>();
-                for (CompraDetalle d : detalles) {
-                    productosDeLaCompra.add(d.getProducto().getIdProducto());
-                }
-                for (java.util.Map.Entry<Integer, BigDecimal> entrada : nuevosPreciosVenta.entrySet()) {
-                    if (!productosDeLaCompra.contains(entrada.getKey())) {
-                        throw new SQLException("Precio para un producto que no pertenece a la compra.");
-                    }
-                    BigDecimal precio = entrada.getValue();
-                    if (precio == null || precio.signum() < 0 || precio.scale() > 2) {
-                        throw new SQLException("Precio de venta inválido para producto " + entrada.getKey());
-                    }
-                }
-                try (java.sql.PreparedStatement ps = cn.prepareStatement(
-                        "UPDATE producto SET precio_venta = ? WHERE id_producto = ?")) {
-                    for (java.util.Map.Entry<Integer, BigDecimal> entrada : nuevosPreciosVenta.entrySet()) {
-                        ps.setBigDecimal(1, entrada.getValue());
-                        ps.setInt(2, entrada.getKey());
-                        if (ps.executeUpdate() != 1) {
-                            throw new SQLException("No se pudo actualizar el precio del producto " + entrada.getKey());
-                        }
-                    }
-                }
             }
 
             // =================================================
