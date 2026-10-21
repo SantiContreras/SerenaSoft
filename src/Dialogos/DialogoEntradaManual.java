@@ -305,14 +305,14 @@ public class DialogoEntradaManual extends JDialog {
         // Ventana más ancha para visualizar todos los componentes
         setSize(
                 new Dimension(
-                        1200,
-                        680
+                        1100,
+                        700
                 )
         );
 
         setMinimumSize(
                 new Dimension(
-                        1100,
+                        960,
                         620
                 )
         );
@@ -389,9 +389,26 @@ public class DialogoEntradaManual extends JDialog {
         lblCostoUnidad = crearValorInformativo("Costo");
 
         cmbFormaCompra = new JComboBox<>();
-        cmbFormaCompra.setPreferredSize(new Dimension(145, 38));
-        cmbFormaCompra.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        cmbFormaCompra.setPreferredSize(new Dimension(190, 37));
+        cmbFormaCompra.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cmbFormaCompra.setMaximumRowCount(16);
+        cmbFormaCompra.setToolTipText("Seleccioná la presentación exacta: PACK x6, CAJA x8, BULTO x12, PALLET x480, etc.");
         cmbFormaCompra.setBackground(Color.WHITE);
+        cmbFormaCompra.setForeground(new Color(35, 54, 82));
+        cmbFormaCompra.setBorder(BorderFactory.createLineBorder(new Color(199, 212, 230), 1));
+        cmbFormaCompra.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(javax.swing.JList<?> list,
+                    Object value, int index, boolean selected, boolean focus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, selected, focus);
+                label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+                label.setBorder(BorderFactory.createEmptyBorder(7, 12, 7, 10));
+                label.setOpaque(true);
+                label.setBackground(selected ? new Color(225, 237, 252) : Color.WHITE);
+                label.setForeground(new Color(28, 54, 91));
+                return label;
+            }
+        });
 
         lblFactorCompraTitulo = crearLabel("Unidades por presentación");
 
@@ -402,6 +419,7 @@ public class DialogoEntradaManual extends JDialog {
         spnFactorCompra.setEditor(
                 new JSpinner.NumberEditor(spnFactorCompra, "0.###")
         );
+        estilizarSpinner(spnFactorCompra, true);
 
         spnCantidad
                 = new JSpinner(
@@ -533,7 +551,7 @@ public class DialogoEntradaManual extends JDialog {
                 ListSelectionModel.SINGLE_SELECTION
         );
 
-        tablaDetalle.setRowHeight(30);
+        tablaDetalle.setRowHeight(32);
 
         tablaDetalle.setFont(
                 new Font(
@@ -560,7 +578,7 @@ public class DialogoEntradaManual extends JDialog {
         );
 
         tablaDetalle.setShowHorizontalLines(true);
-        tablaDetalle.setShowVerticalLines(true);
+        tablaDetalle.setShowVerticalLines(false);
 
         tablaDetalle.setFillsViewportHeight(true);
 
@@ -576,7 +594,7 @@ public class DialogoEntradaManual extends JDialog {
         );
 
         tablaDetalle.setSelectionForeground(
-                Color.BLACK
+                Color.WHITE
         );
 
         //==========================================================
@@ -853,7 +871,7 @@ public class DialogoEntradaManual extends JDialog {
         panelProducto.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        425
+                        540
                 )
         );
 
@@ -891,7 +909,7 @@ public class DialogoEntradaManual extends JDialog {
         scrollContenido.setBorder(null);
 
         scrollContenido.setHorizontalScrollBarPolicy(
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED
         );
 
         scrollContenido.setVerticalScrollBarPolicy(
@@ -1472,10 +1490,10 @@ public class DialogoEntradaManual extends JDialog {
         //======================================================
         JPanel panelCampos = new JPanel(
                 new GridLayout(
-                        1,
-                        4,
-                        18,
-                        0
+                        2,
+                        2,
+                        14,
+                        10
                 )
         );
 
@@ -1490,12 +1508,7 @@ public class DialogoEntradaManual extends JDialog {
                         crearSelectorPresentaciones()
                 );
 
-        cmbFormaCompra.setPreferredSize(
-                new Dimension(
-                        160,
-                        38
-                )
-        );
+        cmbFormaCompra.setPreferredSize(new Dimension(190, 37));
 
         //======================================================
         // CANTIDAD
@@ -1511,8 +1524,8 @@ public class DialogoEntradaManual extends JDialog {
 
         spnCantidad.setPreferredSize(
                 new Dimension(
-                        120,
-                        38
+                        105,
+                        37
                 )
         );
 
@@ -1587,8 +1600,8 @@ public class DialogoEntradaManual extends JDialog {
 
         spnFactorCompra.setPreferredSize(
                 new Dimension(
-                        140,
-                        38
+                        105,
+                        37
                 )
         );
 
@@ -2455,7 +2468,8 @@ public class DialogoEntradaManual extends JDialog {
         panel.setOpaque(false);
         panel.add(cmbFormaCompra, BorderLayout.CENTER);
         JButton agregar = new JButton("+ NUEVA");
-        agregar.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        agregar.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        agregar.setPreferredSize(new Dimension(115, 50));
         agregar.setBackground(new Color(0, 151, 92));
         agregar.setForeground(Color.WHITE);
         agregar.addActionListener(e -> {
@@ -2615,6 +2629,7 @@ public class DialogoEntradaManual extends JDialog {
                     new JSpinner.NumberEditor(spnCantidad, "0.000")
             );
             conectarEditorCantidad(((JSpinner.DefaultEditor) spnCantidad.getEditor()).getTextField());
+            estilizarSpinner(spnCantidad, false);
         } else {
             spnCantidad.setModel(
                     new SpinnerNumberModel(1, 1, 999999, 1)
@@ -2623,6 +2638,7 @@ public class DialogoEntradaManual extends JDialog {
                     new JSpinner.NumberEditor(spnCantidad, "0")
             );
             conectarEditorCantidad(((JSpinner.DefaultEditor) spnCantidad.getEditor()).getTextField());
+            estilizarSpinner(spnCantidad, false);
         }
     }
 
@@ -3014,11 +3030,9 @@ public class DialogoEntradaManual extends JDialog {
         );
 
         spnFactorCompra.setEditor(
-                new JSpinner.NumberEditor(
-                        spnFactorCompra,
-                        "0.###"
-                )
+                new JSpinner.NumberEditor(spnFactorCompra, "0.###")
         );
+        estilizarSpinner(spnFactorCompra, true);
 
         spnFactorCompra.setEnabled(false);
         spnFactorCompra.setVisible(false);
@@ -3026,7 +3040,24 @@ public class DialogoEntradaManual extends JDialog {
 
         spnCantidad.setModel(new SpinnerNumberModel(1, 1, 999999, 1));
         spnCantidad.setEditor(new JSpinner.NumberEditor(spnCantidad, "0"));
+        estilizarSpinner(spnCantidad, false);
         lblSubtotalItem.setText("$ 0,00");
+    }
+
+    // Ajuste visual: el número queda cómodo para seleccionar y editar.
+    private void estilizarSpinner(JSpinner spinner, boolean soloLectura) {
+        spinner.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        spinner.setBorder(BorderFactory.createLineBorder(new Color(199, 212, 230)));
+        if (spinner.getEditor() instanceof JSpinner.DefaultEditor) {
+            javax.swing.JFormattedTextField campo =
+                    ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField();
+            campo.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            campo.setHorizontalAlignment(javax.swing.JTextField.LEFT);
+            campo.setMargin(new Insets(3, 13, 3, 12));
+            campo.setBackground(soloLectura ? new Color(246, 248, 252) : Color.WHITE);
+            campo.setForeground(new Color(28, 54, 91));
+            campo.setCaretColor(new Color(28, 54, 91));
+        }
     }
 
     //==========================================================
@@ -3042,10 +3073,11 @@ public class DialogoEntradaManual extends JDialog {
         spnFactorCompra.setValue(factor.doubleValue());
         // El factor procede de la BD: no debe poder cambiarse libremente.
         spnFactorCompra.setEnabled(false);
-        boolean mostrarFactor = factor.compareTo(BigDecimal.ONE) != 0;
+        boolean mostrarFactor = true;
         spnFactorCompra.setVisible(mostrarFactor);
         lblFactorCompraTitulo.setVisible(mostrarFactor);
-        lblFactorCompraTitulo.setText("Contenido por " + presentacion.getNombre());
+        lblFactorCompraTitulo.setText("CONTENIDO POR " + presentacion.getNombre());
+        lblFactorConversion.setText("1 " + presentacion.getNombre() + " = " + factor.stripTrailingZeros().toPlainString() + " " + codigoUnidad(productoSeleccionado.getUnidadVenta()));
         lblUnidadCantidad.setText(forma);
         lblCostoUnidad.setText("Costo por " + presentacion.getNombre());
         configurarSpinnerSegunUnidad(presentacion.getUnidadCompra());
