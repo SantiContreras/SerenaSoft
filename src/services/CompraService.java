@@ -1,6 +1,8 @@
 package services;
 
 import Dao.CompraDao;
+import Dao.CompraFiscalDao;
+import model.CompraFiscal;
 import Dao.DepositoDao;
 import Dao.ProductoDao;
 import Dao.ProveedorDao;
@@ -88,6 +90,27 @@ public class CompraService {
     public ResultadoOperacion confirmarCompra(
             long idCompra,
             Map<Integer, BigDecimal> preciosVentaPendientes) {
+
+        return confirmarCompra(idCompra, preciosVentaPendientes, null);
+    }
+
+    /** Confirma compra y fiscalidad en la misma transacción. El parámetro fiscal
+     *  nulo mantiene el comportamiento histórico para otros módulos. */
+    public ResultadoOperacion confirmarCompra(
+            long idCompra,
+            Map<Integer, BigDecimal> preciosVentaPendientes,
+            CompraFiscal fiscal) {
+
+        if (fiscal != null) {
+            if (fiscal.idCompra != idCompra) {
+                return ResultadoOperacion.error("La compra fiscal no corresponde al ID de compra.");
+            }
+            try {
+                CompraFiscalService.validar(fiscal);
+            } catch (IllegalArgumentException ex) {
+                return ResultadoOperacion.error("Datos fiscales: " + ex.getMessage());
+            }
+        }
 
         if (preciosVentaPendientes == null) {
             return ResultadoOperacion.error("No se recibieron los precios de venta.");
@@ -585,6 +608,11 @@ public class CompraService {
                         "La compra no pudo ser confirmada "
                         + "porque su estado cambió."
                 );
+            }
+
+            // Registrar fiscalidad antes del COMMIT, sin abrir otra conexión.
+            if (fiscal != null) {
+                new CompraFiscalDao().guardar(fiscal, cn);
             }
 
             // =================================================

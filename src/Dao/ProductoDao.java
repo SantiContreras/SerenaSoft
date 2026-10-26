@@ -15,6 +15,39 @@ import java.util.List;
 
 public class ProductoDao {
 
+    /** Alícuotas activas disponibles para configurar productos sin IVA. */
+    public java.util.List<TipoIva> listarIvasActivos() throws SQLException {
+        java.util.List<TipoIva> resultado = new java.util.ArrayList<>();
+        String sql = "SELECT id_iva, codigo, nombre, porcentaje, activo FROM tipo_iva WHERE activo = 1 ORDER BY porcentaje";
+        try (Connection cn = conexion.getConexion();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                TipoIva iva = new TipoIva();
+                iva.setIdIva(rs.getInt("id_iva"));
+                iva.setCodigo(rs.getString("codigo"));
+                iva.setNombre(rs.getString("nombre"));
+                iva.setPorcentaje(rs.getBigDecimal("porcentaje"));
+                iva.setActivo(rs.getBoolean("activo"));
+                resultado.add(iva);
+            }
+        }
+        return resultado;
+    }
+
+    /** Sólo asigna IVA si el producto sigue sin alícuota; evita pisar cambios ajenos. */
+    public boolean asignarIvaSiFalta(int idProducto, int idIva) throws SQLException {
+        String sql = "UPDATE producto SET id_iva = ? WHERE id_producto = ? AND id_iva IS NULL "
+                + "AND EXISTS (SELECT 1 FROM tipo_iva WHERE id_iva = ? AND activo = 1)";
+        try (Connection cn = conexion.getConexion();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, idIva);
+            ps.setInt(2, idProducto);
+            ps.setInt(3, idIva);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
     private static final String SELECT_COMPLETO =
             "SELECT " +
             "p.*, " +

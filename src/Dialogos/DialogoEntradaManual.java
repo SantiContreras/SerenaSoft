@@ -35,8 +35,12 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import Dao.DepositoDao;
+import Dao.ProductoDao;
+import model.TipoIva;
 import Dao.ProveedorDao;
 import model.Compra;
+import model.CompraFiscal;
+import services.CompraFiscalService;
 import model.Deposito;
 import model.Producto;
 import model.Proveedor;
@@ -59,6 +63,9 @@ import javax.swing.JComponent;
 public class DialogoEntradaManual extends JDialog {
 
     private final CompraService compraService = new CompraService();
+    private final ProductoDao productoDaoFiscal = new ProductoDao();
+    private static final java.util.prefs.Preferences PREFERENCIAS_FISCALES =
+            java.util.prefs.Preferences.userNodeForPackage(DialogoEntradaManual.class);
     private final ProveedorDao proveedorDao = new ProveedorDao();
     private final DepositoDao depositoDao = new DepositoDao();
     private final StockProductoDao stockProductoDao = new StockProductoDao();
@@ -78,8 +85,11 @@ public class DialogoEntradaManual extends JDialog {
     private JTextField txtTotalFactura;
     private JLabel lblResumenFiscal;
     private boolean totalFacturaEditado = false;
-    private String condicionFiscal = "MONOTRIBUTISTA";
+    private String condicionFiscal = PREFERENCIAS_FISCALES.get("condicionFiscalComercio", "MONOTRIBUTISTA");
     private BigDecimal ajusteIvaManual = null;
+    // La primera integración fiscal admite Factura A sin percepciones.
+    // El crédito fiscal requiere validación contable y se registra en cero.
+    private boolean preciosConIvaIncluido = true;
     private String motivoAjusteIva = "";
     private JTextField txtFecha;
 
@@ -1206,7 +1216,7 @@ public class DialogoEntradaManual extends JDialog {
         motivo.setEnabled(discrimina);
         contenido.add(motivo, g);
         g.gridy++; g.gridx = 0; g.gridwidth = 2;
-        JLabel aviso = new JLabel("<html>Los precios de los artículos deben cargarse con un criterio consistente.<br>Este panel calcula y revisa IVA; aún no cambia el costo ni el total persistido.</html>");
+        JLabel aviso = new JLabel("<html>Etapa inicial: Factura A con precios finales (IVA incluido), sin percepciones.<br>El crédito fiscal se guarda en cero hasta su validación contable.<br>Si la factura contiene descuentos no reflejados en los precios, percepciones u otros tributos, no la confirmes todavía.</html>");
         aviso.setForeground(new Color(135, 83, 15));
         aviso.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         contenido.add(aviso, g);
@@ -1225,6 +1235,7 @@ public class DialogoEntradaManual extends JDialog {
                     return;
                 }
                 condicionFiscal = (String) condicion.getSelectedItem();
+                PREFERENCIAS_FISCALES.put("condicionFiscalComercio", condicionFiscal);
                 ajusteIvaManual = discrimina ? nuevo : null;
                 motivoAjusteIva = motivo.getText().trim();
                 dialogo.dispose();
@@ -3341,6 +3352,8 @@ public class DialogoEntradaManual extends JDialog {
 
         // Conciliar antes de crear la compra o modificar existencias.
         if (!validarConciliacionFactura()) return;
+        if ("Factura A".equals(cmbTipoFactura.getSelectedItem())
+                && !validarFacturaAParaPersistir()) return;
 
         // Evitar nuevas confirmaciones mientras se procesa.
         btnConfirmar.setEnabled(false);
@@ -3397,12 +3410,8 @@ public class DialogoEntradaManual extends JDialog {
 
             compra.setOrigenCarga("MANUAL");
 
-            compra.setObservaciones(
-                    "Entrada manual de mercadería | Tipo: " + cmbTipoFactura.getSelectedItem()
-                    + " | Total factura: " + (txtTotalFactura == null ? "" : txtTotalFactura.getText().trim())
-                    + " | IVA estimado incluido: " + calcularIvaEstimado().toPlainString()
-                    + " | Condición fiscal (provisional): " + condicionFiscal
-            );
+            compra.setObservaciones("Entrada manual de mercadería | Tipo: "
+                    + cmbTipoFactura.getSelectedItem());
 
             //==================================================
             // 6. CREAR COMPRA EN BORRADOR
@@ -3464,9 +3473,13 @@ public class DialogoEntradaManual extends JDialog {
             //==================================================
             // 8. CONFIRMAR COMPRA Y ACTUALIZAR STOCK
             //==================================================
+            CompraFiscal fiscal = null;
+            if ("Factura A".equals(cmbTipoFactura.getSelectedItem())) {
+                fiscal = construirFiscalFacturaA(idCompra, proveedor);
+            }
             ResultadoOperacion confirmar
                     = compraService.confirmarCompra(idCompra,
-                            new java.util.HashMap<>(preciosVentaPendientes));
+                            new java.util.HashMap<>(preciosVentaPendientes), fiscal);
 
             if (!confirmar.isExitoso()) {
 
@@ -3530,6 +3543,107 @@ public class DialogoEntradaManual extends JDialog {
             // Solo se utiliza si el diálogo permanece abierto.
             btnConfirmar.setEnabled(true);
         }
+    }
+
+    /** Primera integración: sólo Factura A, precios finales con IVA incluido.
+     *  No se inventa crédito fiscal ni se asignan percepciones desconocidas. */
+    private boolean validarFacturaAParaPersistir() {
+        if (!"RESPONSABLE_INSCRIPTO".equals(condicionFiscal)) {
+            JOptionPane.showMessageDialog(this,
+                    "Para registrar esta Factura A, elegí RESPONSABLE_INSCRIPTO en Ver impuestos.\n"
+                    + "La condición fiscal debe corresponder a tu empresa.",
+                    "Configuración fiscal", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        for (DetalleEntradaTemporal d : detalles) {
+            if (d.getProducto().getTipoIva() == null
+                    || d.getProducto().getTipoIva().getPorcentaje() == null) {
+                if (!solicitarIvaFaltante(d.getProducto())) return false;
+            }
+        }
+        // Al configurar una alícuota se recalcula el IVA antes de confirmar.
+        if (ajusteIvaManual != null && ajusteIvaManual.subtract(calcularIvaEstimado()).abs()
+                .compareTo(new BigDecimal("0.01")) > 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Se actualizaron alícuotas. Revisá el IVA en 'Ver impuestos' antes de confirmar.",
+                    "Revisar IVA", JOptionPane.WARNING_MESSAGE);
+            ajusteIvaManual = null;
+            return false;
+        }
+        return true;
+    }
+
+    /** Pide la alícuota real al operador y la guarda en el catálogo. */
+    private boolean solicitarIvaFaltante(Producto producto) {
+        try {
+            java.util.List<TipoIva> opciones = productoDaoFiscal.listarIvasActivos();
+            if (opciones.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "No hay alícuotas activas en tipo_iva.",
+                        "IVA", JOptionPane.WARNING_MESSAGE);
+                return false;
+            }
+            String[] etiquetas = new String[opciones.size()];
+            for (int i = 0; i < opciones.size(); i++) {
+                TipoIva t = opciones.get(i);
+                etiquetas[i] = t.getNombre() + " (" + t.getPorcentaje().stripTrailingZeros().toPlainString() + " %)";
+            }
+            String elegida = (String) JOptionPane.showInputDialog(this,
+                    "El producto '" + producto.getNombre() + "' no tiene IVA configurado.\n"
+                    + "Seleccioná la alícuota que corresponde legalmente al producto.\n"
+                    + "La selección quedará guardada para futuras compras.",
+                    "Configurar IVA del producto", JOptionPane.QUESTION_MESSAGE,
+                    null, etiquetas, etiquetas[0]);
+            if (elegida == null) return false;
+            int indice = java.util.Arrays.asList(etiquetas).indexOf(elegida);
+            if (indice < 0) return false;
+            TipoIva iva = opciones.get(indice);
+            if (!productoDaoFiscal.asignarIvaSiFalta(producto.getIdProducto(), iva.getIdIva())) {
+                JOptionPane.showMessageDialog(this,
+                        "No se asignó el IVA: el producto pudo haber cambiado. Volvé a buscarlo.",
+                        "IVA", JOptionPane.WARNING_MESSAGE);
+                return false;
+            }
+            producto.setTipoIva(iva);
+            ajusteIvaManual = null; // Evita mantener el cálculo anterior.
+            actualizarResumenFiscal();
+            return true;
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "No se pudo configurar el IVA: " + ex.getMessage(),
+                    "IVA", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    private CompraFiscal construirFiscalFacturaA(long idCompra, Proveedor proveedor) {
+        CompraFiscal f = new CompraFiscal();
+        f.idCompra = idCompra;
+        f.tipoComprobante = "FACTURA";
+        f.letra = "A";
+        String nro = txtNumeroFactura.getText().trim();
+        String[] partes = nro.split("-", 2);
+        f.puntoVenta = partes.length == 2 ? partes[0].trim() : null;
+        f.numero = partes.length == 2 ? partes[1].trim() : nro;
+        f.fechaEmision = LocalDate.parse(txtFecha.getText().trim(),
+                DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        f.totalComprobante = parsearImporteFiscal(txtTotalFactura.getText());
+        f.observacionesFiscales = "Carga desde entrada manual. IVA estimado por producto; "
+                + "crédito fiscal pendiente de validación contable.";
+        java.util.Map<BigDecimal, BigDecimal> totalesPorTasa = new java.util.TreeMap<>();
+        for (DetalleEntradaTemporal d : detalles) {
+            BigDecimal tasa = d.getProducto().getTipoIva().getPorcentaje();
+            totalesPorTasa.merge(tasa, d.getSubtotal(), BigDecimal::add);
+        }
+        for (java.util.Map.Entry<BigDecimal, BigDecimal> e : totalesPorTasa.entrySet()) {
+            BigDecimal tasa = e.getKey();
+            BigDecimal total = e.getValue();
+            if (tasa.signum() == 0) {
+                f.importeExento = f.importeExento.add(total);
+            } else {
+                f.alicuotas.add(CompraFiscalService.desdePrecioFinal(total, tasa, false));
+            }
+        }
+        CompraFiscalService.validar(f);
+        return f;
     }
 
     private void mostrarError(
