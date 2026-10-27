@@ -576,11 +576,17 @@ public class PanelPrincipal extends javax.swing.JFrame {
         });
 
         btnProveedores.addActionListener(e -> {
-
-            mostrarPanel(
-                    new PanelProveedores()
-            );
-
+            JPopupMenu menuCompras = new JPopupMenu();
+            JMenuItem proveedores = new JMenuItem("Gestión de proveedores");
+            JMenuItem historial = new JMenuItem("Historial de compras y facturas");
+            proveedores.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            historial.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            proveedores.addActionListener(ev -> mostrarPanel(new PanelProveedores()));
+            historial.addActionListener(ev -> mostrarPanel(new Paneles.PanelHistorialCompras()));
+            menuCompras.add(proveedores);
+            menuCompras.addSeparator();
+            menuCompras.add(historial);
+            menuCompras.show(btnProveedores, 0, btnProveedores.getHeight());
         });
 
         //==========================================================

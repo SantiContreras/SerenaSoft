@@ -127,7 +127,7 @@ public class PanelStock extends javax.swing.JPanel {
     //==========================================================
     // BUSQUEDA
     //==========================================================
-    private TextFieldRedondeado txtBuscar;
+    private javax.swing.JTextField txtBuscar;
     private RSButtonRound btnBuscar;
 
     //==========================================================
@@ -214,7 +214,7 @@ public class PanelStock extends javax.swing.JPanel {
         // BUSQUEDA
         //======================================================
         txtBuscar
-                = new TextFieldRedondeado();
+                = new javax.swing.JTextField();
 
         txtBuscar.setFont(
                 new Font(
@@ -226,10 +226,20 @@ public class PanelStock extends javax.swing.JPanel {
 
         txtBuscar.setPreferredSize(
                 new Dimension(
-                        360,
-                        46
+                        310,
+                        44
                 )
         );
+
+        txtBuscar.setBackground(Color.WHITE);
+        txtBuscar.setForeground(AZUL_OSCURO);
+        txtBuscar.setCaretColor(AZUL_PRINCIPAL);
+        txtBuscar.setSelectionColor(new Color(210, 228, 252));
+        txtBuscar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(174, 193, 218), 1, true),
+                new EmptyBorder(8, 15, 8, 15)));
+        txtBuscar.putClientProperty("JTextField.placeholderText", "Código, nombre, marca o categoría...");
+        txtBuscar.setToolTipText("Buscá por código, producto, marca, categoría o depósito");
 
         btnBuscar
                 = crearBotonPrimario(
@@ -301,7 +311,7 @@ public class PanelStock extends javax.swing.JPanel {
 
         btnEntrada.setIcon(icono("plus", Color.WHITE));
         btnSalida.setIcon(icono("minus", Color.WHITE));
-        btnAjuste.setIcon(icono("adjust", Color.WHITE));
+        btnAjuste.setIcon(icono("tools", Color.WHITE));
         btnModificar.setIcon(icono("edit", Color.WHITE));
         btnDarBaja.setIcon(icono("cross", Color.WHITE));
         btnActualizar.setIcon(icono("refresh", Color.WHITE));
@@ -355,10 +365,10 @@ public class PanelStock extends javax.swing.JPanel {
                             "Categoría",
                             "Depósito",
                             "Stock",
-                            "Mínimo",
+                            "Estado",
                             "Compra",
                             "Venta",
-                            "Estado"
+                            "Mínimo"
                         },
                         0
                 ) {
@@ -377,9 +387,9 @@ public class PanelStock extends javax.swing.JPanel {
                         modeloStock
                 );
 
-        tablaStock.setRowHeight(
-                31
-        );
+        tablaStock.setRowHeight(36);
+        tablaStock.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        tablaStock.setIntercellSpacing(new Dimension(0, 1));
 
         tablaStock.setFont(
                 new Font(
@@ -444,12 +454,34 @@ public class PanelStock extends javax.swing.JPanel {
                 tablaStock
         );
 
+        DefaultTableCellRenderer rendererFilas = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean selected, boolean focused, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(
+                        table, value, selected, focused, row, column);
+                label.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+                label.setBorder(new EmptyBorder(0, 9, 0, 9));
+                label.setBackground(selected ? new Color(211, 228, 250) :
+                        row % 2 == 0 ? Color.WHITE : new Color(247, 250, 254));
+                label.setForeground(AZUL_OSCURO);
+                label.setHorizontalAlignment((column == 5 || (column >= 7 && column <= 9))
+                        ? SwingConstants.RIGHT : SwingConstants.LEFT);
+                return label;
+            }
+        };
+        for (int columna = 0; columna < 10; columna++) {
+            if (columna != 6) {
+                tablaStock.getColumnModel().getColumn(columna).setCellRenderer(rendererFilas);
+            }
+        }
+
         //======================================================
         // RENDER ESTADO
         //======================================================
         tablaStock
                 .getColumnModel()
-                .getColumn(9)
+                .getColumn(6)
                 .setCellRenderer(
                         new RendererEstado()
                 );
@@ -465,7 +497,7 @@ public class PanelStock extends javax.swing.JPanel {
         tablaStock
                 .getColumnModel()
                 .getColumn(1)
-                .setPreferredWidth(260);
+                .setPreferredWidth(290);
 
         tablaStock
                 .getColumnModel()
@@ -480,7 +512,7 @@ public class PanelStock extends javax.swing.JPanel {
         tablaStock
                 .getColumnModel()
                 .getColumn(4)
-                .setPreferredWidth(90);
+                .setPreferredWidth(145);
 
         tablaStock
                 .getColumnModel()
@@ -502,16 +534,16 @@ public class PanelStock extends javax.swing.JPanel {
                 .getColumn(8)
                 .setPreferredWidth(120);
 
-        tablaStock.getColumnModel().getColumn(9).setPreferredWidth(120);
+        tablaStock.getColumnModel().getColumn(9).setPreferredWidth(100);
 
         scrollStock
                 = new JScrollPane(
                         tablaStock
                 );
 
-        scrollStock.setBorder(
-                BorderFactory.createEmptyBorder()
-        );
+        scrollStock.setBorder(BorderFactory.createEmptyBorder(0, 12, 12, 12));
+        scrollStock.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollStock.getHorizontalScrollBar().setUnitIncrement(18);
 
         scrollStock
                 .getViewport()
@@ -807,19 +839,7 @@ public class PanelStock extends javax.swing.JPanel {
                 )
         );
 
-        panel.setBorder(
-                BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(
-                                BORDE
-                        ),
-                        new EmptyBorder(
-                                14,
-                                20,
-                                14,
-                                20
-                        )
-                )
-        );
+        panel.setBorder(new EmptyBorder(14, 20, 14, 20));
 
         //======================================================
         // TITULOS
@@ -852,7 +872,7 @@ public class PanelStock extends javax.swing.JPanel {
         );
 
         titulo.setForeground(AZUL_OSCURO);
-        titulo.setIcon(icono("adjust", AZUL_PRINCIPAL));
+        titulo.setIcon(icono("inventory", AZUL_PRINCIPAL));
         titulo.setIconTextGap(12);
 
         JLabel subtitulo
@@ -1015,9 +1035,9 @@ public class PanelStock extends javax.swing.JPanel {
         panel.setBorder(
                 new EmptyBorder(
                         15,
-                        28,
+                        20,
                         13,
-                        20
+                        12
                 )
         );
 
@@ -1055,7 +1075,9 @@ public class PanelStock extends javax.swing.JPanel {
                 TEXTO_SECUNDARIO
         );
 
-        lblTitulo.setIcon(icono("adjust", AZUL_PRINCIPAL));
+        lblTitulo.setIcon(icono(titulo.contains("ACTIVOS") ? "check" :
+                titulo.contains("VALOR") ? "money" :
+                titulo.contains("TOTAL") ? "layers" : "inventory", AZUL_PRINCIPAL));
         lblTitulo.setIconTextGap(6);
         panel.add(
                 lblTitulo
@@ -1530,9 +1552,9 @@ public class PanelStock extends javax.swing.JPanel {
             p.getCodigo(), p.getNombre(),
             p.getMarca() == null ? "-" : p.getMarca().getNombre(),
             p.getCategoria() == null ? "-" : p.getCategoria().getNombre(),
-            deposito, formatearCantidad(cantidad), formatearCantidad(minimo),
-            formatearDinero(compra), formatearDinero(venta),
-            p.isActivo() ? calcularEstadoStock(cantidad, minimo) : "INACTIVO"
+            deposito, formatearCantidad(cantidad),
+            p.isActivo() ? calcularEstadoStock(cantidad, minimo) : "INACTIVO",
+            formatearDinero(compra), formatearDinero(venta), formatearCantidad(minimo)
         });
     }
 
@@ -1799,9 +1821,9 @@ public class PanelStock extends javax.swing.JPanel {
                 SwingUtilities.getWindowAncestor(this), id,
                 codigo, valorTabla(fila, 1), valorTabla(fila, 2),
                 valorTabla(fila, 3), valorTabla(fila, 4),
-                valorTabla(fila, 5), valorTabla(fila, 6),
+                valorTabla(fila, 5), valorTabla(fila, 9),
                 valorTabla(fila, 7), valorTabla(fila, 8),
-                valorTabla(fila, 9));
+                valorTabla(fila, 6));
         dialogo.setLocationRelativeTo(this);
         dialogo.setVisible(true);
     }
@@ -2000,14 +2022,14 @@ public class PanelStock extends javax.swing.JPanel {
         lblDetalleMinimo.setText(
                 valorTabla(
                         fila,
-                        6
+                        9
                 )
         );
 
         lblDetalleEstado.setText(
                 valorTabla(
                         fila,
-                        9
+                        6
                 )
         );
 
@@ -2145,22 +2167,45 @@ public class PanelStock extends javax.swing.JPanel {
     // Íconos vectoriales, independientes de fuentes y archivos externos.
     private Icon icono(String tipo, Color color) {
         return new Icon() {
-            public int getIconWidth() { return 19; }
-            public int getIconHeight() { return 19; }
-            public void paintIcon(Component c, Graphics g, int x, int y) {
+            @Override public int getIconWidth() { return 20; }
+            @Override public int getIconHeight() { return 20; }
+            @Override public void paintIcon(Component c, Graphics g, int x, int y) {
                 Graphics2D d = (Graphics2D) g.create();
-                d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 d.translate(x, y);
+                d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 d.setColor(color);
-                d.setStroke(new java.awt.BasicStroke(2.2f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+                d.setStroke(new java.awt.BasicStroke(2.1f,
+                        java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
                 switch (tipo) {
-                    case "plus": d.drawLine(9, 3, 9, 16); d.drawLine(3, 9, 16, 9); break;
-                    case "minus": d.drawLine(3, 9, 16, 9); break;
-                    case "cross": d.drawLine(4, 4, 15, 15); d.drawLine(15, 4, 4, 15); break;
-                    case "search": d.drawOval(2, 2, 10, 10); d.drawLine(11, 11, 17, 17); break;
-                    case "edit": d.drawLine(4, 14, 13, 5); d.drawLine(7, 16, 16, 7); d.drawLine(3, 16, 7, 16); break;
-                    case "refresh": d.drawArc(3, 3, 13, 13, 35, 285); d.drawLine(15, 3, 16, 9); d.drawLine(16, 9, 11, 8); break;
-                    default: d.drawRect(4, 4, 11, 11); break;
+                    case "plus": d.drawLine(10, 3, 10, 17); d.drawLine(3, 10, 17, 10); break;
+                    case "minus": d.drawLine(3, 10, 17, 10); break;
+                    case "cross": d.drawLine(5, 5, 15, 15); d.drawLine(15, 5, 5, 15); break;
+                    case "search": d.drawOval(2, 2, 11, 11); d.drawLine(12, 12, 18, 18); break;
+                    case "edit": d.drawLine(4, 14, 13, 5); d.drawLine(7, 16, 16, 7); d.drawLine(3, 17, 8, 16); break;
+                    case "refresh": d.drawArc(3, 3, 14, 14, 40, 290); d.drawLine(16, 3, 17, 9); d.drawLine(17, 9, 12, 8); break;
+                    case "inventory":
+                        d.drawRoundRect(2, 5, 16, 13, 2, 2); d.drawLine(2, 9, 18, 9);
+                        d.drawLine(7, 5, 7, 2); d.drawLine(13, 5, 13, 2); break;
+                    case "check":
+                        d.drawOval(2, 2, 16, 16); d.drawLine(6, 10, 9, 13); d.drawLine(9, 13, 15, 7); break;
+                    case "money":
+                        d.drawOval(2, 2, 16, 16); d.drawLine(10, 4, 10, 16);
+                        d.drawArc(6, 5, 8, 6, 0, 180); d.drawArc(6, 9, 8, 6, 180, 180); break;
+                    case "layers":
+                        d.drawLine(2, 7, 10, 3); d.drawLine(10, 3, 18, 7);
+                        d.drawLine(18, 7, 10, 11); d.drawLine(10, 11, 2, 7);
+                        d.drawLine(2, 12, 10, 16); d.drawLine(10, 16, 18, 12); break;
+                    case "tools":
+                        d.drawOval(3, 3, 5, 5); d.drawLine(8, 8, 17, 17);
+                        d.drawLine(3, 17, 16, 4); break;
+                    case "list":
+                        for (int i = 5; i <= 15; i += 5) {
+                            d.drawRect(2, i - 1, 2, 2); d.drawLine(8, i, 18, i);
+                        } break;
+                    case "history":
+                        d.drawArc(2, 2, 16, 16, 40, 290);
+                        d.drawLine(10, 5, 10, 10); d.drawLine(10, 10, 14, 12); break;
+                    default: d.drawRoundRect(3, 3, 14, 14, 2, 2);
                 }
                 d.dispose();
             }
@@ -2171,20 +2216,22 @@ public class PanelStock extends javax.swing.JPanel {
     // PANEL TARJETA
     //==========================================================
     private JPanel crearTarjeta() {
-
-        JPanel panel
-                = new JPanel();
-
-        panel.setBackground(
-                Color.WHITE
-        );
-
-        panel.setBorder(
-                BorderFactory.createLineBorder(
-                        BORDE
-                )
-        );
-
+        JPanel panel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 18, 18);
+                g2.setColor(new Color(213, 224, 238));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 18, 18);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        panel.setOpaque(false);
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(new EmptyBorder(1, 1, 1, 1));
         return panel;
     }
 
@@ -2211,7 +2258,9 @@ public class PanelStock extends javax.swing.JPanel {
                 AZUL_OSCURO
         );
 
-        label.setIcon(icono("adjust", AZUL_PRINCIPAL));
+        label.setIcon(icono(texto.contains("ACCIONES") ? "tools" :
+                texto.contains("LISTADO") ? "list" :
+                texto.contains("HISTORIAL") ? "history" : "inventory", AZUL_PRINCIPAL));
         label.setIconTextGap(9);
         return label;
     }
