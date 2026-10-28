@@ -51,12 +51,7 @@ public class DialogoProductoPesable extends JDialog {
 
         setModal(true);
 
-        setSize(
-                new Dimension(
-                        600,
-                        470
-                )
-        );
+        setSize(640, 520);
 
         setLocationRelativeTo(
                 parent
@@ -66,6 +61,7 @@ public class DialogoProductoPesable extends JDialog {
     );
 
         setResizable(false);
+        EstiloDialogosVentas.aplicar(this);
     }
 
     private void inicializarComponentes() {
@@ -189,10 +185,7 @@ public class DialogoProductoPesable extends JDialog {
         );
         header.add(subtitulo);
 
-        add(
-                header,
-                BorderLayout.NORTH
-        );
+        add(EstiloDialogosVentas.encabezado("⚖","PRODUCTO PESABLE","Ingresá el peso para calcular el importe"),BorderLayout.NORTH);
 
         JPanel centro =
                 new JPanel(
@@ -496,6 +489,20 @@ public class DialogoProductoPesable extends JDialog {
                 );
     }
 
+    /** Preselecciona un producto pesable ingresado por código en caja. */
+    public void seleccionarProducto(model.Producto producto) {
+        if (producto == null) return;
+        codigoProducto = producto.getCodigoBarra();
+        if(codigoProducto==null || codigoProducto.isBlank()) codigoProducto=producto.getCodigo();
+        nombreProducto=producto.getNombre();
+        precioKg=producto.getPrecioVenta().doubleValue();
+        txtProducto.setText(nombreProducto);
+        lblPrecioKg.setText(formatear(precioKg));
+        txtPeso.setText("");
+        actualizarTotal();
+        javax.swing.SwingUtilities.invokeLater(() -> txtPeso.requestFocusInWindow());
+    }
+
     public boolean isConfirmado() {
         return confirmado;
     }
@@ -533,7 +540,7 @@ public class DialogoProductoPesable extends JDialog {
         boton.setPreferredSize(
                 new Dimension(
                         ancho,
-                        36
+                        46
                 )
         );
 
@@ -549,7 +556,7 @@ public class DialogoProductoPesable extends JDialog {
                 new Font(
                         "Segoe UI",
                         Font.BOLD,
-                        12
+                        15
                 )
         );
 

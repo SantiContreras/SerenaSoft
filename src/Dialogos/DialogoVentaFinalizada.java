@@ -45,6 +45,8 @@ public class DialogoVentaFinalizada extends JDialog {
     //==========================================================
     private boolean nuevaVenta = false;
     private boolean imprimir = false;
+    private long ventaId;
+    public void setVentaId(long id) { this.ventaId=id; }
 
     //==========================================================
     // COLORES SERENA SOFT
@@ -734,16 +736,14 @@ public class DialogoVentaFinalizada extends JDialog {
         });
 
         btnImprimir.addActionListener(e -> {
-
-            imprimir = true;
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Más adelante aquí imprimiremos "
-                    + "el comprobante de la venta.",
-                    "Imprimir comprobante",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
+            if(ventaId<=0) { JOptionPane.showMessageDialog(this,"No se encontró la venta guardada.");return; }
+            try {
+                services.TicketVentaJasper.mostrar(ventaId);
+                imprimir=true;
+            } catch(Exception ex) {
+                JOptionPane.showMessageDialog(this,"La venta está guardada, pero no se pudo abrir el ticket: " + ex.getMessage(),
+                    "Impresión pendiente",JOptionPane.ERROR_MESSAGE);
+            }
         });
     }
 

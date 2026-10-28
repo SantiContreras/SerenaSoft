@@ -60,6 +60,7 @@ public class DialogoVentaManual extends JDialog {
                 getContentPane()
     );
         setResizable(false);
+        EstiloDialogosVentas.aplicar(this);
     }
 
     private void inicializarComponentes() {
@@ -179,10 +180,7 @@ public class DialogoVentaManual extends JDialog {
 
         header.add(subtitulo);
 
-        add(
-                header,
-                BorderLayout.NORTH
-        );
+        add(EstiloDialogosVentas.encabezado("✎","VENTA MANUAL","Ingresá la descripción, cantidad y precio"),BorderLayout.NORTH);
 
         JPanel centro =
                 new JPanel(
@@ -476,7 +474,7 @@ public class DialogoVentaManual extends JDialog {
         boton.setPreferredSize(
                 new Dimension(
                         ancho,
-                        36
+                        46
                 )
         );
 
@@ -496,7 +494,7 @@ public class DialogoVentaManual extends JDialog {
                 new Font(
                         "Segoe UI",
                         Font.BOLD,
-                        12
+                        15
                 )
         );
 

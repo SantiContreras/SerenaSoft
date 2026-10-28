@@ -40,6 +40,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JRadioButton;
 import javax.swing.border.TitledBorder;
 import Diseños.TablaEstilo;
+import java.awt.Cursor;
 import java.awt.FlowLayout;
 
 /**
@@ -48,6 +49,19 @@ import java.awt.FlowLayout;
  */
 public class PanelVentas extends javax.swing.JPanel {
 
+    private final java.util.LinkedHashMap<Integer, LineaCarrito> carrito = new java.util.LinkedHashMap<>();
+    private javax.swing.JTextField txtImporteRecibido;
+    private javax.swing.JLabel lblCambioCalculado;
+    private javax.swing.JLabel lblResumenCliente;
+    private JLabel lblTotalVentaReal;
+    private JLabel lblSubtotalVentaReal;
+    private JLabel lblDescuentoVentaReal;
+    private java.math.BigDecimal descuentoGeneralVenta = java.math.BigDecimal.ZERO;
+    private static final class LineaCarrito {
+        model.Producto producto;
+        java.math.BigDecimal cantidad;
+        LineaCarrito(model.Producto p, java.math.BigDecimal c) { producto=p; cantidad=c; }
+    }
     private JTable tabla;
     private TextFieldRedondeado txtCodigo;
 
@@ -127,6 +141,11 @@ public class PanelVentas extends javax.swing.JPanel {
         armarTabla();
 
         configurarEventosProductos();
+        txtCodigo.addActionListener(e -> buscarCodigoEscaneado());
+        btnScan.addActionListener(e -> buscarCodigoEscaneado());
+        actualizarCarrito();
+        configurarAtajosCaja();
+        javax.swing.SwingUtilities.invokeLater(() -> txtCodigo.requestFocusInWindow());
 
     }
 
@@ -157,33 +176,8 @@ public class PanelVentas extends javax.swing.JPanel {
 
             if (dialogo.isSeleccionado()) {
 
-                System.out.println(
-                        "Producto seleccionado:"
-                );
-
-                System.out.println(
-                        "Código: "
-                        + dialogo.getCodigoSeleccionado()
-                );
-
-                System.out.println(
-                        "Producto: "
-                        + dialogo.getProductoSeleccionado()
-                );
-
-                System.out.println(
-                        "Precio: "
-                        + dialogo.getPrecioSeleccionado()
-                );
-
-                /*
-             * MÁS ADELANTE:
-             *
-             * agregarProductoAVenta(...)
-             *
-             * Por ahora solamente comprobamos
-             * que el diálogo devuelve bien los datos.
-                 */
+                model.Producto producto = dialogo.getObjetoProductoSeleccionado();
+                if (producto != null) agregarAlCarrito(producto, java.math.BigDecimal.ONE);
             }
         });
 
@@ -207,40 +201,13 @@ public class PanelVentas extends javax.swing.JPanel {
 
             if (dialogo.isConfirmado()) {
 
-                System.out.println(
-                        "Producto pesable:"
-                );
-
-                System.out.println(
-                        "Código: "
-                        + dialogo.getCodigoProducto()
-                );
-
-                System.out.println(
-                        "Producto: "
-                        + dialogo.getNombreProducto()
-                );
-
-                System.out.println(
-                        "Peso: "
-                        + dialogo.getPeso()
-                );
-
-                System.out.println(
-                        "Precio Kg: "
-                        + dialogo.getPrecioKg()
-                );
-
-                System.out.println(
-                        "Total: "
-                        + dialogo.getTotal()
-                );
-
-                /*
-             * MÁS ADELANTE:
-             *
-             * agregarProductoPesableAVenta(...)
-                 */
+                model.Producto producto = new Dao.ProductoDao().buscarPorCodigoBarra(dialogo.getCodigoProducto());
+                if (producto == null) producto = new Dao.ProductoDao().buscarPorCodigo(dialogo.getCodigoProducto());
+                if (producto == null) {
+                    javax.swing.JOptionPane.showMessageDialog(this,"El producto pesable no existe en la base de datos.");
+                } else {
+                    agregarAlCarrito(producto, java.math.BigDecimal.valueOf(dialogo.getPeso()));
+                }
             }
         });
 
@@ -264,35 +231,10 @@ public class PanelVentas extends javax.swing.JPanel {
 
             if (dialogo.isConfirmado()) {
 
-                System.out.println(
-                        "Concepto manual:"
-                );
-
-                System.out.println(
-                        "Descripción: "
-                        + dialogo.getDescripcion()
-                );
-
-                System.out.println(
-                        "Cantidad: "
-                        + dialogo.getCantidad()
-                );
-
-                System.out.println(
-                        "Precio: "
-                        + dialogo.getPrecio()
-                );
-
-                System.out.println(
-                        "Subtotal: "
-                        + dialogo.getSubtotal()
-                );
-
-                /*
-             * MÁS ADELANTE:
-             *
-             * agregarConceptoManualAVenta(...)
-                 */
+                javax.swing.JOptionPane.showMessageDialog(this,
+                    "Las ventas manuales requieren un concepto asociado a un producto registrado. "
+                    + "Esta opción no se agregará al carrito para evitar diferencias de stock y contabilidad.",
+                    "Venta manual",javax.swing.JOptionPane.INFORMATION_MESSAGE);
             }
         });
 
@@ -336,22 +278,231 @@ public class PanelVentas extends javax.swing.JPanel {
             if (opcion
                     == javax.swing.JOptionPane.YES_OPTION) {
 
-                /*
-             * MÁS ADELANTE:
-             *
-             * DefaultTableModel modelo =
-             *      (DefaultTableModel) tabla.getModel();
-             *
-             * modelo.removeRow(fila);
-             *
-             * recalcularVenta();
-                 */
-                System.out.println(
-                        "Eliminar: "
-                        + producto
-                );
+                int modeloFila = tabla.convertRowIndexToModel(fila);
+                int id = ((Number) tabla.getModel().getValueAt(modeloFila,0)).intValue();
+                carrito.remove(id);
+                actualizarCarrito();
             }
         });
+    }
+
+    // Nueva venta: borra únicamente el carrito en memoria, sin tocar ventas ya guardadas.
+    private void limpiarVentaActual() {
+        if (!carrito.isEmpty()) {
+            int opcion = javax.swing.JOptionPane.showConfirmDialog(this,
+                    "¿Limpiar todos los productos y reiniciar el total de esta venta?",
+                    "Nueva venta", javax.swing.JOptionPane.YES_NO_OPTION,
+                    javax.swing.JOptionPane.QUESTION_MESSAGE);
+            if (opcion != javax.swing.JOptionPane.YES_OPTION) return;
+        }
+        carrito.clear();
+        descuentoGeneralVenta = java.math.BigDecimal.ZERO;
+        if (tabla != null) tabla.clearSelection();
+        if (txtCodigo != null) {
+            txtCodigo.setText("");
+            txtCodigo.requestFocusInWindow();
+        }
+        if(txtImporteRecibido!=null)txtImporteRecibido.setText("");
+        actualizarCarrito();
+    }
+
+    private void configurarAtajosCaja() {
+        // WHEN_IN_FOCUSED_WINDOW permite usarlos incluso con el foco en la tabla.
+        javax.swing.InputMap teclas = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        javax.swing.ActionMap acciones = getActionMap();
+        registrarAtajo(teclas, acciones, "F2", "buscarProducto", () -> btnAgregar.doClick());
+        registrarAtajo(teclas, acciones, "F3", "pesable", () -> btnPesable.doClick());
+        registrarAtajo(teclas, acciones, "F4", "manual", () -> btnManual.doClick());
+        registrarAtajo(teclas, acciones, "F6", "quitar", () -> btnEliminar.doClick());
+        registrarAtajo(teclas, acciones, "F7", "clienteFacturacion", () -> abrirClienteFacturacion());
+        registrarAtajo(teclas, acciones, "F8", "nuevaVenta", () -> limpiarVentaActual());
+        registrarAtajo(teclas, acciones, "F9", "cobrar", () -> btnCobrar.doClick());
+        registrarAtajo(teclas, acciones, "F10", "codigo", () -> {
+            txtCodigo.requestFocusInWindow();
+            txtCodigo.selectAll();
+        });
+        btnAgregar.setToolTipText("F2 - Buscar producto");
+        btnPesable.setToolTipText("F3 - Producto pesable");
+        btnManual.setToolTipText("F4 - Venta manual (pendiente)");
+        btnEliminar.setToolTipText("F6 - Quitar producto seleccionado");
+        btnCobrar.setToolTipText("F9 - Cobrar venta");
+        btnScan.setToolTipText("Ingresá un código y presioná Enter (o hacé clic aquí)");
+    }
+
+    private void registrarAtajo(javax.swing.InputMap teclas, javax.swing.ActionMap acciones,
+            String tecla, String nombre, Runnable accion) {
+        teclas.put(javax.swing.KeyStroke.getKeyStroke(tecla), nombre);
+        acciones.put(nombre, new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                accion.run();
+            }
+        });
+    }
+
+    private static java.math.BigDecimal dinero(java.math.BigDecimal x) {
+        return x.setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+    private java.math.BigDecimal subtotalCarrito() {
+        java.math.BigDecimal t=java.math.BigDecimal.ZERO;
+        for (LineaCarrito l:carrito.values()) t=t.add(l.producto.getPrecioVenta().multiply(l.cantidad));
+        return dinero(t);
+    }
+    private void buscarCodigoEscaneado() {
+        String codigo=txtCodigo.getText().trim();
+        if(codigo.isEmpty())return;
+        Dao.ProductoDao dao=new Dao.ProductoDao();
+        model.Producto p=dao.buscarPorCodigoBarra(codigo);
+        if(p==null)p=dao.buscarPorCodigo(codigo);
+        if(p==null){javax.swing.JOptionPane.showMessageDialog(this,"No se encontró el código: "+codigo);txtCodigo.selectAll();txtCodigo.requestFocusInWindow();return;}
+        if (p.isPesable()) {
+            abrirDialogoPesable(p);
+        } else {
+            agregarAlCarrito(p,java.math.BigDecimal.ONE);
+        }
+        txtCodigo.setText("");txtCodigo.requestFocusInWindow();
+    }
+    private void abrirDialogoPesable(model.Producto producto) {
+        java.awt.Window ventana = javax.swing.SwingUtilities.getWindowAncestor(this);
+        Dialogos.DialogoProductoPesable d = new Dialogos.DialogoProductoPesable(ventana);
+        d.seleccionarProducto(producto);
+        d.setVisible(true);
+        if (d.isConfirmado()) {
+            agregarAlCarrito(producto, java.math.BigDecimal.valueOf(d.getPeso()));
+        }
+        txtCodigo.requestFocusInWindow();
+    }
+
+    private java.math.BigDecimal parsearImporte(String valor) {
+        String t=valor.trim().replace("$", "").replace(" ", "");
+        if (t.contains(",")) t=t.replace(".", "").replace(",", ".");
+        return new java.math.BigDecimal(t);
+    }
+    private java.math.BigDecimal totalVentaActual() {
+        return subtotalCarrito().subtract(descuentoGeneralVenta).max(java.math.BigDecimal.ZERO);
+    }
+    private void calcularCambio(boolean avisar) {
+        if (txtImporteRecibido==null || lblCambioCalculado==null) return;
+        try {
+            String t=txtImporteRecibido.getText().trim();
+            if (t.isEmpty()) {lblCambioCalculado.setText("$ 0,00");return;}
+            java.math.BigDecimal recibido=parsearImporte(t);
+            if(recibido.signum()<0)throw new NumberFormatException();
+            java.math.BigDecimal diferencia=recibido.subtract(totalVentaActual());
+            lblCambioCalculado.setText(formatoPeso(diferencia.max(java.math.BigDecimal.ZERO)));
+            lblCambioCalculado.setForeground(diferencia.signum()<0?ROJO_ERROR:VERDE_OK);
+            if(avisar && diferencia.signum()<0)javax.swing.JOptionPane.showMessageDialog(this,
+                "Faltan "+formatoPeso(diferencia.negate())+" para cubrir el total.");
+        } catch(Exception ex) {
+            lblCambioCalculado.setText("Importe inválido");
+            lblCambioCalculado.setForeground(ROJO_ERROR);
+            if(avisar)javax.swing.JOptionPane.showMessageDialog(this,"Ingresá un importe válido.");
+        }
+    }
+
+    private void agregarAlCarrito(model.Producto p,java.math.BigDecimal cantidad) {
+        if(p==null || !p.isActivo() || p.getPrecioVenta()==null || p.getPrecioVenta().signum()<0
+           || cantidad==null || cantidad.signum()<=0) {
+            javax.swing.JOptionPane.showMessageDialog(this,"Producto, precio o cantidad inválidos.");return;
+        }
+        LineaCarrito actual=carrito.get(p.getIdProducto());
+        if(actual==null)carrito.put(p.getIdProducto(),new LineaCarrito(p,cantidad));
+        else actual.cantidad=actual.cantidad.add(cantidad);
+        actualizarCarrito();
+    }
+    private void actualizarCarrito() {
+        if(tabla==null)return;
+        DefaultTableModel m=(DefaultTableModel)tabla.getModel();m.setRowCount(0);
+        for(LineaCarrito l:carrito.values()){
+            m.addRow(new Object[]{l.producto.getIdProducto(),l.producto.getNombre(),l.cantidad,
+                dinero(l.producto.getPrecioVenta()),dinero(l.producto.getPrecioVenta().multiply(l.cantidad))});
+        }
+        if(lblTotalVentaReal!=null)lblTotalVentaReal.setText(formatoPeso(subtotalCarrito().subtract(descuentoGeneralVenta)));
+        if(lblSubtotalVentaReal!=null)lblSubtotalVentaReal.setText(formatoPeso(subtotalCarrito()));
+        if(lblDescuentoVentaReal!=null)lblDescuentoVentaReal.setText(formatoPeso(descuentoGeneralVenta));
+        if(btnCobrar!=null)btnCobrar.setText("COBRAR   "+formatoPeso(totalVentaActual()));
+        calcularCambio(false);
+    }
+    private String formatoPeso(java.math.BigDecimal importe) {
+        java.text.NumberFormat f=java.text.NumberFormat.getCurrencyInstance(new java.util.Locale("es","AR"));
+        return f.format(importe);
+    }
+    private int seleccionarId(String sql,String titulo)throws java.sql.SQLException {
+        java.util.LinkedHashMap<String,Integer> opciones=new java.util.LinkedHashMap<>();
+        try(java.sql.Connection c=Configuracion.conexion.getConexion();
+            java.sql.PreparedStatement p=c.prepareStatement(sql);
+            java.sql.ResultSet r=p.executeQuery()){
+            while(r.next())opciones.put(r.getString(2)+" (#"+r.getInt(1)+")",r.getInt(1));
+        }
+        if(opciones.isEmpty())throw new java.sql.SQLException("No hay registros disponibles para "+titulo);
+        Object eleccion=javax.swing.JOptionPane.showInputDialog(this,"Seleccioná "+titulo,titulo,
+           javax.swing.JOptionPane.QUESTION_MESSAGE,null,opciones.keySet().toArray(),opciones.keySet().iterator().next());
+        return eleccion==null?-1:opciones.get(eleccion.toString());
+    }
+    private int medioPagoSeleccionado(String nombre) throws java.sql.SQLException {
+        try (java.sql.Connection c=Configuracion.conexion.getConexion();
+             java.sql.PreparedStatement p=c.prepareStatement("SELECT id_medio_pago FROM medio_pago WHERE activo=1 AND LOWER(nombre)=LOWER(?)")) {
+            p.setString(1,nombre);
+            try(java.sql.ResultSet r=p.executeQuery()) {
+                if(r.next()) return r.getInt(1);
+            }
+        }
+        throw new java.sql.SQLException("El medio de pago '"+nombre+"' no está configurado en medio_pago. Revisá el catálogo.");
+    }
+    private Integer clienteSeleccionado() throws java.sql.SQLException {
+        String doc=txtDocumento.getText().trim();
+        if(doc.isEmpty()) return null;
+        try(java.sql.Connection c=Configuracion.conexion.getConexion();
+            java.sql.PreparedStatement p=c.prepareStatement("SELECT id_cliente FROM cliente WHERE activo=1 AND nro_documento=?")) {
+            p.setString(1,doc);
+            try(java.sql.ResultSet r=p.executeQuery()) {
+                if(r.next()) { int id=r.getInt(1); if(r.next()) throw new java.sql.SQLException("Documento ambiguo: seleccioná un cliente único"); return id; }
+            }
+        }
+        throw new java.sql.SQLException("No existe un cliente activo con documento "+doc);
+    }
+    private void confirmarVentaReal() {
+        if(carrito.isEmpty()){javax.swing.JOptionPane.showMessageDialog(this,"Agregá productos al carrito.");return;}
+        try {
+            java.math.BigDecimal total=subtotalCarrito().subtract(descuentoGeneralVenta);
+            if(total.signum()<=0)throw new IllegalArgumentException("Total inválido");
+            String pago=String.valueOf(comboPago.getSelectedItem());
+            String recibidoTexto=txtImporteRecibido.getText().trim();
+            if(recibidoTexto.isEmpty()) {
+                recibidoTexto=javax.swing.JOptionPane.showInputDialog(this,"Importe recibido:",total.toPlainString());
+                if(recibidoTexto==null)return;
+            }
+            java.math.BigDecimal recibido=parsearImporte(recibidoTexto);
+            if(recibido.compareTo(total)<0)throw new IllegalArgumentException("Importe recibido insuficiente");
+            int deposito=seleccionarId("SELECT id_deposito,nombre FROM deposito WHERE activo=1 ORDER BY es_principal DESC,nombre","depósito");
+            if(deposito<0)return;
+            int medio=medioPagoSeleccionado(pago);
+            if(medio<0)return;
+            java.awt.Window ventana=javax.swing.SwingUtilities.getWindowAncestor(this);
+            Dialogos.DialogoConfirmarVenta d=new Dialogos.DialogoConfirmarVenta(ventana,
+                txtCliente.getText(),txtDocumento.getText(),String.valueOf(comboCondicionIVA.getSelectedItem()),
+                String.valueOf(comboComprobante.getSelectedItem()),pago,
+                subtotalCarrito().doubleValue(),descuentoGeneralVenta.doubleValue(),total.doubleValue(),
+                recibido.doubleValue(),recibido.subtract(total).doubleValue());
+            d.setVisible(true);
+            if(!d.isVentaConfirmada())return;
+            services.VentaService.Solicitud s=new services.VentaService.Solicitud();
+            s.usuarioId=sesion.SesionUsuario.getIdUsuario();s.depositoId=deposito;
+            s.clienteId=clienteSeleccionado();
+            s.observaciones=d.getObservaciones();s.descuentoGeneral=descuentoGeneralVenta;
+            for(LineaCarrito l:carrito.values())s.items.add(new services.VentaService.Item(
+                l.producto.getIdProducto(),l.cantidad,java.math.BigDecimal.ZERO));
+            s.pagos.add(new services.VentaService.Pago(medio,total,recibido,""));
+            services.VentaService.Resultado r=new services.VentaService().confirmar(s);
+            carrito.clear();descuentoGeneralVenta=java.math.BigDecimal.ZERO;
+            txtImporteRecibido.setText("");actualizarCarrito();
+            Dialogos.DialogoVentaFinalizada fin=new Dialogos.DialogoVentaFinalizada(ventana,
+                String.format("%08d",r.numero),String.valueOf(comboComprobante.getSelectedItem()),pago,
+                r.total.doubleValue(),recibido.doubleValue(),r.cambio.doubleValue(),
+                sesion.SesionUsuario.getNombreUsuario());
+            fin.setVentaId(r.ventaId);
+            fin.setVisible(true);
+        }catch(Exception ex){javax.swing.JOptionPane.showMessageDialog(this,
+            "No se registró la venta: "+ex.getMessage(),"Venta no confirmada",javax.swing.JOptionPane.ERROR_MESSAGE);}
     }
 
     private void armarSubPanelProducto() {
@@ -693,402 +844,73 @@ public class PanelVentas extends javax.swing.JPanel {
     }
 
     private void armarSubPanelCliente() {
-
         subPanelClientes.removeAll();
-
-        subPanelClientes.setLayout(null);
+        subPanelClientes.setLayout(new java.awt.BorderLayout(12,0));
+        subPanelClientes.setBorder(javax.swing.BorderFactory.createEmptyBorder(10,16,10,16));
         subPanelClientes.setOpaque(false);
-
-        //=====================================================
-        // TITULO
-        //=====================================================
-        lblClienteTitulo
-                = new JLabel(
-                        "CLIENTE / FACTURACIÓN"
-                );
-
-        lblClienteTitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        17
-                )
-        );
-
-        lblClienteTitulo.setForeground(
-                new Color(
-                        20,
-                        55,
-                        120
-                )
-        );
-
-        lblClienteTitulo.setBounds(
-                20,
-                10,
-                320,
-                25
-        );
-
-        //=====================================================
-        // CLIENTE
-        //=====================================================
-        lblCliente
-                = new JLabel(
-                        "Cliente"
-                );
-
-        lblCliente.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        lblCliente.setBounds(
-                20,
-                42,
-                90,
-                20
-        );
-
-        txtCliente
-                = new TextFieldRedondeado();
-
-        txtCliente.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        14
-                )
-        );
-
-        txtCliente.setBounds(
-                20,
-                65,
-                300,
-                34
-        );
-
-        txtCliente.setEditable(false);
-
-        txtCliente.setText(
-                "Consumidor Final"
-        );
-
-        btnBuscarCliente
-                = new RSButtonRound();
-
-        btnBuscarCliente.setText(
-                "..."
-        );
-
-        btnBuscarCliente.setBounds(
-                330,
-                65,
-                45,
-                34
-        );
-
-        //=====================================================
-        // DOCUMENTO
-        //=====================================================
-        lblDocumento
-                = new JLabel(
-                        "CUIT / DNI"
-                );
-
-        lblDocumento.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        lblDocumento.setBounds(
-                20,
-                110,
-                100,
-                20
-        );
-
-        txtDocumento
-                = new TextFieldRedondeado();
-
-        txtDocumento.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        14
-                )
-        );
-
-        txtDocumento.setBounds(
-                20,
-                133,
-                220,
-                32
-        );
-
-        //=====================================================
-        // CONDICION IVA
-        //=====================================================
-        JLabel lblCondicionIVA
-                = new JLabel(
-                        "Condición IVA"
-                );
-
-        lblCondicionIVA.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        lblCondicionIVA.setBounds(
-                430,
-                42,
-                130,
-                20
-        );
-
-        comboCondicionIVA
-                = new RSComboBox();
-
-        comboCondicionIVA.setModel(
-                new DefaultComboBoxModel<>(
-                        new String[]{
-                            "Consumidor Final",
-                            "Responsable Inscripto",
-                            "Monotributista",
-                            "Exento"
-                        }
-                )
-        );
-
-        comboCondicionIVA.setBounds(
-                430,
-                65,
-                200,
-                32
-        );
-
-        //=====================================================
-        // TIPO DE CLIENTE
-        //=====================================================
-        JLabel lblTipoCliente
-                = new JLabel(
-                        "Tipo de Cliente"
-                );
-
-        lblTipoCliente.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        lblTipoCliente.setBounds(
-                650,
-                42,
-                130,
-                20
-        );
-
-        comboTipoCliente
-                = new RSComboBox();
-
-        comboTipoCliente.setModel(
-                new DefaultComboBoxModel<>(
-                        new String[]{
-                            "Minorista",
-                            "Mayorista",
-                            "Cuenta Corriente"
-                        }
-                )
-        );
-
-        comboTipoCliente.setBounds(
-                650,
-                65,
-                180,
-                32
-        );
-
-        //=====================================================
-        // COMPROBANTE
-        //=====================================================
-        JLabel lblComprobante
-                = new JLabel(
-                        "Comprobante"
-                );
-
-        lblComprobante.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        lblComprobante.setBounds(
-                430,
-                110,
-                130,
-                20
-        );
-
-        comboComprobante
-                = new RSComboBox();
-
-        comboComprobante.setModel(
-                new DefaultComboBoxModel<>(
-                        new String[]{
-                            "Ticket",
-                            "Factura A",
-                            "Factura B",
-                            "Factura C"
-                        }
-                )
-        );
-
-        comboComprobante.setBounds(
-                430,
-                133,
-                200,
-                32
-        );
-
-        //=====================================================
-        // ESTADO FACTURACION
-        //=====================================================
-        JLabel lblEstadoFacturacion
-                = new JLabel(
-                        "Sin facturación electrónica"
-                );
-
-        lblEstadoFacturacion.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        12
-                )
-        );
-
-        lblEstadoFacturacion.setForeground(
-                new Color(
-                        120,
-                        120,
-                        120
-                )
-        );
-
-        lblEstadoFacturacion.setBounds(
-                650,
-                135,
-                220,
-                25
-        );
-
-        //=====================================================
-        // AGREGAR
-        //=====================================================
-        subPanelClientes.add(
-                lblClienteTitulo
-        );
-
-        subPanelClientes.add(
-                lblCliente
-        );
-
-        subPanelClientes.add(
-                txtCliente
-        );
-
-        subPanelClientes.add(
-                btnBuscarCliente
-        );
-
-        subPanelClientes.add(
-                lblDocumento
-        );
-
-        subPanelClientes.add(
-                txtDocumento
-        );
-
-        subPanelClientes.add(
-                lblCondicionIVA
-        );
-
-        subPanelClientes.add(
-                comboCondicionIVA
-        );
-
-        subPanelClientes.add(
-                lblTipoCliente
-        );
-
-        subPanelClientes.add(
-                comboTipoCliente
-        );
-
-        subPanelClientes.add(
-                lblComprobante
-        );
-
-        subPanelClientes.add(
-                comboComprobante
-        );
-
-        subPanelClientes.add(
-                lblEstadoFacturacion
-        );
-
-        //=====================================================
-        // EVENTO BUSCAR CLIENTE
-        //=====================================================
-        btnBuscarCliente.addActionListener(e -> {
-
-            java.awt.Window ventana
-                    = javax.swing.SwingUtilities
-                            .getWindowAncestor(
-                                    this
-                            );
-
-            Dialogos.DialogoBuscarCliente dialogo
-                    = new Dialogos.DialogoBuscarCliente(
-                            ventana
-                    );
-
-            dialogo.setVisible(true);
-
-            if (dialogo.isSeleccionado()) {
-
-                txtCliente.setText(
-                        dialogo.getNombreSeleccionado()
-                );
-
-                txtDocumento.setText(
-                        dialogo.getDocumentoSeleccionado()
-                );
-
-                comboCondicionIVA.setSelectedItem(
-                        dialogo.getCondicionIVASeleccionada()
-                );
-
-                comboTipoCliente.setSelectedItem(
-                        dialogo.getTipoClienteSeleccionado()
-                );
+        txtCliente = new TextFieldRedondeado(); txtCliente.setText("Consumidor Final");
+        txtDocumento = new TextFieldRedondeado();
+        comboCondicionIVA = new RSComboBox();
+        comboCondicionIVA.setModel(new DefaultComboBoxModel<>(new String[]{
+            "Consumidor Final","Responsable Inscripto","Monotributista","Exento"}));
+        comboTipoCliente = new RSComboBox();
+        comboTipoCliente.setModel(new DefaultComboBoxModel<>(new String[]{"Minorista","Mayorista"}));
+        comboComprobante = new RSComboBox();
+        comboComprobante.setModel(new DefaultComboBoxModel<>(new String[]{"Ticket","Factura A","Factura B","Factura C"}));
+        lblResumenCliente = new JLabel("Consumidor Final  |  Minorista  |  Ticket");
+        lblResumenCliente.setFont(new Font("Segoe UI",Font.BOLD,14));
+        lblResumenCliente.setForeground(AZUL_PRESION);
+        JButton boton = new JButton("CLIENTE / FACTURACIÓN  F7");
+        boton.setFont(new Font("Segoe UI",Font.BOLD,14));
+        boton.setPreferredSize(new Dimension(280,48));
+        boton.setEnabled(true);
+        boton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        boton.setFocusPainted(false);
+        boton.setContentAreaFilled(false);
+        boton.setOpaque(false);
+        boton.setBorder(BorderFactory.createEmptyBorder(8,12,8,12));
+        boton.setForeground(Color.WHITE);
+        boton.setIcon(new javax.swing.Icon(){
+            public int getIconWidth(){return 23;}public int getIconHeight(){return 23;}
+            public void paintIcon(java.awt.Component c,java.awt.Graphics g,int x,int y){
+                java.awt.Graphics2D a=(java.awt.Graphics2D)g.create();
+                a.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                a.translate(x,y);a.setColor(new Color(255,206,77));a.fillRoundRect(1,1,21,21,6,6);
+                a.setColor(new Color(17,57,117));a.setStroke(new java.awt.BasicStroke(1.7f));
+                a.drawOval(7,4,9,9);a.drawArc(4,13,15,9,0,180);a.dispose();
             }
         });
-
-        subPanelClientes.repaint();
-        subPanelClientes.revalidate();
+        boton.setIconTextGap(8);
+        boton.setUI(new javax.swing.plaf.basic.BasicButtonUI(){
+            @Override public void paint(java.awt.Graphics g,javax.swing.JComponent c){
+                javax.swing.AbstractButton b=(javax.swing.AbstractButton)c;
+                java.awt.Graphics2D a=(java.awt.Graphics2D)g.create();
+                a.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                a.setColor(b.getModel().isPressed()?new Color(12,55,117):b.getModel().isRollover()?new Color(23,135,219):new Color(17,82,163));
+                a.fillRoundRect(0,0,c.getWidth()-1,c.getHeight()-1,14,14);a.dispose();
+                super.paint(g,c);
+            }
+        });
+        boton.setRolloverEnabled(true);
+        boton.addActionListener(e -> abrirClienteFacturacion());
+        subPanelClientes.add(lblResumenCliente,java.awt.BorderLayout.CENTER);
+        subPanelClientes.add(boton,java.awt.BorderLayout.EAST);
+    }
+    private void abrirClienteFacturacion() {
+        Dialogos.DialogoClienteFacturacionVentas dialogo = new Dialogos.DialogoClienteFacturacionVentas(
+                javax.swing.SwingUtilities.getWindowAncestor(this),
+                txtCliente.getText(),txtDocumento.getText(),
+                String.valueOf(comboCondicionIVA.getSelectedItem()),
+                String.valueOf(comboTipoCliente.getSelectedItem()),
+                String.valueOf(comboComprobante.getSelectedItem()));
+        dialogo.setVisible(true);
+        if(!dialogo.isConfirmado())return;
+        txtCliente.setText(dialogo.getNombre());
+        txtDocumento.setText(dialogo.getDocumento());
+        comboCondicionIVA.setSelectedItem(dialogo.getCondicionIVA());
+        comboTipoCliente.setSelectedItem(dialogo.getTipoVenta());
+        comboComprobante.setSelectedItem(dialogo.getComprobante());
+        lblResumenCliente.setText(dialogo.getNombre()+"  |  "+dialogo.getTipoVenta()+"  |  "+dialogo.getComprobante());
     }
 
     private void armarTabla() {
@@ -1531,7 +1353,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         panelDerecho.setLayout(new BoxLayout(panelDerecho, BoxLayout.Y_AXIS));
 
-        javax.swing.JLabel lblTotal = new javax.swing.JLabel("$ 2.000.000");
+        javax.swing.JLabel lblTotal = new javax.swing.JLabel("$ 0,00");
         lblTotal.setFont(new java.awt.Font("Arial", 1, 28));
 
         javax.swing.JComboBox<String> comboPago
@@ -1633,7 +1455,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         // Alturas
         subPanelProducto.setPreferredSize(new Dimension(0, 190));
-        subPanelClientes.setPreferredSize(new Dimension(0, 170));
+        subPanelClientes.setPreferredSize(new Dimension(0, 65));
 
         panelIzquierdo.add(subPanelProducto, BorderLayout.NORTH);
         panelIzquierdo.add(subPanelDetalleVenta, BorderLayout.CENTER);
@@ -1839,6 +1661,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         JTextField txtImporte
                 = new JTextField();
+        txtImporteRecibido = txtImporte;
 
         txtImporte.setHorizontalAlignment(
                 JTextField.RIGHT
@@ -1902,6 +1725,7 @@ public class PanelVentas extends javax.swing.JPanel {
                         "$ 0,00"
                 );
 
+        lblCambioCalculado = cambio;
         cambio.setOpaque(true);
 
         cambio.setBackground(
@@ -1978,6 +1802,13 @@ public class PanelVentas extends javax.swing.JPanel {
         );
 
         panel.add(btnCalcular);
+        btnCalcular.addActionListener(e -> calcularCambio(true));
+        txtImporte.addActionListener(e -> calcularCambio(true));
+        txtImporte.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e){calcularCambio(false);}
+            public void removeUpdate(javax.swing.event.DocumentEvent e){calcularCambio(false);}
+            public void changedUpdate(javax.swing.event.DocumentEvent e){calcularCambio(false);}
+        });
 
         panel.add(
                 Box.createVerticalStrut(8)
@@ -2030,70 +1861,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         panel.add(btnCobrar);
 
-        btnCobrar.addActionListener(e -> {
-
-            java.awt.Window ventana
-                    = javax.swing.SwingUtilities
-                            .getWindowAncestor(
-                                    this
-                            );
-
-            Dialogos.DialogoConfirmarVenta dialogo
-                    = new Dialogos.DialogoConfirmarVenta(
-                            ventana,
-                            txtCliente.getText(),
-                            txtDocumento.getText(),
-                            comboCondicionIVA
-                                    .getSelectedItem()
-                                    .toString(),
-                            comboComprobante
-                                    .getSelectedItem()
-                                    .toString(),
-                            comboPago
-                                    .getSelectedItem()
-                                    .toString(),
-                            38800.00, // subtotal temporal
-
-                            0.00, // descuento temporal
-
-                            38800.00, // total temporal
-
-                            40000.00, // recibe temporal
-
-                            1200.00 // cambio temporal
-                    );
-
-            dialogo.setVisible(true);
-
-            if (dialogo.isVentaConfirmada()) {
-
-                Dialogos.DialogoVentaFinalizada finalizada
-                        = new Dialogos.DialogoVentaFinalizada(
-                                ventana,
-                                "00000125",
-                                comboComprobante
-                                        .getSelectedItem()
-                                        .toString(),
-                                comboPago
-                                        .getSelectedItem()
-                                        .toString(),
-                                38800.00,
-                                40000.00,
-                                1200.00,
-                                "Santiago"
-                        );
-
-                finalizada.setVisible(true);
-
-                if (finalizada.isNuevaVenta()) {
-
-                    System.out.println(
-                            "Preparar nueva venta..."
-                    );
-                }
-            }
-
-        });
+        btnCobrar.addActionListener(e -> confirmarVentaReal());
 
         panel.add(
                 Box.createVerticalGlue()
@@ -2223,9 +1991,8 @@ public class PanelVentas extends javax.swing.JPanel {
         // TOTAL PRINCIPAL
         //====================================================
         JLabel lblTotal
-                = new JLabel(
-                        "$ 2.2000.000"
-                );
+                = new JLabel("$ 0,00");
+        lblTotalVentaReal = lblTotal;
 
         lblTotal.setFont(
                 new Font(
@@ -2267,6 +2034,8 @@ public class PanelVentas extends javax.swing.JPanel {
                         ROJO_ERROR
                 );
 
+        lblSubtotalVentaReal = (JLabel)((BorderLayout)filaSubtotal.getLayout()).getLayoutComponent(BorderLayout.EAST);
+        lblDescuentoVentaReal = (JLabel)((BorderLayout)filaDescuento.getLayout()).getLayoutComponent(BorderLayout.EAST);
         panel.add(titulo);
 
         panel.add(
