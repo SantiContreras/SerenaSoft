@@ -170,7 +170,7 @@ public class DialogoVentaFinalizada extends JDialog {
 
         btnImprimir =
                 crearBoton(
-                        "IMPRIMIR COMPROBANTE",
+                        "IMPRIMIR TICKET",
                         AZUL,
                         190
                 );
@@ -738,10 +738,13 @@ public class DialogoVentaFinalizada extends JDialog {
         btnImprimir.addActionListener(e -> {
             if(ventaId<=0) { JOptionPane.showMessageDialog(this,"No se encontró la venta guardada.");return; }
             try {
-                services.TicketVentaJasper.mostrar(ventaId);
+                services.TicketVentaJasper.imprimirRapido(ventaId);
                 imprimir=true;
+                JOptionPane.showMessageDialog(this,
+                    "Ticket enviado a la impresora predeterminada.\nPodés iniciar una nueva venta.",
+                    "Impresión enviada", JOptionPane.INFORMATION_MESSAGE);
             } catch(Exception ex) {
-                JOptionPane.showMessageDialog(this,"La venta está guardada, pero no se pudo abrir el ticket: " + ex.getMessage(),
+                JOptionPane.showMessageDialog(this,"La venta está guardada, pero no se pudo imprimir el ticket: " + ex.getMessage(),
                     "Impresión pendiente",JOptionPane.ERROR_MESSAGE);
             }
         });

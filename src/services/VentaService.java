@@ -134,7 +134,7 @@ public final class VentaService {
                     detalle.cantidad=l.cantidad;detalle.precioUnitario=l.precio;detalle.costoUnitario=l.costo;
                     detalle.descuentoPorcentaje=l.descuentoPorcentaje;detalle.descuentoImporte=l.descuentoImporte;
                     detalle.ivaPorcentaje=l.iva;detalle.ivaImporte=l.ivaImporte;detalle.subtotal=l.subtotal;
-                    detalleDao.insertar(c,detalle);
+                    long idDetalleVenta = detalleDao.insertar(c,detalle);
                     if(l.controla){
                         BigDecimal anterior;
                         try(PreparedStatement ps=c.prepareStatement("SELECT cantidad FROM stock_producto WHERE id_producto=? AND id_deposito=? FOR UPDATE")){
@@ -150,8 +150,8 @@ public final class VentaService {
                         if(actualizados==0){
                             update(c,"INSERT INTO stock_producto(id_producto,id_deposito,cantidad) VALUES(?,?,?)",l.id,s.depositoId,posterior);
                         }
-                        update(c,"INSERT INTO movimiento_stock(id_producto,id_deposito,id_usuario,tipo_movimiento,motivo,cantidad,stock_anterior,stock_posterior,costo_unitario,tipo_origen,id_origen) VALUES(?,?,?,'VENTA','Venta POS',?,?,?,?, 'VENTA',?)",
-                            l.id,s.depositoId,s.usuarioId,l.cantidad.negate(),anterior,posterior,l.costo,id);
+                        update(c,"INSERT INTO movimiento_stock(id_producto,id_deposito,id_usuario,tipo_movimiento,id_detalle_origen,cantidad,stock_anterior,stock_posterior,observaciones) VALUES(?,?,?,'VENTA',?,?,?,?,'Venta POS')",
+                            l.id,s.depositoId,s.usuarioId,idDetalleVenta,l.cantidad.negate(),anterior,posterior);
                     }
                 }
                 for(Pago p:s.pagos){

@@ -56,6 +56,7 @@ public class PanelVentas extends javax.swing.JPanel {
     private JLabel lblTotalVentaReal;
     private JLabel lblSubtotalVentaReal;
     private JLabel lblDescuentoVentaReal;
+    private JLabel lblNumeroVentaActual, lblItemsActual, lblUnidadesActual;
     private java.math.BigDecimal descuentoGeneralVenta = java.math.BigDecimal.ZERO;
     private static final class LineaCarrito {
         model.Producto producto;
@@ -419,6 +420,12 @@ public class PanelVentas extends javax.swing.JPanel {
         if(lblTotalVentaReal!=null)lblTotalVentaReal.setText(formatoPeso(subtotalCarrito().subtract(descuentoGeneralVenta)));
         if(lblSubtotalVentaReal!=null)lblSubtotalVentaReal.setText(formatoPeso(subtotalCarrito()));
         if(lblDescuentoVentaReal!=null)lblDescuentoVentaReal.setText(formatoPeso(descuentoGeneralVenta));
+        if(lblItemsActual!=null) lblItemsActual.setText("Items: " + carrito.size());
+        if(lblUnidadesActual!=null) {
+            java.math.BigDecimal unidades=java.math.BigDecimal.ZERO;
+            for(LineaCarrito linea:carrito.values()) unidades=unidades.add(linea.cantidad);
+            lblUnidadesActual.setText("Unidades: " + unidades.stripTrailingZeros().toPlainString().replace('.',','));
+        }
         if(btnCobrar!=null)btnCobrar.setText("COBRAR   "+formatoPeso(totalVentaActual()));
         calcularCambio(false);
     }
@@ -460,49 +467,62 @@ public class PanelVentas extends javax.swing.JPanel {
         }
         throw new java.sql.SQLException("No existe un cliente activo con documento "+doc);
     }
+    /** El cajero confirma todos los datos en una sola ventana, sin prompts intermedios. */
     private void confirmarVentaReal() {
-        if(carrito.isEmpty()){javax.swing.JOptionPane.showMessageDialog(this,"Agregá productos al carrito.");return;}
+        if(carrito.isEmpty()) {javax.swing.JOptionPane.showMessageDialog(this,"Agregá productos al carrito.");return;}
         try {
-            java.math.BigDecimal total=subtotalCarrito().subtract(descuentoGeneralVenta);
-            if(total.signum()<=0)throw new IllegalArgumentException("Total inválido");
-            String pago=String.valueOf(comboPago.getSelectedItem());
-            String recibidoTexto=txtImporteRecibido.getText().trim();
-            if(recibidoTexto.isEmpty()) {
-                recibidoTexto=javax.swing.JOptionPane.showInputDialog(this,"Importe recibido:",total.toPlainString());
-                if(recibidoTexto==null)return;
-            }
-            java.math.BigDecimal recibido=parsearImporte(recibidoTexto);
-            if(recibido.compareTo(total)<0)throw new IllegalArgumentException("Importe recibido insuficiente");
-            int deposito=seleccionarId("SELECT id_deposito,nombre FROM deposito WHERE activo=1 ORDER BY es_principal DESC,nombre","depósito");
-            if(deposito<0)return;
-            int medio=medioPagoSeleccionado(pago);
-            if(medio<0)return;
+            java.math.BigDecimal total=totalVentaActual();
+            if(total.signum()<=0)throw new IllegalArgumentException("El total de la venta debe ser positivo.");
             java.awt.Window ventana=javax.swing.SwingUtilities.getWindowAncestor(this);
+            java.math.BigDecimal inicial=java.math.BigDecimal.ZERO;
+            try {if(!txtImporteRecibido.getText().trim().isEmpty())inicial=parsearImporte(txtImporteRecibido.getText());}catch(Exception ignored){}
             Dialogos.DialogoConfirmarVenta d=new Dialogos.DialogoConfirmarVenta(ventana,
                 txtCliente.getText(),txtDocumento.getText(),String.valueOf(comboCondicionIVA.getSelectedItem()),
-                String.valueOf(comboComprobante.getSelectedItem()),pago,
+                String.valueOf(comboComprobante.getSelectedItem()),String.valueOf(comboPago.getSelectedItem()),
                 subtotalCarrito().doubleValue(),descuentoGeneralVenta.doubleValue(),total.doubleValue(),
-                recibido.doubleValue(),recibido.subtract(total).doubleValue());
+                inicial.doubleValue(),java.math.BigDecimal.ZERO.doubleValue());
             d.setVisible(true);
             if(!d.isVentaConfirmada())return;
-            services.VentaService.Solicitud s=new services.VentaService.Solicitud();
-            s.usuarioId=sesion.SesionUsuario.getIdUsuario();s.depositoId=deposito;
-            s.clienteId=clienteSeleccionado();
-            s.observaciones=d.getObservaciones();s.descuentoGeneral=descuentoGeneralVenta;
-            for(LineaCarrito l:carrito.values())s.items.add(new services.VentaService.Item(
-                l.producto.getIdProducto(),l.cantidad,java.math.BigDecimal.ZERO));
-            s.pagos.add(new services.VentaService.Pago(medio,total,recibido,""));
-            services.VentaService.Resultado r=new services.VentaService().confirmar(s);
+            // Los IDs se resuelven después de confirmar la ventana, antes de registrar la transacción.
+            int medio=medioPagoSeleccionado(d.getFormaPago());
+            int deposito=depositoPrincipalActivo();
+            java.math.BigDecimal recibido=d.getImporteRecibido();
+            services.VentaService.Solicitud solicitud=new services.VentaService.Solicitud();
+            solicitud.usuarioId=sesion.SesionUsuario.getIdUsuario();
+            solicitud.depositoId=deposito;
+            solicitud.clienteId=clienteSeleccionado();
+            solicitud.observaciones=d.getObservaciones();
+            solicitud.descuentoGeneral=descuentoGeneralVenta;
+            for(LineaCarrito linea:carrito.values())solicitud.items.add(new services.VentaService.Item(
+                linea.producto.getIdProducto(),linea.cantidad,java.math.BigDecimal.ZERO));
+            solicitud.pagos.add(new services.VentaService.Pago(medio,total,recibido,""));
+            services.VentaService.Resultado resultado=new services.VentaService().confirmar(solicitud);
             carrito.clear();descuentoGeneralVenta=java.math.BigDecimal.ZERO;
-            txtImporteRecibido.setText("");actualizarCarrito();
+            txtImporteRecibido.setText("");
+            txtCliente.setText("Consumidor Final");
+            txtDocumento.setText("");
+            comboCondicionIVA.setSelectedItem("Consumidor Final");
+            comboTipoCliente.setSelectedItem("Minorista");
+            comboComprobante.setSelectedItem("Ticket");
+            lblResumenCliente.setText("Consumidor Final  |  Minorista  |  Ticket");
+            actualizarCarrito();
             Dialogos.DialogoVentaFinalizada fin=new Dialogos.DialogoVentaFinalizada(ventana,
-                String.format("%08d",r.numero),String.valueOf(comboComprobante.getSelectedItem()),pago,
-                r.total.doubleValue(),recibido.doubleValue(),r.cambio.doubleValue(),
+                String.format("%08d",resultado.numero),String.valueOf(comboComprobante.getSelectedItem()),d.getFormaPago(),
+                resultado.total.doubleValue(),recibido.doubleValue(),resultado.cambio.doubleValue(),
                 sesion.SesionUsuario.getNombreUsuario());
-            fin.setVentaId(r.ventaId);
+            fin.setVentaId(resultado.ventaId);
             fin.setVisible(true);
         }catch(Exception ex){javax.swing.JOptionPane.showMessageDialog(this,
             "No se registró la venta: "+ex.getMessage(),"Venta no confirmada",javax.swing.JOptionPane.ERROR_MESSAGE);}
+    }
+    private int depositoPrincipalActivo() throws java.sql.SQLException {
+        try(java.sql.Connection c=Configuracion.conexion.getConexion();
+            java.sql.PreparedStatement p=c.prepareStatement(
+                "SELECT id_deposito FROM deposito WHERE activo=1 ORDER BY es_principal DESC,id_deposito LIMIT 1");
+            java.sql.ResultSet r=p.executeQuery()) {
+            if(r.next())return r.getInt(1);
+        }
+        throw new java.sql.SQLException("No hay un depósito activo configurado.");
     }
 
     private void armarSubPanelProducto() {
@@ -1147,7 +1167,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         JLabel lblNumeroVenta
                 = new JLabel(
-                        "00000125"
+                        "Al confirmar"
                 );
 
         lblNumeroVenta.setFont(
@@ -1162,6 +1182,7 @@ public class PanelVentas extends javax.swing.JPanel {
                 TITULO_PANEL
         );
 
+        lblNumeroVentaActual = lblNumeroVenta;
         panelNumero.add(lblVenta);
         panelNumero.add(lblNumeroVenta);
 
@@ -1181,7 +1202,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         JLabel lblItems
                 = new JLabel(
-                        "Items: 5"
+                        "Items: 0"
                 );
 
         lblItems.setFont(
@@ -1202,7 +1223,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         JLabel lblUnidades
                 = new JLabel(
-                        "Unidades: 7,75"
+                        "Unidades: 0"
                 );
 
         lblUnidades.setFont(
@@ -1221,6 +1242,8 @@ public class PanelVentas extends javax.swing.JPanel {
                 )
         );
 
+        lblItemsActual = lblItems;
+        lblUnidadesActual = lblUnidades;
         panelEstadisticas.add(lblItems);
         panelEstadisticas.add(lblUnidades);
 
@@ -1282,59 +1305,6 @@ public class PanelVentas extends javax.swing.JPanel {
         subPanelDetalleVenta.add(
                 contenedorTabla,
                 BorderLayout.CENTER
-        );
-
-        //==========================================================
-        // DATOS DE PRUEBA
-        //==========================================================
-        modelo.addRow(
-                new Object[]{
-                    1,
-                    "Jamón La Piamontesa x kg",
-                    "1.00",
-                    "$ 12.000",
-                    "$ 12.000"
-                }
-        );
-
-        modelo.addRow(
-                new Object[]{
-                    2,
-                    "Papel Higiénico Elite x4",
-                    "2.00",
-                    "$ 3.500",
-                    "$ 7.000"
-                }
-        );
-
-        modelo.addRow(
-                new Object[]{
-                    3,
-                    "Aceite Natura 900 ml",
-                    "1.00",
-                    "$ 8.500",
-                    "$ 8.500"
-                }
-        );
-
-        modelo.addRow(
-                new Object[]{
-                    4,
-                    "Coca Cola 2.25 L",
-                    "3.00",
-                    "$ 2.600",
-                    "$ 7.800"
-                }
-        );
-
-        modelo.addRow(
-                new Object[]{
-                    5,
-                    "Queso Cremoso Punta del Agua",
-                    "0.750",
-                    "$ 14.000",
-                    "$ 10.500"
-                }
         );
 
         //==========================================================
