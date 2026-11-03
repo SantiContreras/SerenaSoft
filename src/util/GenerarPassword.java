@@ -6,7 +6,7 @@ public class GenerarPassword {
 
     public static void main(String[] args) {
 
-        String password = "Admin1234";
+        String password = "administrador2027";
 
         String hash = PasswordUtil.generarHash(password);
 
