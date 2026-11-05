@@ -1,6 +1,9 @@
 package Paneles;
 
 import Dao.HistorialComprasDao;
+import Configuracion.conexion;
+import Dialogos.DialogoRegistrarPagoProveedor;
+import java.sql.*;
 import Dao.HistorialComprasDao.CompraFila;
 import java.awt.*;
 import java.awt.event.*;
@@ -44,6 +47,7 @@ public class PanelHistorialCompras extends JPanel {
         confirmadas.setOpaque(false);confirmadas.setFont(new Font("Segoe UI",Font.PLAIN,12));confirmadas.addActionListener(e->cargar());acciones.add(confirmadas);
         RSButtonRound refrescar=boton("ACTUALIZAR",120);refrescar.addActionListener(e->cargar());acciones.add(refrescar);
         RSButtonRound ver=boton("VER DETALLE",135);ver.addActionListener(e->abrirDetalle());acciones.add(ver);
+        RSButtonRound pagar=boton("PAGAR COMPRA",145);pagar.addActionListener(e->pagarCompra());acciones.add(pagar);
         filtros.add(acciones,BorderLayout.EAST);arriba.add(filtros,BorderLayout.SOUTH);add(arriba,BorderLayout.NORTH);
         estilizar(tabla);tabla.setAutoCreateRowSorter(true);tabla.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tabla.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){if(e.getClickCount()==2)abrirDetalle();}});
@@ -128,6 +132,21 @@ public class PanelHistorialCompras extends JPanel {
                 resumen.setText(compras.size()+" compras encontradas  |  Total listado: "+dinero.format(total));
             }catch(Exception ex){resumen.setText("No se pudo consultar el historial");error(ex);}}
         }.execute();
+    }
+    private void pagarCompra(){
+        int fila=tabla.getSelectedRow();
+        if(fila<0){JOptionPane.showMessageDialog(this,"Seleccioná primero una compra de la tabla.");return;}
+        long id=((Number)modelo.getValueAt(tabla.convertRowIndexToModel(fila),0)).longValue();
+        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement(
+                "SELECT c.id_proveedor,p.razon_social,c.estado FROM compra c JOIN proveedor p ON p.id_proveedor=c.id_proveedor WHERE c.id_compra=?")){
+            p.setLong(1,id);
+            try(ResultSet r=p.executeQuery()){
+                if(!r.next())throw new SQLException("La compra no existe.");
+                if(!"CONFIRMADA".equals(r.getString(3))){JOptionPane.showMessageDialog(this,"Solo se pueden pagar compras confirmadas.");return;}
+                new DialogoRegistrarPagoProveedor(SwingUtilities.getWindowAncestor(this),r.getInt(1),r.getString(2),0,id).setVisible(true);
+                cargar();
+            }
+        }catch(SQLException ex){JOptionPane.showMessageDialog(this,ex.getMessage(),"Error consultando compra",JOptionPane.ERROR_MESSAGE);}
     }
     private void abrirDetalle(){
         int fila=tabla.getSelectedRow();if(fila<0){JOptionPane.showMessageDialog(this,"Seleccioná una compra de la tabla.");return;}

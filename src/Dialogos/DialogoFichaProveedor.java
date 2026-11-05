@@ -1,7 +1,12 @@
 package Dialogos;
 
-import Diseños.EstiloBotones;
+import Configuracion.conexion;
+import java.sql.*;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.util.Locale;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -32,6 +37,35 @@ public class DialogoFichaProveedor extends JDialog {
     // PROVEEDOR
     //==========================================================
     private int idProveedor;
+    private String nombreProveedorCabecera = "PROVEEDOR";
+
+    private static final class IconoResumen implements javax.swing.Icon {
+        private final String tipo;
+        private final Color color;
+        IconoResumen(String tipo, Color color) { this.tipo = tipo; this.color = color; }
+        @Override public int getIconWidth() { return 20; }
+        @Override public int getIconHeight() { return 20; }
+        @Override public void paintIcon(Component c, java.awt.Graphics g, int x, int y) {
+            java.awt.Graphics2D a = (java.awt.Graphics2D) g.create();
+            try {
+                a.translate(x, y);
+                a.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                a.setColor(color);
+                a.setStroke(new java.awt.BasicStroke(1.8f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+                if (tipo.equals("Total Comprado")) {
+                    a.drawRoundRect(2, 5, 16, 12, 3, 3); a.drawLine(5, 5, 7, 2); a.drawLine(7, 2, 15, 2);
+                    a.drawLine(6, 11, 14, 11);
+                } else if (tipo.equals("Total Pagado")) {
+                    a.drawOval(2, 2, 16, 16); a.drawLine(6, 10, 9, 13); a.drawLine(9, 13, 15, 7);
+                } else if (tipo.equals("Saldo Pendiente")) {
+                    a.drawOval(2, 2, 16, 16); a.drawLine(10, 5, 10, 11); a.fillOval(9, 14, 2, 2);
+                } else {
+                    a.drawRoundRect(2, 4, 16, 14, 2, 2); a.drawLine(2, 8, 18, 8);
+                    a.drawLine(6, 2, 6, 6); a.drawLine(14, 2, 14, 6); a.fillOval(6, 11, 3, 3);
+                }
+            } finally { a.dispose(); }
+        }
+    }
 
     //==========================================================
     // DATOS GENERALES
@@ -59,6 +93,16 @@ public class DialogoFichaProveedor extends JDialog {
     //==========================================================
     // TABLAS
     //==========================================================
+    private JPanel panelNavegacion;
+    private CardLayout tarjetasGuia;
+    private JPanel contenidoGuia;
+    private JButton navDeudas, navCompras, navDatos;
+    private JButton subMovimientos, subPagos;
+    private CardLayout tarjetasDeudas;
+    private JPanel contenidoDeudas;
+
+    private JLabel ayudaPagoGuiado;
+    private final java.util.List<Long> idsFacturas = new java.util.ArrayList<>();
     private JTable tablaCompras;
     private JTable tablaFacturas;
     private JTable tablaCuentaCorriente;
@@ -123,6 +167,7 @@ public class DialogoFichaProveedor extends JDialog {
         super(parent);
 
         this.idProveedor = idProveedor;
+        this.nombreProveedorCabecera = (razonSocial == null || razonSocial.isBlank()) ? "PROVEEDOR" : razonSocial;
 
         inicializarComponentes();
 
@@ -135,7 +180,7 @@ public class DialogoFichaProveedor extends JDialog {
                 estado
         );
 
-        cargarDatosPrueba();
+        cargarDatosReales();
 
         configurarEventos();
 
@@ -160,9 +205,7 @@ public class DialogoFichaProveedor extends JDialog {
         );
 
         setLocationRelativeTo(parent);
-         EstiloBotones.corregirBotones(
-                getContentPane()
-    );
+         // Los botones vectoriales gestionan su propio contraste.
         setResizable(true);
     }
 
@@ -290,6 +333,14 @@ public class DialogoFichaProveedor extends JDialog {
                 = crearTabla(
                         modeloFacturas
                 );
+        tablaFacturas.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) actualizarSeleccionFactura();
+        });
+        tablaFacturas.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2 && javax.swing.SwingUtilities.isLeftMouseButton(e)) pagarFacturaSeleccionada();
+            }
+        });
 
         modeloCuenta
                 = new DefaultTableModel(
@@ -417,8 +468,42 @@ public class DialogoFichaProveedor extends JDialog {
                 .setReorderingAllowed(false);
 
         aplicarHeaderAzul(tabla);
+        if (modelo == modeloFacturas) {
+            tabla.getColumnModel().getColumn(6).setCellRenderer(new EstadoFacturaRenderer());
+        }
 
         return tabla;
+    }
+
+
+    /** Estados de pago con contraste y colores suaves, sin fuentes de iconos externas. */
+    private static final class EstadoFacturaRenderer extends DefaultTableCellRenderer {
+        EstadoFacturaRenderer() {
+            setHorizontalAlignment(JLabel.CENTER);
+            setFont(new Font("Segoe UI", Font.BOLD, 12));
+        }
+        @Override public Component getTableCellRendererComponent(JTable table, Object value,
+                boolean selected, boolean focus, int row, int column) {
+            super.getTableCellRendererComponent(table, value, selected, focus, row, column);
+            String estado = value == null ? "" : value.toString().trim().toUpperCase(Locale.ROOT);
+            setText("  " + estado + "  ");
+            if ("PAGADA".equals(estado)) {
+                setForeground(new Color(18, 113, 67));
+                setBackground(selected ? new Color(182, 223, 201) : new Color(225, 246, 234));
+            } else if ("PARCIAL".equals(estado)) {
+                setForeground(new Color(145, 85, 10));
+                setBackground(selected ? new Color(247, 219, 158) : new Color(255, 244, 217));
+            } else if ("PENDIENTE".equals(estado)) {
+                setForeground(new Color(173, 44, 51));
+                setBackground(selected ? new Color(248, 197, 198) : new Color(255, 232, 233));
+            } else {
+                setForeground(selected ? table.getSelectionForeground() : table.getForeground());
+                setBackground(selected ? table.getSelectionBackground() : table.getBackground());
+            }
+            setOpaque(true);
+            setBorder(BorderFactory.createEmptyBorder(3, 5, 3, 5));
+            return this;
+        }
     }
 
     //==========================================================
@@ -531,7 +616,7 @@ public class DialogoFichaProveedor extends JDialog {
         );
 
         header.setBackground(
-                Color.WHITE
+                AZUL_OSCURO
         );
 
         header.setBorder(
@@ -545,7 +630,7 @@ public class DialogoFichaProveedor extends JDialog {
 
         JLabel lblTitulo
                 = new JLabel(
-                        "FICHA DEL PROVEEDOR"
+                        nombreProveedorCabecera.toUpperCase(java.util.Locale.ROOT)
                 );
 
         lblTitulo.setFont(
@@ -557,12 +642,12 @@ public class DialogoFichaProveedor extends JDialog {
         );
 
         lblTitulo.setForeground(
-                AZUL_OSCURO
+                Color.WHITE
         );
 
         JLabel lblSubtitulo
                 = new JLabel(
-                        "Información comercial, compras, facturas y cuenta corriente"
+                        "FICHA DEL PROVEEDOR  |  Compras, facturas y cuenta corriente"
                 );
 
         lblSubtitulo.setFont(
@@ -574,7 +659,7 @@ public class DialogoFichaProveedor extends JDialog {
         );
 
         lblSubtitulo.setForeground(
-                TEXTO_SECUNDARIO
+                new Color(220, 233, 252)
         );
 
         header.add(lblTitulo);
@@ -623,57 +708,29 @@ public class DialogoFichaProveedor extends JDialog {
                 BorderLayout.NORTH
         );
 
-        //======================================================
-        // PESTAÑAS
-        //======================================================
-        JTabbedPane tabs
-                = new JTabbedPane();
+        // Navegacion guiada: tres destinos claros para el operador.
+        tarjetasGuia = new CardLayout();
+        contenidoGuia = new JPanel(tarjetasGuia);
+        contenidoGuia.setBackground(FONDO);
+        contenidoGuia.add(crearVistaDeudas(), "DEUDAS");
+        contenidoGuia.add(crearPanelTabla(tablaCompras), "COMPRAS");
+        contenidoGuia.add(crearPanelDatosGenerales(), "DATOS");
 
-        tabs.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        tabs.addTab(
-                "Datos Generales",
-                crearPanelDatosGenerales()
-        );
-
-        tabs.addTab(
-                "Compras",
-                crearPanelTabla(
-                        tablaCompras
-                )
-        );
-
-        tabs.addTab(
-                "Facturas",
-                crearPanelTabla(
-                        tablaFacturas
-                )
-        );
-
-        tabs.addTab(
-                "Cuenta Corriente",
-                crearPanelTabla(
-                        tablaCuentaCorriente
-                )
-        );
-
-        tabs.addTab(
-                "Pagos",
-                crearPanelTabla(
-                        tablaPagos
-                )
-        );
-
-        centro.add(
-                tabs,
-                BorderLayout.CENTER
-        );
+        panelNavegacion = new JPanel(new BorderLayout(0, 10));
+        panelNavegacion.setOpaque(false);
+        JPanel barra = new JPanel(new java.awt.GridLayout(1, 3, 10, 0));
+        barra.setOpaque(false);
+        navDeudas = crearBoton("FACTURAS Y PAGOS", AZUL_OSCURO, 190);
+        navCompras = crearBoton("+  HISTORIAL DE COMPRAS", AZUL, 190);
+        navDatos = crearBoton("i  DATOS DEL PROVEEDOR", AZUL, 190);
+        barra.add(navDeudas); barra.add(navCompras); barra.add(navDatos);
+        panelNavegacion.add(barra, BorderLayout.NORTH);
+        panelNavegacion.add(contenidoGuia, BorderLayout.CENTER);
+        centro.add(panelNavegacion, BorderLayout.CENTER);
+        navDeudas.addActionListener(e -> { cambiarSeccion("DEUDAS"); cambiarDetalleDeuda("FACTURAS"); });
+        navCompras.addActionListener(e -> cambiarSeccion("COMPRAS"));
+        navDatos.addActionListener(e -> cambiarSeccion("DATOS"));
+        cambiarSeccion("DEUDAS");
 
         add(
                 centro,
@@ -727,6 +784,8 @@ public class DialogoFichaProveedor extends JDialog {
                 btnNuevaCompra
         );
 
+        btnRegistrarPago.setText("PAGAR FACTURA SELECCIONADA");
+        btnRegistrarPago.setPreferredSize(new Dimension(245, 36));
         acciones.add(
                 btnRegistrarPago
         );
@@ -760,6 +819,59 @@ public class DialogoFichaProveedor extends JDialog {
                 footer,
                 BorderLayout.SOUTH
         );
+    }
+
+    private void cambiarSeccion(String seccion) {
+        tarjetasGuia.show(contenidoGuia, seccion);
+        navDeudas.setBackground("DEUDAS".equals(seccion) ? AZUL_OSCURO : AZUL);
+        navCompras.setBackground("COMPRAS".equals(seccion) ? AZUL_OSCURO : AZUL);
+        navDatos.setBackground("DATOS".equals(seccion) ? AZUL_OSCURO : AZUL);
+        navDeudas.setToolTipText("Consultar deuda, facturas y registrar pagos");
+        navCompras.setToolTipText("Ver todas las compras del proveedor");
+        navDatos.setToolTipText("Consultar informacion fiscal y de contacto");
+    }
+
+    private JPanel crearVistaDeudas() {
+        JPanel vista = new JPanel(new BorderLayout(0, 10));
+        vista.setBackground(Color.WHITE);
+        vista.setBorder(new EmptyBorder(12, 14, 12, 14));
+        JPanel superior = new JPanel(new BorderLayout(0, 8));
+        superior.setOpaque(false);
+        JLabel titulo = new JLabel("FACTURAS DEL PROVEEDOR  |  Seleccioná una factura para pagar");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        titulo.setForeground(AZUL_OSCURO);
+        superior.add(titulo, BorderLayout.NORTH);
+        JPanel opciones = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        opciones.setOpaque(false);
+        subMovimientos = crearBoton("VER MOVIMIENTOS", AZUL, 170);
+        subPagos = crearBoton("VER PAGOS REALIZADOS", AZUL, 205);
+        opciones.add(subMovimientos); opciones.add(subPagos);
+        JButton reporte = crearBoton("IMPRIMIR REPORTE", AZUL_OSCURO, 190);
+        reporte.setToolTipText("Reporte de pagos por rango de fechas");
+        reporte.addActionListener(e -> new DialogoReportePagosProveedor(this, idProveedor).setVisible(true));
+        opciones.add(reporte);
+        superior.add(opciones, BorderLayout.SOUTH);
+        vista.add(superior, BorderLayout.NORTH);
+        tarjetasDeudas = new CardLayout();
+        contenidoDeudas = new JPanel(tarjetasDeudas);
+        contenidoDeudas.add(crearPanelTabla(tablaFacturas), "FACTURAS");
+        contenidoDeudas.add(crearPanelTabla(tablaCuentaCorriente), "MOVIMIENTOS");
+        contenidoDeudas.add(crearPanelTabla(tablaPagos), "PAGOS");
+        vista.add(contenidoDeudas, BorderLayout.CENTER);
+        subMovimientos.addActionListener(e -> cambiarDetalleDeuda("MOVIMIENTOS"));
+        subPagos.addActionListener(e -> cambiarDetalleDeuda("PAGOS"));
+        cambiarDetalleDeuda("FACTURAS");
+        ayudaPagoGuiado = new JLabel("PASO 1: Seleccioná una factura pendiente de la tabla.  PASO 2: Pulsá PAGAR FACTURA SELECCIONADA.");
+        ayudaPagoGuiado.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        ayudaPagoGuiado.setForeground(AZUL_OSCURO);
+        vista.add(ayudaPagoGuiado, BorderLayout.SOUTH);
+        return vista;
+    }
+
+    private void cambiarDetalleDeuda(String seccion) {
+        tarjetasDeudas.show(contenidoDeudas, seccion);
+        subMovimientos.setBackground("MOVIMIENTOS".equals(seccion) ? AZUL_OSCURO : AZUL);
+        subPagos.setBackground("PAGOS".equals(seccion) ? AZUL_OSCURO : AZUL);
     }
 
     //==========================================================
@@ -828,9 +940,14 @@ public class DialogoFichaProveedor extends JDialog {
                         new BorderLayout()
                 );
 
-        panel.setBackground(
-                Color.WHITE
-        );
+        Color acento = titulo.equals("Total Comprado") ? AZUL
+                : titulo.equals("Total Pagado") ? VERDE
+                : titulo.equals("Saldo Pendiente") ? ROJO : NARANJA;
+        Color suave = titulo.equals("Total Comprado") ? new Color(235, 243, 255)
+                : titulo.equals("Total Pagado") ? new Color(231, 248, 238)
+                : titulo.equals("Saldo Pendiente") ? new Color(255, 237, 238)
+                : new Color(255, 246, 229);
+        panel.setBackground(suave);
 
         panel.setBorder(
                 BorderFactory
@@ -859,15 +976,15 @@ public class DialogoFichaProveedor extends JDialog {
                 )
         );
 
-        panel.add(
-                lblTitulo,
-                BorderLayout.NORTH
-        );
+        JPanel encabezado = new JPanel(new BorderLayout(8, 0));
+        encabezado.setOpaque(false);
+        JLabel icono = new JLabel(new IconoResumen(titulo, acento));
+        encabezado.add(icono, BorderLayout.WEST);
+        lblTitulo.setForeground(acento);
+        encabezado.add(lblTitulo, BorderLayout.CENTER);
+        panel.add(encabezado, BorderLayout.NORTH);
 
-        panel.add(
-                valor,
-                BorderLayout.CENTER
-        );
+        panel.add(valor, BorderLayout.CENTER);
 
         return panel;
     }
@@ -1105,163 +1222,89 @@ public class DialogoFichaProveedor extends JDialog {
                 estado
         );
 
-        // Datos simulados
-        lblCondicionIva.setText(
-                "Responsable Inscripto"
-        );
+        try (Connection c = conexion.getConexion();
+             PreparedStatement p = c.prepareStatement("SELECT nombre_comercial,condicion_iva,direccion,localidad,provincia,email,persona_contacto FROM proveedor WHERE id_proveedor=?")) {
+            p.setInt(1, idProveedor);
+            try (ResultSet r=p.executeQuery()) {
+                if(r.next()) {
+                    lblNombreComercial.setText(nvl(r.getString(1)));
+                    lblCondicionIva.setText(nvl(r.getString(2)));
+                    lblDireccion.setText(nvl(r.getString(3)));
+                    lblLocalidad.setText(nvl(r.getString(4)));
+                    lblProvincia.setText(nvl(r.getString(5)));
+                    lblEmail.setText(nvl(r.getString(6)));
+                    lblContacto.setText(nvl(r.getString(7)));
+                }
+            }
+        } catch(SQLException ex) { JOptionPane.showMessageDialog(this,"No se pudieron cargar los datos del proveedor: " + ex.getMessage()); }
 
-        lblDireccion.setText(
-                "Av. Principal 123"
-        );
-
-        lblLocalidad.setText(
-                "Resistencia"
-        );
-
-        lblProvincia.setText(
-                "Chaco"
-        );
-
-        lblEmail.setText(
-                "contacto@proveedor.com"
-        );
-
-        lblContacto.setText(
-                "Juan Pérez"
-        );
     }
 
     //==========================================================
     // DATOS PRUEBA
     //==========================================================
-    private void cargarDatosPrueba() {
-
-        //======================================================
-        // RESUMEN
-        //==========================================================
-        lblTotalComprado.setText(
-                "$ 2.850.000"
-        );
-
-        lblTotalPagado.setText(
-                "$ 2.664.600"
-        );
-
-        lblSaldoPendiente.setText(
-                "$ 185.400"
-        );
-
-        lblUltimaCompra.setText(
-                "21/08/2026"
-        );
-
-        //======================================================
-        // COMPRAS
-        //==========================================================
-        modeloCompras.setRowCount(0);
-
-        modeloCompras.addRow(
-                new Object[]{
-                    1,
-                    "21/08/2026",
-                    "0004-00012345",
-                    30,
-                    "$ 185.400",
-                    "Pendiente"
-                }
-        );
-
-        modeloCompras.addRow(
-                new Object[]{
-                    2,
-                    "10/08/2026",
-                    "0004-00012001",
-                    18,
-                    "$ 120.000",
-                    "Pagada"
-                }
-        );
-
-        //======================================================
-        // FACTURAS
-        //==========================================================
-        modeloFacturas.setRowCount(0);
-
-        modeloFacturas.addRow(
-                new Object[]{
-                    "0004-00012345",
-                    "21/08/2026",
-                    "20/09/2026",
-                    "$ 185.400",
-                    "$ 0",
-                    "$ 185.400",
-                    "Pendiente"
-                }
-        );
-
-        modeloFacturas.addRow(
-                new Object[]{
-                    "0004-00012001",
-                    "10/08/2026",
-                    "10/09/2026",
-                    "$ 120.000",
-                    "$ 120.000",
-                    "$ 0",
-                    "Pagada"
-                }
-        );
-
-        //======================================================
-        // CUENTA
-        //==========================================================
-        modeloCuenta.setRowCount(0);
-
-        modeloCuenta.addRow(
-                new Object[]{
-                    "21/08/2026",
-                    "Compra",
-                    "0004-00012345",
-                    "$ 185.400",
-                    "$ 0",
-                    "$ 185.400"
-                }
-        );
-
-        modeloCuenta.addRow(
-                new Object[]{
-                    "15/08/2026",
-                    "Pago",
-                    "Transferencia",
-                    "$ 0",
-                    "$ 100.000",
-                    "$ 0"
-                }
-        );
-
-        //======================================================
-        // PAGOS
-        //==========================================================
-        modeloPagos.setRowCount(0);
-
-        modeloPagos.addRow(
-                new Object[]{
-                    "15/08/2026",
-                    "$ 100.000",
-                    "Transferencia",
-                    "TRX-55421",
-                    "Pago parcial"
-                }
-        );
-
-        modeloPagos.addRow(
-                new Object[]{
-                    "05/08/2026",
-                    "$ 250.000",
-                    "Efectivo",
-                    "-",
-                    "Pago de facturas"
-                }
-        );
+    private static String nvl(String s) { return s==null || s.isBlank() ? "—" : s; }
+    private static String moneda(BigDecimal n) {
+        return NumberFormat.getCurrencyInstance(new Locale("es","AR")).format(n==null?BigDecimal.ZERO:n);
+    }
+    private void cargarDatosReales() {
+        idsFacturas.clear();
+        modeloCompras.setRowCount(0);modeloFacturas.setRowCount(0);
+        modeloCuenta.setRowCount(0);modeloPagos.setRowCount(0);
+        try(Connection c=conexion.getConexion()) {
+            BigDecimal comprado=BigDecimal.ZERO,pagado=BigDecimal.ZERO;
+            String ultima="—";
+            try(PreparedStatement p=c.prepareStatement(
+                "SELECT c.id_compra,DATE_FORMAT(c.fecha,'%d/%m/%Y'),COALESCE(c.numero_comprobante,''),"+
+                "(SELECT COUNT(*) FROM compra_detalle d WHERE d.id_compra=c.id_compra),c.total,c.estado " +
+                "FROM compra c WHERE c.id_proveedor=? ORDER BY c.fecha DESC,c.id_compra DESC")) {
+                p.setInt(1,idProveedor);
+                try(ResultSet r=p.executeQuery()) { while(r.next()) {
+                    long id=r.getLong(1);String fecha=r.getString(2),factura=r.getString(3),estado=r.getString(6);
+                    BigDecimal total=r.getBigDecimal(5);
+                    modeloCompras.addRow(new Object[]{id,fecha,factura,r.getInt(4),moneda(total),estado});
+                    if(!"CONFIRMADA".equals(estado)) continue;
+                    if("—".equals(ultima)) ultima=fecha;
+                    comprado=comprado.add(total);
+                    BigDecimal aplicado=BigDecimal.ZERO;
+                    try(PreparedStatement pp=c.prepareStatement("SELECT COALESCE(SUM(monto),0) FROM compra_pago WHERE id_compra=?")) {
+                        pp.setLong(1,id);try(ResultSet x=pp.executeQuery()){if(x.next()) aplicado=x.getBigDecimal(1);}
+                    }
+                    pagado=pagado.add(aplicado);
+                    BigDecimal saldo=total.subtract(aplicado);
+                    String estadoPago=saldo.signum()<=0?"PAGADA":aplicado.signum()==0?"PENDIENTE":"PARCIAL";
+                    idsFacturas.add(id);
+                    modeloFacturas.addRow(new Object[]{"Compra #"+id+" / "+factura,fecha,"—",moneda(total),moneda(aplicado),moneda(saldo),estadoPago});
+                }}
+            }
+            try(PreparedStatement p=c.prepareStatement(
+                "SELECT DATE_FORMAT(cp.fecha,'%d/%m/%Y'),cp.monto,mp.nombre,cp.referencia,cp.observaciones,cp.id_compra " +
+                "FROM compra_pago cp JOIN compra c ON c.id_compra=cp.id_compra JOIN medio_pago mp ON mp.id_medio_pago=cp.id_medio_pago " +
+                "WHERE c.id_proveedor=? ORDER BY cp.fecha DESC,cp.id_pago DESC")) {
+                p.setInt(1,idProveedor);try(ResultSet r=p.executeQuery()) {while(r.next()) {
+                    modeloPagos.addRow(new Object[]{r.getString(1),moneda(r.getBigDecimal(2)),r.getString(3),nvl(r.getString(4)),nvl(r.getString(5))});
+                }}
+            }
+            // Extracto por compra/pago, ordenado cronológicamente con saldo acumulado.
+            try(PreparedStatement p=c.prepareStatement(
+                "SELECT fecha,clase,ref,debe,haber FROM ("+
+                "SELECT c.fecha fecha,'Compra' clase,CONCAT('#',c.id_compra) ref,c.total debe,0 haber FROM compra c WHERE c.id_proveedor=? AND c.estado='CONFIRMADA' " +
+                "UNION ALL SELECT cp.fecha,'Pago',CONCAT('Compra #',cp.id_compra),0,cp.monto FROM compra_pago cp JOIN compra c ON c.id_compra=cp.id_compra WHERE c.id_proveedor=?"+
+                ") t ORDER BY fecha,CASE WHEN clase='Compra' THEN 0 ELSE 1 END")) {
+                p.setInt(1,idProveedor);p.setInt(2,idProveedor);
+                BigDecimal saldo=BigDecimal.ZERO;
+                try(ResultSet r=p.executeQuery()){while(r.next()) {
+                    BigDecimal debe=r.getBigDecimal(4),haber=r.getBigDecimal(5);
+                    saldo=saldo.add(debe).subtract(haber);
+                    modeloCuenta.addRow(new Object[]{new java.text.SimpleDateFormat("dd/MM/yyyy").format(r.getTimestamp(1)),r.getString(2),r.getString(3),moneda(debe),moneda(haber),moneda(saldo)});
+                }}
+            }
+            lblTotalComprado.setText(moneda(comprado));lblTotalPagado.setText(moneda(pagado));
+            lblSaldoPendiente.setText(moneda(comprado.subtract(pagado)));
+            lblUltimaCompra.setText(ultima);
+        } catch(SQLException ex) {
+            JOptionPane.showMessageDialog(this,"Error al consultar cuenta corriente real: " + ex.getMessage(),"Proveedores",JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     //==========================================================
@@ -1282,25 +1325,57 @@ public class DialogoFichaProveedor extends JDialog {
 
                 });
 
-        btnRegistrarPago.addActionListener(e -> {
-
-            DialogoRegistrarPagoProveedor dialogo
-                    = new DialogoRegistrarPagoProveedor(
-                            this,
-                            idProveedor,
-                            lblRazonSocial.getText(),
-                            185400.00
-                    );
-
-            dialogo.setVisible(true);
-
-        });
+        btnRegistrarPago.addActionListener(e -> pagarFacturaSeleccionada());
 
         btnCerrar.addActionListener(e -> {
 
             dispose();
 
         });
+    }
+
+    private void actualizarSeleccionFactura() {
+        if (ayudaPagoGuiado == null || tablaFacturas == null) return;
+        int fila = tablaFacturas.getSelectedRow();
+        if (fila < 0) {
+            ayudaPagoGuiado.setText("PASO 1: Seleccioná una factura PENDIENTE o PARCIAL.  PASO 2: Pulsá PAGAR FACTURA SELECCIONADA.");
+            return;
+        }
+        int indice = tablaFacturas.convertRowIndexToModel(fila);
+        if (indice < 0 || indice >= idsFacturas.size()) return;
+        String estado = String.valueOf(modeloFacturas.getValueAt(indice, 6));
+        if ("PAGADA".equals(estado)) {
+            ayudaPagoGuiado.setText("Esta factura ya está pagada. Seleccioná otra con saldo pendiente.");
+        } else {
+            ayudaPagoGuiado.setText("FACTURA SELECCIONADA: Compra #" + idsFacturas.get(indice)
+                    + "  |  Saldo: " + modeloFacturas.getValueAt(indice, 5)
+                    + "  |  Pulsá PAGAR FACTURA SELECCIONADA.");
+        }
+    }
+
+    private void pagarFacturaSeleccionada() {
+        cambiarSeccion("DEUDAS");
+        cambiarDetalleDeuda("FACTURAS");
+        int fila = tablaFacturas.getSelectedRow();
+        if (fila < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Primero seleccioná una factura pendiente de la tabla.\nDespués pulsá PAGAR FACTURA SELECCIONADA.",
+                    "Seleccionar factura", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        int indice = tablaFacturas.convertRowIndexToModel(fila);
+        if (indice < 0 || indice >= idsFacturas.size()) return;
+        if ("PAGADA".equals(String.valueOf(modeloFacturas.getValueAt(indice, 6)))) {
+            JOptionPane.showMessageDialog(this, "Esta factura ya está pagada. Seleccioná otra con saldo pendiente.",
+                    "Factura sin deuda", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        long compraId = idsFacturas.get(indice);
+        DialogoRegistrarPagoProveedor dialogo = new DialogoRegistrarPagoProveedor(
+                this, idProveedor, nombreProveedorCabecera, 0.0, compraId);
+        dialogo.setVisible(true);
+        cargarDatosReales();
+        cambiarDetalleDeuda("FACTURAS");
     }
 
     //==========================================================
@@ -1438,8 +1513,8 @@ public class DialogoFichaProveedor extends JDialog {
             Color color,
             int ancho) {
 
-        JButton boton
-                = new JButton(texto);
+        String icono = texto.toLowerCase().contains("compra") ? "plus" : texto.toLowerCase().contains("pago") ? "wallet" : "close";
+        JButton boton = new BotonSerena(texto, color, icono);
 
         boton.setPreferredSize(
                 new Dimension(

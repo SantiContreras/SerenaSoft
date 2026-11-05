@@ -112,13 +112,24 @@ public final class VentaService {
                     cambio=cambio.add(recibido.subtract(p.monto));
                 }
                 validar(totalPagos.compareTo(total)==0,"Pagos no coinciden con total: "+totalPagos+" vs "+total);
+                // Vincular automáticamente la venta con la caja abierta (si la hay).
+                // Nunca se inventa una sesión ni se reescriben ventas históricas.
+                Integer sesionParaVenta = s.cajaSesionId;
+                if (sesionParaVenta == null) {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "SELECT id_sesion FROM caja_sesion WHERE estado='ABIERTA' ORDER BY id_sesion DESC LIMIT 1")) {
+                        try (ResultSet rs = ps.executeQuery()) {
+                            if (rs.next()) sesionParaVenta = rs.getInt(1);
+                        }
+                    }
+                }
                 VentaDao ventaDao=new VentaDao();
                 VentaDetalleDao detalleDao=new VentaDetalleDao();
                 VentaPagoDao pagoDao=new VentaPagoDao();
                 long numero=ventaDao.reservarNumero(c);
                 Venta venta=new Venta();
                 venta.numeroVenta=numero;venta.idUsuario=s.usuarioId;venta.idDeposito=s.depositoId;
-                venta.idCliente=s.clienteId;venta.idCajaSesion=s.cajaSesionId;
+                venta.idCliente=s.clienteId;venta.idCajaSesion=sesionParaVenta;
                 venta.subtotal=bruto;venta.descuentoTotal=descuentosLineas.add(general);
                 venta.total=total;venta.observaciones=s.observaciones;
                 long id=ventaDao.insertar(c,venta);

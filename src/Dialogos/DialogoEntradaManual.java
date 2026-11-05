@@ -3523,6 +3523,19 @@ public class DialogoEntradaManual extends JDialog {
 
             dialogo.setVisible(true);
 
+            // La compra ya está confirmada y el stock registrado. El pago es opcional
+            // y se realiza como una transacción independiente: si falla, la compra
+            // permanece CONFIRMADA y PENDIENTE, sin duplicar stock.
+            int pagarAhora = JOptionPane.showConfirmDialog(this,
+                    "Compra #" + idCompra + " confirmada.\n¿Querés registrar un pago al proveedor ahora?\n" +
+                    "Si elegís NO, queda pendiente para pagar desde Proveedores.",
+                    "Condición de pago", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (pagarAhora == JOptionPane.YES_OPTION) {
+                DialogoRegistrarPagoProveedor pago = new DialogoRegistrarPagoProveedor(
+                        this, idProveedorSeleccionado, proveedor.getRazonSocial(), 0);
+                pago.setVisible(true);
+            }
+
             //==================================================
             // 10. CERRAR ENTRADA MANUAL
             //==================================================

@@ -9,7 +9,18 @@ import Dialogos.DialogoArqueoCaja;
 import Dialogos.DialogoCerrarCaja;
 import Dialogos.DialogoEgresoCaja;
 import Dialogos.DialogoIngresoCaja;
-import Diseños.EstiloBotones;
+import services.CajaService;
+import sesion.SesionUsuario;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.util.Locale;
+import java.util.List;
+import java.sql.SQLException;
+import javax.swing.Icon;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -28,13 +39,18 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.RowFilter;
+import javax.swing.table.TableRowSorter;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
-import rojeru_san.rsbutton.RSButtonRound;
+import java.awt.geom.RoundRectangle2D;
 import rojerusan.RSComboBox;
 
 /**
@@ -42,6 +58,10 @@ import rojerusan.RSComboBox;
  * @author santi
  */
 public class PanelCaja extends javax.swing.JPanel {
+
+    private final CajaService cajaService = new CajaService();
+    private CajaService.Resumen resumenActual;
+    private final NumberFormat moneda = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-AR"));
 
     //==========================================================
     // ESTADO DE CAJA
@@ -65,6 +85,8 @@ public class PanelCaja extends javax.swing.JPanel {
     private RSComboBox comboTipoMovimiento;
     private RSComboBox comboFecha;
     private JButton btnBuscar;
+    private JTextField txtBuscarMovimiento;
+    private TableRowSorter<DefaultTableModel> filtroTabla;
 
     //==========================================================
     // TABLA
@@ -75,11 +97,11 @@ public class PanelCaja extends javax.swing.JPanel {
     //==========================================================
     // BOTONES
     //==========================================================
-    private RSButtonRound btnAbrirCaja;
-    private RSButtonRound btnIngreso;
-    private RSButtonRound btnEgreso;
-    private RSButtonRound btnArqueo;
-    private RSButtonRound btnCerrarCaja;
+    private JButton btnAbrirCaja;
+    private JButton btnIngreso;
+    private JButton btnEgreso;
+    private JButton btnArqueo;
+    private JButton btnCerrarCaja;
 
     //==========================================================
     // MEDIOS DE PAGO
@@ -128,8 +150,7 @@ public class PanelCaja extends javax.swing.JPanel {
 
         construirPanel();
 
-        cargarDatosPrueba();
-         EstiloBotones.corregirBotones(this);
+        refrescarCaja();
 
         configurarEventos();
         
@@ -267,6 +288,11 @@ public class PanelCaja extends javax.swing.JPanel {
                 );
 
         inicializarTabla();
+        txtBuscarMovimiento = new JTextField();
+        txtBuscarMovimiento.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        txtBuscarMovimiento.setToolTipText("Buscar por fecha, tipo, descripción, medio de pago o usuario");
+        txtBuscarMovimiento.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDE), new EmptyBorder(5, 10, 5, 10)));
     }
 
     //==========================================================
@@ -374,6 +400,8 @@ public class PanelCaja extends javax.swing.JPanel {
                 );
 
         aplicarHeaderAzul();
+        filtroTabla = new TableRowSorter<>(modeloTabla);
+        tablaMovimientos.setRowSorter(filtroTabla);
 
         tablaMovimientos
                 .getColumnModel()
@@ -502,301 +530,92 @@ public class PanelCaja extends javax.swing.JPanel {
     // CONSTRUIR PANEL
     //==========================================================
     private void construirPanel() {
+        setLayout(new BorderLayout());
+        setBackground(FONDO);
+        JPanel contenedor = new JPanel();
+        contenedor.setLayout(new BoxLayout(contenedor, BoxLayout.Y_AXIS));
+        contenedor.setBackground(FONDO);
+        contenedor.setBorder(new EmptyBorder(12, 18, 12, 18));
 
-        setLayout(
-                new BorderLayout()
-        );
+        JPanel header = crearHeader();
+        agregarBloque(contenedor, header, 55, 8);
 
-        setBackground(
-                FONDO
-        );
+        JPanel bloquePrincipal = new JPanel(new GridLayout(1, 2, 12, 0));
+        bloquePrincipal.setOpaque(false);
+        bloquePrincipal.add(crearTarjetaSaldoPrincipal());
+        bloquePrincipal.add(crearPanelEstadoCaja());
+        agregarBloque(contenedor, bloquePrincipal, 108, 10);
 
-        JPanel contenedor
-                = new JPanel();
+        agregarBloque(contenedor, crearPanelResumen(), 75, 10);
+        agregarBloque(contenedor, crearPanelFiltros(), 64, 10);
+        agregarBloque(contenedor, crearPanelMovimientos(), 250, 10);
 
-        contenedor.setLayout(
-                new BoxLayout(
-                        contenedor,
-                        BoxLayout.Y_AXIS
-                )
-        );
+        JLabel subtituloMedios = new JLabel("RESUMEN POR MEDIO DE PAGO");
+        subtituloMedios.setForeground(AZUL_OSCURO);
+        subtituloMedios.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        subtituloMedios.setAlignmentX(LEFT_ALIGNMENT);
+        contenedor.add(subtituloMedios);
+        contenedor.add(Box.createVerticalStrut(6));
+        agregarBloque(contenedor, crearPanelMediosPago(), 70, 0);
 
-        contenedor.setBackground(
-                FONDO
-        );
+        JPanel barra = new JPanel(new BorderLayout());
+        barra.setBackground(Color.WHITE);
+        barra.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, BORDE),
+            new EmptyBorder(5, 14, 5, 14)));
+        barra.add(crearPanelAcciones(), BorderLayout.CENTER);
+        add(barra, BorderLayout.SOUTH);
 
-        contenedor.setBorder(
-                new EmptyBorder(
-                        15,
-                        20,
-                        15,
-                        20
-                )
-        );
+        JScrollPane scroll = new JScrollPane(contenedor);
+        scroll.setBorder(null);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.getViewport().setBackground(FONDO);
+        add(scroll, BorderLayout.CENTER);
+    }
 
-        //======================================================
-        // HEADER
-        //======================================================
-        JPanel header
-                = crearHeader();
+    private void agregarBloque(JPanel contenedor, JPanel bloque, int alto, int espacio) {
+        bloque.setAlignmentX(LEFT_ALIGNMENT);
+        bloque.setPreferredSize(new Dimension(1000, alto));
+        bloque.setMinimumSize(new Dimension(0, alto));
+        bloque.setMaximumSize(new Dimension(Integer.MAX_VALUE, alto));
+        contenedor.add(bloque);
+        if (espacio > 0) contenedor.add(Box.createVerticalStrut(espacio));
+    }
 
-        header.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        contenedor.add(
-                header
-        );
-
-        contenedor.add(
-                Box.createVerticalStrut(12)
-        );
-
-        //======================================================
-        // ESTADO
-        //======================================================
-        JPanel estado
-                = crearPanelEstadoCaja();
-
-        estado.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        estado.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        90
-                )
-        );
-
-        contenedor.add(
-                estado
-        );
-
-        contenedor.add(
-                Box.createVerticalStrut(12)
-        );
-
-        //======================================================
-        // RESUMEN
-        //======================================================
-        JPanel resumen
-                = crearPanelResumen();
-
-        resumen.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        resumen.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        95
-                )
-        );
-
-        contenedor.add(
-                resumen
-        );
-
-        contenedor.add(
-                Box.createVerticalStrut(12)
-        );
-
-        //======================================================
-        // FILTROS
-        //======================================================
-        JPanel filtros
-                = crearPanelFiltros();
-
-        filtros.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        filtros.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        70
-                )
-        );
-
-        contenedor.add(
-                filtros
-        );
-
-        contenedor.add(
-                Box.createVerticalStrut(12)
-        );
-
-        //======================================================
-        // TABLA
-        //======================================================
-        JPanel tabla
-                = crearPanelMovimientos();
-
-        tabla.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        tabla.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        330
-                )
-        );
-
-        contenedor.add(
-                tabla
-        );
-
-        contenedor.add(
-                Box.createVerticalStrut(12)
-        );
-
-        //======================================================
-        // MEDIOS DE PAGO
-        //======================================================
-        JPanel medios
-                = crearPanelMediosPago();
-
-        medios.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        medios.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        95
-                )
-        );
-
-        contenedor.add(
-                medios
-        );
-
-        contenedor.add(
-                Box.createVerticalStrut(12)
-        );
-
-        //======================================================
-        // BOTONES
-        //======================================================
-        JPanel acciones
-                = crearPanelAcciones();
-
-        acciones.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        acciones.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        70
-                )
-        );
-
-        contenedor.add(
-                acciones
-        );
-
-        JScrollPane scroll
-                = new JScrollPane(
-                        contenedor
-                );
-
-        scroll.setBorder(
-                null
-        );
-
-        scroll.setHorizontalScrollBarPolicy(
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        );
-
-        scroll.setVerticalScrollBarPolicy(
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-        );
-
-        scroll.getVerticalScrollBar()
-                .setUnitIncrement(
-                        16
-                );
-
-        scroll.getViewport()
-                .setBackground(
-                        FONDO
-                );
-
-        add(
-                scroll,
-                BorderLayout.CENTER
-        );
+    private JPanel crearTarjetaSaldoPrincipal() {
+        JPanel p = new JPanel(new BorderLayout(8, 6));
+        p.setBackground(AZUL_OSCURO);
+        p.setBorder(new EmptyBorder(13, 20, 13, 20));
+        JLabel titulo = new JLabel("SALDO DISPONIBLE EN CAJA");
+        titulo.setForeground(new Color(202, 222, 255));
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        p.add(titulo, BorderLayout.NORTH);
+        lblSaldoActual.setForeground(Color.WHITE);
+        lblSaldoActual.setFont(new Font("Segoe UI", Font.BOLD, 29));
+        p.add(lblSaldoActual, BorderLayout.CENTER);
+        JLabel nota = new JLabel("Efectivo esperado según movimientos registrados");
+        nota.setForeground(new Color(202, 222, 255));
+        nota.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        p.add(nota, BorderLayout.SOUTH);
+        return p;
     }
 
     //==========================================================
     // HEADER
     //==========================================================
     private JPanel crearHeader() {
-
-        JPanel panel
-                = new JPanel();
-
-        panel.setLayout(
-                new BoxLayout(
-                        panel,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-        panel.setOpaque(
-                false
-        );
-
-        JLabel titulo
-                = new JLabel(
-                        "CAJA"
-                );
-
-        titulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        24
-                )
-        );
-
-        titulo.setForeground(
-                AZUL_OSCURO
-        );
-
-        JLabel subtitulo
-                = new JLabel(
-                        "Control de movimientos, ingresos, egresos y cierre de caja"
-                );
-
-        subtitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        14
-                )
-        );
-
-        subtitulo.setForeground(
-                TEXTO_SECUNDARIO
-        );
-
-        panel.add(titulo);
-
-        panel.add(
-                Box.createVerticalStrut(
-                        5
-                )
-        );
-
-        panel.add(
-                subtitulo
-        );
-
-        return panel;
+        JPanel p = new JPanel(new BorderLayout());
+        p.setOpaque(false);
+        JLabel titulo = new JLabel("Caja y movimientos");
+        titulo.setForeground(AZUL_OSCURO);
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 23));
+        JLabel detalle = new JLabel("Control financiero  |  Aperturas, movimientos, arqueos y cierres");
+        detalle.setForeground(TEXTO_SECUNDARIO);
+        detalle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        p.add(titulo, BorderLayout.NORTH);
+        p.add(detalle, BorderLayout.SOUTH);
+        return p;
     }
 
     //==========================================================
@@ -807,10 +626,10 @@ public class PanelCaja extends javax.swing.JPanel {
         JPanel panel
                 = new JPanel(
                         new GridLayout(
-                                1,
                                 3,
-                                15,
-                                0
+                                1,
+                                0,
+                                5
                         )
                 );
 
@@ -851,8 +670,8 @@ public class PanelCaja extends javax.swing.JPanel {
                 = new JPanel(
                         new GridLayout(
                                 1,
-                                5,
-                                12,
+                                4,
+                                10,
                                 0
                         )
                 );
@@ -889,12 +708,7 @@ public class PanelCaja extends javax.swing.JPanel {
                 )
         );
 
-        panel.add(
-                crearTarjetaDato(
-                        "Saldo Actual",
-                        lblSaldoActual
-                )
-        );
+        // El saldo actual se destaca en la tarjeta principal superior.
 
         return panel;
     }
@@ -903,65 +717,30 @@ public class PanelCaja extends javax.swing.JPanel {
     // FILTROS
     //==========================================================
     private JPanel crearPanelFiltros() {
-
-        JPanel panel
-                = new JPanel(
-                        new FlowLayout(
-                                FlowLayout.LEFT,
-                                10,
-                                10
-                        )
-                );
-
-        panel.setBackground(
-                Color.WHITE
-        );
-
-        panel.setBorder(
-                crearBordeTitulo(
-                        "Filtros"
-                )
-        );
-
-        panel.add(
-                crearLabel(
-                        "Tipo"
-                )
-        );
-
-        comboTipoMovimiento.setPreferredSize(
-                new Dimension(
-                        170,
-                        32
-                )
-        );
-
-        panel.add(
-                comboTipoMovimiento
-        );
-
-        panel.add(
-                crearLabel(
-                        "Período"
-                )
-        );
-
-        comboFecha.setPreferredSize(
-                new Dimension(
-                        160,
-                        32
-                )
-        );
-
-        panel.add(
-                comboFecha
-        );
-
-        panel.add(
-                btnBuscar
-        );
-
-        return panel;
+        JPanel p = new JPanel(new BorderLayout(10, 0));
+        p.setBackground(Color.WHITE);
+        p.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDE), new EmptyBorder(10, 12, 10, 12)));
+        JPanel izquierda = new JPanel(new BorderLayout(7, 0));
+        izquierda.setOpaque(false);
+        JLabel lupa = new JLabel("BUSCAR");
+        lupa.setForeground(AZUL_OSCURO);
+        lupa.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        izquierda.add(lupa, BorderLayout.WEST);
+        izquierda.add(txtBuscarMovimiento, BorderLayout.CENTER);
+        p.add(izquierda, BorderLayout.CENTER);
+        JPanel derecha = new JPanel(new FlowLayout(FlowLayout.RIGHT, 7, 0));
+        derecha.setOpaque(false);
+        derecha.add(crearLabel("Tipo"));
+        comboTipoMovimiento.setPreferredSize(new Dimension(145, 35));
+        derecha.add(comboTipoMovimiento);
+        derecha.add(crearLabel("Período"));
+        comboFecha.setPreferredSize(new Dimension(145, 35));
+        derecha.add(comboFecha);
+        btnBuscar.setPreferredSize(new Dimension(92, 35));
+        derecha.add(btnBuscar);
+        p.add(derecha, BorderLayout.EAST);
+        return p;
     }
 
     //==========================================================
@@ -978,11 +757,8 @@ public class PanelCaja extends javax.swing.JPanel {
                 Color.WHITE
         );
 
-        panel.setBorder(
-                crearBordeTitulo(
-                        "Movimientos de Caja"
-                )
-        );
+        panel.setBorder(BorderFactory.createLineBorder(BORDE));
+        panel.add(crearEncabezadoSeccion("MOVIMIENTOS DE CAJA"), BorderLayout.NORTH);
 
         JScrollPane scroll
                 = new JScrollPane(
@@ -1020,11 +796,7 @@ public class PanelCaja extends javax.swing.JPanel {
                 false
         );
 
-        panel.setBorder(
-                crearBordeTitulo(
-                        "Resumen por Medio de Pago"
-                )
-        );
+        panel.setBorder(BorderFactory.createEmptyBorder(3, 0, 0, 0));
 
         panel.add(
                 crearTarjetaDato(
@@ -1101,324 +873,208 @@ public class PanelCaja extends javax.swing.JPanel {
     //==========================================================
     // TARJETA
     //==========================================================
-    private JPanel crearTarjetaDato(
-            String titulo,
-            JLabel valor) {
-
-        JPanel panel
-                = new JPanel(
-                        new BorderLayout()
-                );
-
-        panel.setBackground(
-                Color.WHITE
-        );
-
-        panel.setBorder(
-                BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(
-                                BORDE
-                        ),
-                        new EmptyBorder(
-                                10,
-                                14,
-                                10,
-                                14
-                        )
-                )
-        );
-
-        JLabel lblTitulo
-                = new JLabel(
-                        titulo
-                );
-
-        lblTitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        12
-                )
-        );
-
-        lblTitulo.setForeground(
-                new Color(
-                        65,
-                        70,
-                        80
-                )
-        );
-
-        panel.add(
-                lblTitulo,
-                BorderLayout.NORTH
-        );
-
-        panel.add(
-                valor,
-                BorderLayout.CENTER
-        );
-
+    private JPanel crearTarjetaDato(String titulo, JLabel valor) {
+        Color fondoTarjeta = new Color(238, 244, 255);
+        Color bordeTarjeta = new Color(206, 221, 246);
+        Color acento = AZUL;
+        if (titulo.equals("Ventas") || titulo.equals("Ingresos") || titulo.equals("Efectivo")) {
+            fondoTarjeta = new Color(235, 250, 243);
+            bordeTarjeta = new Color(192, 230, 211);
+            acento = VERDE;
+        } else if (titulo.equals("Egresos")) {
+            fondoTarjeta = new Color(255, 241, 239);
+            bordeTarjeta = new Color(244, 210, 205);
+            acento = ROJO;
+        } else if (titulo.equals("Saldo Actual") || titulo.equals("Estado de Caja")) {
+            fondoTarjeta = new Color(227, 238, 255);
+            bordeTarjeta = new Color(177, 202, 241);
+            acento = AZUL_OSCURO;
+        } else if (titulo.equals("Apertura") || titulo.equals("Transferencia")) {
+            fondoTarjeta = new Color(245, 241, 255);
+            bordeTarjeta = new Color(222, 210, 247);
+            acento = new Color(106, 75, 160);
+        }
+        final Color bg = fondoTarjeta, edge = bordeTarjeta, line = acento;
+        JPanel panel = new JPanel(new BorderLayout(0, 6)) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(bg);
+                g2.fillRoundRect(1, 1, getWidth()-3, getHeight()-3, 16, 16);
+                g2.setColor(edge);
+                g2.drawRoundRect(1, 1, getWidth()-3, getHeight()-3, 16, 16);
+                g2.setColor(line);
+                g2.fillRoundRect(1, 9, 4, Math.max(12, getHeight()-18), 4, 4);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        panel.setOpaque(false);
+        boolean estadoMini = titulo.equals("Estado de Caja") || titulo.equals("Cajero") || titulo.equals("Apertura");
+        panel.setBorder(new EmptyBorder(estadoMini ? 3 : 8, 13, estadoMini ? 3 : 7, 10));
+        JLabel lblTitulo = new JLabel(titulo.toUpperCase(java.util.Locale.ROOT));
+        lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lblTitulo.setForeground(new Color(73, 91, 119));
+        if (estadoMini) {
+            panel.setLayout(new BorderLayout(8, 0));
+            lblTitulo.setPreferredSize(new Dimension(112, 20));
+            valor.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            panel.add(lblTitulo, BorderLayout.WEST);
+            panel.add(valor, BorderLayout.CENTER);
+        } else {
+            valor.setFont(new Font("Segoe UI", Font.BOLD, 18));
+            panel.add(lblTitulo, BorderLayout.NORTH);
+            panel.add(valor, BorderLayout.CENTER);
+        }
         return panel;
     }
 
     //==========================================================
     // DATOS DE PRUEBA
     //==========================================================
-    private void cargarDatosPrueba() {
+    private String dinero(BigDecimal n) { return moneda.format(n == null ? BigDecimal.ZERO : n); }
 
-        modeloTabla.setRowCount(
-                0
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    "26/08/2026",
-                    "08:45",
-                    "Venta",
-                    "Venta N° 00000120",
-                    "Efectivo",
-                    "$ 18.500",
-                    "",
-                    "Santiago"
+    private void refrescarCaja() {
+        try {
+            resumenActual = cajaService.obtenerResumen();
+            CajaService.Resumen r = resumenActual;
+            boolean abierta = r.idSesion > 0;
+            lblEstadoCaja.setText(abierta ? "ABIERTA  #" + r.idSesion : "SIN APERTURA");
+            lblEstadoCaja.setForeground(abierta ? VERDE : ROJO);
+            lblCajero.setText(abierta ? r.cajero : "Sin sesión abierta");
+            lblFechaApertura.setText(abierta ? r.apertura : "—");
+            lblSaldoInicial.setText(dinero(r.inicial));
+            lblVentas.setText(dinero(r.ventas));
+            lblIngresos.setText(dinero(r.ingresos));
+            lblEgresos.setText(dinero(r.egresos));
+            lblSaldoActual.setText(dinero(r.efectivoEsperado));
+            lblEfectivo.setText(dinero(r.efectivoEsperado));
+            lblTarjeta.setText(dinero(r.tarjeta));
+            lblTransferencia.setText(dinero(r.transferencia));
+            lblMercadoPago.setText(dinero(r.mercadoPago));
+            btnAbrirCaja.setEnabled(!abierta);
+            btnIngreso.setEnabled(abierta);
+            btnEgreso.setEnabled(abierta);
+            btnArqueo.setEnabled(abierta);
+            btnCerrarCaja.setEnabled(abierta);
+            modeloTabla.setRowCount(0);
+            if (abierta) {
+                for (CajaService.Movimiento m : cajaService.movimientos(r.idSesion,
+                        String.valueOf(comboTipoMovimiento.getSelectedItem()),
+                        String.valueOf(comboFecha.getSelectedItem()))) {
+                    modeloTabla.addRow(new Object[]{m.fecha, m.hora, m.tipo, m.descripcion,
+                        m.medio, m.ingreso.signum() == 0 ? "" : dinero(m.ingreso),
+                        m.egreso.signum() == 0 ? "" : dinero(m.egreso), m.usuario});
                 }
-        );
+            }
+            aplicarBusquedaLocal();
+        } catch (SQLException ex) {
+            lblEstadoCaja.setText("ERROR DE CONEXIÓN / ESQUEMA");
+            lblCajero.setText("Revisar configuración SQL");
+            modeloTabla.setRowCount(0);
+            btnAbrirCaja.setEnabled(false);
+            btnIngreso.setEnabled(false);
+            btnEgreso.setEnabled(false);
+            btnArqueo.setEnabled(false);
+            btnCerrarCaja.setEnabled(false);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Caja - MariaDB", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
-        modeloTabla.addRow(
-                new Object[]{
-                    "26/08/2026",
-                    "09:10",
-                    "Venta",
-                    "Venta N° 00000121",
-                    "Tarjeta",
-                    "$ 32.000",
-                    "",
-                    "Santiago"
-                }
-        );
+    private void aplicarBusquedaLocal() {
+        String q = txtBuscarMovimiento.getText().trim();
+        if (q.isEmpty()) filtroTabla.setRowFilter(null);
+        else filtroTabla.setRowFilter(RowFilter.regexFilter("(?iu)" + java.util.regex.Pattern.quote(q)));
+    }
 
-        modeloTabla.addRow(
-                new Object[]{
-                    "26/08/2026",
-                    "09:35",
-                    "Ingreso",
-                    "Fondo adicional",
-                    "Efectivo",
-                    "$ 20.000",
-                    "",
-                    "Santiago"
-                }
-        );
+    private void error(Exception ex) {
+        JOptionPane.showMessageDialog(this, ex.getMessage(), "Caja - Operación no realizada", JOptionPane.ERROR_MESSAGE);
+    }
 
-        modeloTabla.addRow(
-                new Object[]{
-                    "26/08/2026",
-                    "10:05",
-                    "Egreso",
-                    "Compra de insumos",
-                    "Efectivo",
-                    "",
-                    "$ 5.500",
-                    "Santiago"
-                }
-        );
-
-        modeloTabla.addRow(
-                new Object[]{
-                    "26/08/2026",
-                    "10:45",
-                    "Pago Proveedor",
-                    "Distribuidora Norte",
-                    "Transferencia",
-                    "",
-                    "$ 10.000",
-                    "Santiago"
-                }
-        );
+    private int usuarioId() {
+        int id = SesionUsuario.getIdUsuario();
+        if (id <= 0) throw new IllegalStateException("Iniciá sesión para operar la caja.");
+        return id;
     }
 
     //==========================================================
     // EVENTOS TEMPORALES
     //==========================================================
     private void configurarEventos() {
-
+        btnBuscar.addActionListener(e -> refrescarCaja());
+        comboTipoMovimiento.addActionListener(e -> refrescarCaja());
+        comboFecha.addActionListener(e -> refrescarCaja());
+        txtBuscarMovimiento.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e) { aplicarBusquedaLocal(); }
+            public void removeUpdate(DocumentEvent e) { aplicarBusquedaLocal(); }
+            public void changedUpdate(DocumentEvent e) { aplicarBusquedaLocal(); }
+        });
         btnAbrirCaja.addActionListener(e -> {
-
-            Window ventana
-                    = SwingUtilities.getWindowAncestor(
-                            this
-                    );
-
-            DialogoAperturaCaja dialogo
-                    = new DialogoAperturaCaja(
-                            ventana,
-                            "Santiago"
-                    );
-
-            dialogo.setVisible(true);
-
-            if (dialogo.isConfirmado()) {
-
-                double saldoInicial
-                        = dialogo.getSaldoInicial();
-
-                System.out.println(
-                        "Caja abierta con: "
-                        + saldoInicial
-                );
-            }
+            try {
+                Window w = SwingUtilities.getWindowAncestor(this);
+                DialogoAperturaCaja d = new DialogoAperturaCaja(w, SesionUsuario.getNombreUsuario());
+                d.setVisible(true);
+                if (d.isConfirmado()) {
+                    cajaService.abrir(usuarioId(), BigDecimal.valueOf(d.getSaldoInicial()), d.getObservaciones());
+                    refrescarCaja();
+                }
+            } catch (Exception ex) { error(ex); }
         });
-
-        btnIngreso.addActionListener(e -> {
-
-            Window ventana
-                    = SwingUtilities.getWindowAncestor(this);
-
-            DialogoIngresoCaja dialogo
-                    = new DialogoIngresoCaja(
-                            ventana,
-                            "Santiago"
-                    );
-
-            dialogo.setVisible(true);
-
-            if (dialogo.isConfirmado()) {
-
-                System.out.println(
-                        "Ingreso: $ "
-                        + dialogo.getMonto()
-                );
-
-                System.out.println(
-                        "Medio: "
-                        + dialogo.getMedioPago()
-                );
-
-                System.out.println(
-                        "Motivo: "
-                        + dialogo.getMotivo()
-                );
-            }
-        });
-
-        btnEgreso.addActionListener(e -> {
-
-            Window ventana
-                    = SwingUtilities.getWindowAncestor(this);
-
-            DialogoEgresoCaja dialogo
-                    = new DialogoEgresoCaja(
-                            ventana,
-                            "Santiago"
-                    );
-
-            dialogo.setVisible(true);
-
-            if (dialogo.isConfirmado()) {
-
-                System.out.println(
-                        "Egreso: $ "
-                        + dialogo.getMonto()
-                );
-
-                System.out.println(
-                        "Medio de pago: "
-                        + dialogo.getMedioPago()
-                );
-
-                System.out.println(
-                        "Motivo: "
-                        + dialogo.getMotivo()
-                );
-            }
-        });
+        btnIngreso.addActionListener(e -> registrarMovimiento(true));
+        btnEgreso.addActionListener(e -> registrarMovimiento(false));
         btnArqueo.addActionListener(e -> {
-
-            Window ventana
-                    = SwingUtilities.getWindowAncestor(this);
-
-            DialogoArqueoCaja dialogo
-                    = new DialogoArqueoCaja(
-                            ventana,
-                            "Santiago",
-                            152500,
-                            64500,
-                            22900,
-                            0
-                    );
-
-            dialogo.setVisible(true);
-
-            if (dialogo.isConfirmado()) {
-
-                System.out.println(
-                        "Esperado: "
-                        + dialogo.getEfectivoEsperado()
-                );
-
-                System.out.println(
-                        "Contado: "
-                        + dialogo.getEfectivoContado()
-                );
-
-                System.out.println(
-                        "Diferencia: "
-                        + dialogo.getDiferencia()
-                );
-
-                System.out.println(
-                        "Estado: "
-                        + dialogo.getEstadoArqueo()
-                );
-            }
+            try {
+                if (resumenActual == null || resumenActual.idSesion <= 0) return;
+                CajaService.Resumen r = resumenActual;
+                DialogoArqueoCaja d = new DialogoArqueoCaja(SwingUtilities.getWindowAncestor(this),
+                    SesionUsuario.getNombreUsuario(), r.efectivoEsperado.doubleValue(),
+                    r.tarjeta.doubleValue(), r.transferencia.doubleValue(), r.mercadoPago.doubleValue());
+                d.setVisible(true);
+                if (d.isConfirmado()) {
+                    cajaService.arquear(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), "Arqueo manual");
+                    refrescarCaja();
+                }
+            } catch (Exception ex) { error(ex); }
         });
-
         btnCerrarCaja.addActionListener(e -> {
-
-            Window ventana
-                    = SwingUtilities.getWindowAncestor(this);
-
-            DialogoCerrarCaja dialogo
-                    = new DialogoCerrarCaja(
-                            ventana,
-                            "Santiago",
-                            50000, // saldo inicial
-                            98000, // ventas efectivo
-                            20000, // ingresos efectivo
-                            15500, // egresos efectivo
-
-                            64500, // tarjeta
-                            22900, // transferencia
-                            0 // Mercado Pago
-                    );
-
-            dialogo.setVisible(true);
-
-            if (dialogo.isConfirmado()) {
-
-                System.out.println("CAJA CERRADA");
-
-                System.out.println(
-                        "Esperado: "
-                        + dialogo.getEfectivoEsperado()
-                );
-
-                System.out.println(
-                        "Contado: "
-                        + dialogo.getEfectivoContado()
-                );
-
-                System.out.println(
-                        "Diferencia: "
-                        + dialogo.getDiferencia()
-                );
-
-                System.out.println(
-                        "Estado: "
-                        + dialogo.getEstadoCierre()
-                );
-            }
+            try {
+                if (resumenActual == null || resumenActual.idSesion <= 0) return;
+                CajaService.Resumen r = resumenActual;
+                DialogoCerrarCaja d = new DialogoCerrarCaja(SwingUtilities.getWindowAncestor(this),
+                    SesionUsuario.getNombreUsuario(), r.inicial.doubleValue(), r.ventasEfectivo.doubleValue(),
+                    r.ingresosEfectivo.doubleValue(), r.egresosEfectivo.doubleValue(),
+                    r.tarjeta.doubleValue(), r.transferencia.doubleValue(), r.mercadoPago.doubleValue());
+                d.setVisible(true);
+                if (d.isConfirmado()) {
+                    cajaService.cerrar(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), "Cierre de caja");
+                    refrescarCaja();
+                }
+            } catch (Exception ex) { error(ex); }
         });
+    }
+
+    private void registrarMovimiento(boolean ingreso) {
+        try {
+            if (resumenActual == null || resumenActual.idSesion <= 0) return;
+            Window w = SwingUtilities.getWindowAncestor(this);
+            if (ingreso) {
+                DialogoIngresoCaja d = new DialogoIngresoCaja(w, SesionUsuario.getNombreUsuario());
+                d.setVisible(true);
+                if (d.isConfirmado()) {
+                    cajaService.registrar(resumenActual.idSesion, usuarioId(), true,
+                        BigDecimal.valueOf(d.getMonto()), d.getMedioPago(), d.getMotivo(), d.getObservaciones());
+                    refrescarCaja();
+                }
+            } else {
+                DialogoEgresoCaja d = new DialogoEgresoCaja(w, SesionUsuario.getNombreUsuario());
+                d.setVisible(true);
+                if (d.isConfirmado()) {
+                    cajaService.registrar(resumenActual.idSesion, usuarioId(), false,
+                        BigDecimal.valueOf(d.getMonto()), d.getMedioPago(), d.getMotivo(), d.getObservaciones());
+                    refrescarCaja();
+                }
+            }
+        } catch (Exception ex) { error(ex); }
     }
 
     //==========================================================
@@ -1545,46 +1201,92 @@ public class PanelCaja extends javax.swing.JPanel {
         return boton;
     }
 
-    private RSButtonRound crearBotonAccion(
-            String texto,
-            Color color) {
-
-        RSButtonRound boton
-                = new RSButtonRound();
-
-        boton.setText(
-                texto
-        );
-
-        boton.setPreferredSize(
-                new Dimension(
-                        145,
-                        40
-                )
-        );
-
-        boton.setBackground(
-                color
-        );
-
-        boton.setForeground(
-                Color.WHITE
-        );
-
-        boton.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        12
-                )
-        );
-
+    /** Botón dibujado directamente: evita que el Look&Feel o RSButtonRound
+     * pinte texto gris/blanco invisible al deshabilitar acciones. */
+    private JButton crearBotonAccion(String texto, Color color) {
+        JButton boton = new JButton(texto) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                            RenderingHints.VALUE_ANTIALIAS_ON);
+                    Color fondo = isEnabled() ? color : new Color(125, 140, 161);
+                    if (getModel().isPressed() && isEnabled()) fondo = fondo.darker();
+                    else if (getModel().isRollover() && isEnabled()) fondo = fondo.brighter();
+                    g2.setColor(fondo);
+                    g2.fill(new RoundRectangle2D.Float(0, 0, getWidth()-1, getHeight()-1, 13, 13));
+                    g2.setColor(Color.WHITE);
+                    g2.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                    java.awt.FontMetrics fm = g2.getFontMetrics();
+                    int textoAncho = fm.stringWidth(getText());
+                    int iconoAncho = 19, separacion = 9;
+                    int total = iconoAncho + separacion + textoAncho;
+                    int inicio = Math.max(8, (getWidth()-total)/2);
+                    new IconoCaja(getText()).paintIcon(this, g2, inicio,
+                            (getHeight()-19)/2);
+                    g2.drawString(getText(), inicio+iconoAncho+separacion,
+                            (getHeight()-fm.getHeight())/2+fm.getAscent());
+                } finally { g2.dispose(); }
+            }
+        };
+        boton.setPreferredSize(new Dimension(142, 42));
+        boton.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        boton.setForeground(Color.WHITE);
+        boton.setBackground(color);
+        boton.setContentAreaFilled(false);
+        boton.setBorderPainted(false);
+        boton.setFocusPainted(false);
+        boton.setOpaque(false);
+        boton.setRolloverEnabled(true);
+        boton.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        boton.getAccessibleContext().setAccessibleName(texto);
         return boton;
+    }
+
+    /** Iconos vectoriales, sin depender de emojis ni fuentes externas. */
+    private static final class IconoCaja implements Icon {
+        private final String tipo;
+        IconoCaja(String tipo) { this.tipo=tipo; }
+        @Override public int getIconWidth() { return 19; }
+        @Override public int getIconHeight() { return 19; }
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D a=(Graphics2D)g.create();
+            try {
+                a.translate(x,y);a.setColor(Color.WHITE);
+                a.setStroke(new BasicStroke(1.8f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+                a.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+                if(tipo.contains("ABRIR")) {
+                    a.drawRoundRect(2,6,15,11,3,3);a.drawLine(5,6,5,3);a.drawLine(5,3,14,3);
+                    a.drawLine(9,9,9,14);a.drawLine(7,11,11,11);
+                } else if(tipo.contains("CERRAR")) {
+                    a.drawRoundRect(2,7,15,10,3,3);a.drawRoundRect(5,2,9,8,3,3);
+                    a.drawLine(8,12,11,12);
+                } else if(tipo.contains("ARQUEO")) {
+                    a.drawRoundRect(3,2,13,16,3,3);a.drawLine(6,6,13,6);
+                    a.drawLine(6,10,8,12);a.drawLine(8,12,13,8);
+                } else {
+                    a.drawOval(4,4,11,11);a.drawLine(9,7,9,12);
+                    if(tipo.contains("INGRESO")) {a.drawLine(6,10,9,7);a.drawLine(9,7,12,10);}
+                    else {a.drawLine(6,10,9,13);a.drawLine(9,13,12,10);}
+                }
+            } finally { a.dispose(); }
+        }
     }
 
     //==========================================================
     // BORDE
     //==========================================================
+    private JPanel crearEncabezadoSeccion(String titulo) {
+        JPanel cabecera = new JPanel(new BorderLayout());
+        cabecera.setBackground(new Color(28, 68, 133));
+        cabecera.setBorder(new EmptyBorder(9, 13, 9, 13));
+        JLabel texto = new JLabel(titulo);
+        texto.setForeground(Color.WHITE);
+        texto.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        cabecera.add(texto, BorderLayout.WEST);
+        return cabecera;
+    }
+
     private javax.swing.border.TitledBorder crearBordeTitulo(
             String titulo) {
 
