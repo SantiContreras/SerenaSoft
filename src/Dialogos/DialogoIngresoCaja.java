@@ -1,6 +1,5 @@
 package Dialogos;
 
-import Diseños.EstiloBotones;
 import java.awt.*;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
@@ -115,9 +114,6 @@ public class DialogoIngresoCaja extends JDialog {
         setDefaultCloseOperation(
                 JDialog.DISPOSE_ON_CLOSE
         );
-         EstiloBotones.corregirBotones(
-                getContentPane()
-    );
         setLocationRelativeTo(parent);
     }
 
@@ -276,10 +272,10 @@ public class DialogoIngresoCaja extends JDialog {
 
         contenido.setBorder(
                 new EmptyBorder(
-                        18,
-                        22,
-                        18,
-                        22
+                        12,
+                        20,
+                        12,
+                        20
                 )
         );
 
@@ -1168,14 +1164,12 @@ public class DialogoIngresoCaja extends JDialog {
             int ancho) {
 
         JButton boton =
-                new JButton(
-                        texto
-                );
+                new BotonSerena(texto);
 
         boton.setPreferredSize(
                 new Dimension(
                         ancho,
-                        40
+                        44
                 )
         );
 
@@ -1183,7 +1177,7 @@ public class DialogoIngresoCaja extends JDialog {
                 new Font(
                         "Segoe UI",
                         Font.BOLD,
-                        11
+                        12
                 )
         );
 
@@ -1349,5 +1343,47 @@ public class DialogoIngresoCaja extends JDialog {
 
         return lblHora
                 .getText();
+    }
+
+    /** Botón dibujado en Java2D: mantiene texto blanco visible en cualquier Look & Feel. */
+    private static final class BotonSerena extends JButton {
+        private Color normal = new Color(25,70,145);
+        private Color hover = new Color(45,95,180);
+        private boolean encima;
+        BotonSerena(String texto) {
+            super(texto);
+            setOpaque(false);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setFocusPainted(false);
+            setForeground(Color.WHITE);
+            setFont(new Font("Segoe UI",Font.BOLD,12));
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override public void mouseEntered(java.awt.event.MouseEvent e) { encima=true; repaint(); }
+                @Override public void mouseExited(java.awt.event.MouseEvent e) { encima=false; repaint(); }
+            });
+        }
+        @Override public void setBackground(Color c) {
+            super.setBackground(c);
+            if(c!=null) { normal=c; repaint(); }
+        }
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2=(Graphics2D)g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            Color base=normal==null?new Color(25,70,145):normal;
+            if(encima && isEnabled()) base=base.brighter();
+            if(!isEnabled()) base=new Color(116,130,151);
+            g2.setColor(base);
+            g2.fillRoundRect(0,0,getWidth()-1,getHeight()-1,12,12);
+            g2.setFont(getFont());
+            g2.setColor(Color.WHITE);
+            FontMetrics fm=g2.getFontMetrics();
+            String t=getText()==null?"":getText();
+            int x=(getWidth()-fm.stringWidth(t))/2;
+            int y=(getHeight()-fm.getHeight())/2+fm.getAscent();
+            g2.drawString(t,Math.max(8,x),y);
+            g2.dispose();
+        }
     }
 }

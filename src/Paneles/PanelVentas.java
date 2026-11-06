@@ -496,7 +496,39 @@ public class PanelVentas extends javax.swing.JPanel {
             for(LineaCarrito linea:carrito.values())solicitud.items.add(new services.VentaService.Item(
                 linea.producto.getIdProducto(),linea.cantidad,java.math.BigDecimal.ZERO));
             solicitud.pagos.add(new services.VentaService.Pago(medio,total,recibido,""));
-            services.VentaService.Resultado resultado=new services.VentaService().confirmar(solicitud);
+            services.VentaService.Resultado resultado;
+            try {
+                resultado=new services.VentaService().confirmar(solicitud);
+            } catch (services.VentaService.StockInsuficienteException falta) {
+                int opcion=javax.swing.JOptionPane.showConfirmDialog(this,
+                    "El producto está físicamente en la caja, pero hay una diferencia de inventario.\n\n"
+                    +falta.getMessage()+"\n\n"
+                    +"¿Solicitar autorización del administrador para continuar con esta venta?",
+                    "Autorización de stock",javax.swing.JOptionPane.YES_NO_OPTION,
+                    javax.swing.JOptionPane.WARNING_MESSAGE);
+                if(opcion!=javax.swing.JOptionPane.YES_OPTION)return;
+                javax.swing.JTextField usuarioAdmin=new javax.swing.JTextField(22);
+                javax.swing.JPasswordField claveAdmin=new javax.swing.JPasswordField(22);
+                javax.swing.JPanel credenciales=new javax.swing.JPanel(new java.awt.GridLayout(0,1,5,6));
+                credenciales.add(new javax.swing.JLabel("Usuario administrador:"));
+                credenciales.add(usuarioAdmin);
+                credenciales.add(new javax.swing.JLabel("Contraseña:"));
+                credenciales.add(claveAdmin);
+                int ok=javax.swing.JOptionPane.showConfirmDialog(this,credenciales,
+                    "Autorizar excepción de inventario",javax.swing.JOptionPane.OK_CANCEL_OPTION,
+                    javax.swing.JOptionPane.PLAIN_MESSAGE);
+                if(ok!=javax.swing.JOptionPane.OK_OPTION)return;
+                char[] temporal=claveAdmin.getPassword();
+                try {
+                    solicitud.autorizadorUsuario=usuarioAdmin.getText().trim();
+                    solicitud.autorizadorClave=new String(temporal);
+                    resultado=new services.VentaService().confirmar(solicitud);
+                } finally {
+                    java.util.Arrays.fill(temporal,'\0');
+                    solicitud.autorizadorClave=null;
+                    claveAdmin.setText("");
+                }
+            }
             carrito.clear();descuentoGeneralVenta=java.math.BigDecimal.ZERO;
             txtImporteRecibido.setText("");
             txtCliente.setText("Consumidor Final");

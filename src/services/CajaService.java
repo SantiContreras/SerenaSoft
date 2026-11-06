@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import sesion.SesionUsuario;
 
 /** Operaciones de caja transaccionales. Nunca contabiliza reintegros pendientes como egresos. */
 public final class CajaService {
@@ -46,10 +47,24 @@ public final class CajaService {
             try(ResultSet r=p.executeQuery()) { if (!r.next() || !"ABIERTA".equals(r.getString(1))) throw new SQLException("La caja ya no está abierta. Actualizá el panel."); }
         }
     }
+    private static void verificarPropietario(Connection c, long sesion, int usuario) throws SQLException {
+        if (usuario <= 0 || usuario != SesionUsuario.getIdUsuario())
+            throw new SQLException("El usuario activo no corresponde a esta operación de caja.");
+        try (PreparedStatement p = c.prepareStatement("SELECT id_usuario_apertura FROM caja_sesion WHERE id_sesion=? FOR UPDATE")) {
+            p.setLong(1, sesion);
+            try (ResultSet rs = p.executeQuery()) {
+                if (!rs.next() || rs.getInt(1) != usuario)
+                    throw new SQLException("Esta caja pertenece a otro cajero.");
+            }
+        }
+    }
     public Resumen obtenerResumen() throws SQLException {
+        int usuarioActual = SesionUsuario.getIdUsuario();
+        if (usuarioActual <= 0) throw new SQLException("Iniciá sesión para consultar tu caja.");
         Resumen r = new Resumen();
         try(Connection c=conexion.getConexion()) {
-            try(PreparedStatement p=c.prepareStatement("SELECT cs.id_sesion,cs.monto_inicial,DATE_FORMAT(cs.fecha_apertura,'%d/%m/%Y %H:%i'),u.nombre_completo FROM caja_sesion cs JOIN usuario u ON u.id_usuario=cs.id_usuario_apertura WHERE cs.estado='ABIERTA' ORDER BY cs.id_sesion DESC LIMIT 1")) {
+            try(PreparedStatement p=c.prepareStatement("SELECT cs.id_sesion,cs.monto_inicial,DATE_FORMAT(cs.fecha_apertura,'%d/%m/%Y %H:%i'),u.nombre_completo FROM caja_sesion cs JOIN usuario u ON u.id_usuario=cs.id_usuario_apertura WHERE cs.estado='ABIERTA' AND cs.id_usuario_apertura=? ORDER BY cs.id_sesion DESC LIMIT 1")) {
+                p.setInt(1,usuarioActual);
                 try(ResultSet x=p.executeQuery()) { if(x.next()) {r.idSesion=x.getLong(1);r.inicial=money(x,2);r.apertura=x.getString(3);r.cajero=x.getString(4);} }
             }
             if(r.idSesion==0) return r;
@@ -91,12 +106,38 @@ public final class CajaService {
         try(Connection c=conexion.getConexion()) {
             c.setAutoCommit(false);
             try {
-                long idCaja;
-                try(PreparedStatement p=c.prepareStatement("SELECT id_caja FROM caja WHERE activo=1 ORDER BY id_caja LIMIT 1 FOR UPDATE");ResultSet r=p.executeQuery()) {
-                    if(!r.next())throw new SQLException("No hay caja configurada. Ejecutá el SQL de instalación.");idCaja=r.getLong(1);
+                // Serializar las aperturas del mismo usuario, incluso desde dos equipos.
+                try (PreparedStatement lock = c.prepareStatement("SELECT id_usuario FROM usuario WHERE id_usuario=? FOR UPDATE")) {
+                    lock.setInt(1, usuario);
+                    try (ResultSet rs = lock.executeQuery()) {
+                        if (!rs.next()) throw new SQLException("Usuario inexistente.");
+                    }
                 }
-                try(PreparedStatement p=c.prepareStatement("SELECT id_sesion FROM caja_sesion WHERE id_caja=? AND estado='ABIERTA' LIMIT 1")) {
-                    p.setLong(1,idCaja);try(ResultSet r=p.executeQuery()){if(r.next())throw new SQLException("Ya existe una sesión abierta para esta caja.");}
+                try (PreparedStatement check = c.prepareStatement("SELECT id_sesion FROM caja_sesion WHERE id_usuario_apertura=? AND estado='ABIERTA' LIMIT 1")) {
+                    check.setInt(1, usuario);
+                    try (ResultSet rs = check.executeQuery()) {
+                        if (rs.next()) throw new SQLException("Ya tenés una caja abierta. Cerrala antes de abrir otra.");
+                    }
+                }
+                // Caja física/lógica dedicada a cada cajero. No reutilizar CAJA-01 de otro usuario.
+                String codigo = "CAJERO-" + usuario;
+                long idCaja;
+                try (PreparedStatement caja = c.prepareStatement("SELECT id_caja FROM caja WHERE codigo=? AND activo=1 FOR UPDATE")) {
+                    caja.setString(1, codigo);
+                    try (ResultSet rs = caja.executeQuery()) {
+                        if (rs.next()) idCaja = rs.getLong(1);
+                        else {
+                            try (PreparedStatement ins = c.prepareStatement("INSERT INTO caja(codigo,nombre,activo) VALUES(?,?,1)", Statement.RETURN_GENERATED_KEYS)) {
+                                ins.setString(1, codigo);
+                                ins.setString(2, "Caja del usuario " + usuario);
+                                ins.executeUpdate();
+                                try (ResultSet keys = ins.getGeneratedKeys()) {
+                                    if (!keys.next()) throw new SQLException("No se pudo crear la caja del usuario.");
+                                    idCaja = keys.getLong(1);
+                                }
+                            }
+                        }
+                    }
                 }
                 try(PreparedStatement p=c.prepareStatement("INSERT INTO caja_sesion(id_caja,id_usuario_apertura,monto_inicial,estado,observacion_apertura) VALUES(?,?,?,'ABIERTA',?)")) {
                     p.setLong(1,idCaja);p.setInt(2,usuario);p.setBigDecimal(3,inicial);p.setString(4,observacion);p.executeUpdate();
@@ -111,6 +152,7 @@ public final class CajaService {
         try(Connection c=conexion.getConexion()) {
             c.setAutoCommit(false);
             try {
+                verificarPropietario(c, sesion, usuario);
                 bloquearSesion(c,sesion);
                 try(PreparedStatement p=c.prepareStatement("INSERT INTO caja_movimiento(id_sesion,id_usuario,tipo,medio_pago,monto,motivo,observaciones) VALUES(?,?,?,?,?,?,?)")) {
                     p.setLong(1,sesion);p.setInt(2,usuario);p.setString(3,ingreso?"INGRESO":"EGRESO");p.setString(4,k);p.setBigDecimal(5,monto);p.setString(6,motivo);p.setString(7,observaciones);p.executeUpdate();
@@ -121,10 +163,11 @@ public final class CajaService {
     }
     public void arquear(long sesion,int usuario,BigDecimal contado,String obs) throws SQLException {
         if(contado==null || contado.signum()<0)throw new IllegalArgumentException("Conteo inválido.");
+        if (usuario != SesionUsuario.getIdUsuario()) throw new SQLException("Usuario de caja no coincide con la sesión actual.");
         Resumen r=obtenerResumen();if(r.idSesion!=sesion)throw new SQLException("La sesión cambió.");
         try(Connection c=conexion.getConexion()) {
             c.setAutoCommit(false);
-            try {bloquearSesion(c,sesion);
+            try {verificarPropietario(c, sesion, usuario);bloquearSesion(c,sesion);
                 try(PreparedStatement p=c.prepareStatement("INSERT INTO arqueo_caja(id_sesion,id_usuario,efectivo_esperado,efectivo_contado,diferencia,observaciones) VALUES(?,?,?,?,?,?)")) {
                     p.setLong(1,sesion);p.setInt(2,usuario);p.setBigDecimal(3,r.efectivoEsperado);p.setBigDecimal(4,contado);p.setBigDecimal(5,contado.subtract(r.efectivoEsperado));p.setString(6,obs);p.executeUpdate();}
                 c.commit();
@@ -133,10 +176,11 @@ public final class CajaService {
     }
     public void cerrar(long sesion,int usuario,BigDecimal contado,String obs) throws SQLException {
         if(contado==null || contado.signum()<0)throw new IllegalArgumentException("Conteo inválido.");
+        if (usuario != SesionUsuario.getIdUsuario()) throw new SQLException("Usuario de caja no coincide con la sesión actual.");
         Resumen r=obtenerResumen();if(r.idSesion!=sesion)throw new SQLException("La sesión cambió.");
         try(Connection c=conexion.getConexion()) {
             c.setAutoCommit(false);
-            try {bloquearSesion(c,sesion);
+            try {verificarPropietario(c, sesion, usuario);bloquearSesion(c,sesion);
                 try(PreparedStatement p=c.prepareStatement("UPDATE caja_sesion SET estado='CERRADA',id_usuario_cierre=?,fecha_cierre=NOW(),efectivo_esperado=?,efectivo_contado=?,diferencia=?,observacion_cierre=? WHERE id_sesion=? AND estado='ABIERTA'")) {
                     p.setInt(1,usuario);p.setBigDecimal(2,r.efectivoEsperado);p.setBigDecimal(3,contado);p.setBigDecimal(4,contado.subtract(r.efectivoEsperado));p.setString(5,obs);p.setLong(6,sesion);if(p.executeUpdate()!=1)throw new SQLException("No se pudo cerrar la caja.");}
                 c.commit();

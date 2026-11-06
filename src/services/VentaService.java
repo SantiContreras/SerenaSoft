@@ -36,6 +36,8 @@ public final class VentaService {
         public Integer clienteId, cajaSesionId;
         public BigDecimal descuentoGeneral=BigDecimal.ZERO;
         public String observaciones="";
+        /** Credenciales de autorización sólo para esta venta; nunca se guardan. */
+        public String autorizadorUsuario, autorizadorClave;
         public final List<Item> items=new ArrayList<>();
         public final List<Pago> pagos=new ArrayList<>();
     }
@@ -45,6 +47,9 @@ public final class VentaService {
         Resultado(long id,long numero,BigDecimal sub,BigDecimal desc,BigDecimal total,BigDecimal cambio){
             this.ventaId=id;this.numero=numero;this.subtotal=sub;this.descuento=desc;this.total=total;this.cambio=cambio;
         }
+    }
+    public static final class StockInsuficienteException extends SQLException {
+        public StockInsuficienteException(String detalle){super(detalle);}
     }
     private static final class Linea {
         int id; String nombre; BigDecimal cantidad, precio, costo, iva, descuentoPorcentaje, descuentoImporte, subtotal, ivaImporte;
@@ -112,17 +117,20 @@ public final class VentaService {
                     cambio=cambio.add(recibido.subtract(p.monto));
                 }
                 validar(totalPagos.compareTo(total)==0,"Pagos no coinciden con total: "+totalPagos+" vs "+total);
-                // Vincular automáticamente la venta con la caja abierta (si la hay).
-                // Nunca se inventa una sesión ni se reescriben ventas históricas.
-                Integer sesionParaVenta = s.cajaSesionId;
-                if (sesionParaVenta == null) {
-                    try (PreparedStatement ps = c.prepareStatement(
-                            "SELECT id_sesion FROM caja_sesion WHERE estado='ABIERTA' ORDER BY id_sesion DESC LIMIT 1")) {
-                        try (ResultSet rs = ps.executeQuery()) {
-                            if (rs.next()) sesionParaVenta = rs.getInt(1);
-                        }
+                // No vincular jamás una venta a la última caja global.
+                // Bloquear la sesión del cajero dentro de la misma transacción de venta.
+                Integer sesionParaVenta = null;
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT id_sesion FROM caja_sesion WHERE id_usuario_apertura=? AND estado='ABIERTA' ORDER BY id_sesion DESC LIMIT 1 FOR UPDATE")) {
+                    ps.setInt(1, s.usuarioId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) sesionParaVenta = rs.getInt(1);
                     }
                 }
+                if (sesionParaVenta == null)
+                    throw new SQLException("Para cobrar una venta debés abrir tu propia caja primero.");
+                if (s.cajaSesionId != null && !s.cajaSesionId.equals(sesionParaVenta))
+                    throw new SQLException("La caja seleccionada no pertenece al cajero o ya fue cerrada.");
                 VentaDao ventaDao=new VentaDao();
                 VentaDetalleDao detalleDao=new VentaDetalleDao();
                 VentaPagoDao pagoDao=new VentaPagoDao();
@@ -134,6 +142,9 @@ public final class VentaService {
                 venta.total=total;venta.observaciones=s.observaciones;
                 long id=ventaDao.insertar(c,venta);
                 BigDecimal distribuido=BigDecimal.ZERO;
+                Integer autorizadorId=null;
+                String autorizadorNombre=null;
+                java.util.List<String> excepcionesStock=new java.util.ArrayList<>();
                 for(int i=0;i<lineas.size();i++){
                     Linea l=lineas.get(i);
                     BigDecimal parte=(i==lineas.size()-1)?general.subtract(distribuido):money(general.multiply(l.subtotal).divide(netoLineas,8,RoundingMode.HALF_UP));
@@ -153,7 +164,28 @@ public final class VentaService {
                             try(ResultSet rs=ps.executeQuery()){anterior=rs.next()?rs.getBigDecimal(1):BigDecimal.ZERO;}
                         }
                         BigDecimal posterior=anterior.subtract(l.cantidad);
-                        validar(l.sinStock || posterior.signum()>=0,"Stock insuficiente: "+l.nombre);
+                        if (!l.sinStock && posterior.signum()<0) {
+                            if (s.autorizadorUsuario==null || s.autorizadorClave==null) {
+                                throw new StockInsuficienteException("Stock insuficiente: " + l.nombre
+                                    + " | registrado: " + anterior.toPlainString()
+                                    + " | solicitado: " + l.cantidad.toPlainString());
+                            }
+                            if (autorizadorId==null) {
+                                try (PreparedStatement auth=c.prepareStatement(
+                                    "SELECT u.id_usuario,u.nombre_completo,u.password_hash FROM usuario u "
+                                  + "JOIN rol r ON r.id_rol=u.id_rol WHERE LOWER(u.username)=LOWER(?) "
+                                  + "AND u.estado='ACTIVO' AND r.activo=1 AND UPPER(r.nombre)='ADMINISTRADOR' LIMIT 1")) {
+                                    auth.setString(1,s.autorizadorUsuario.trim());
+                                    try (ResultSet ar=auth.executeQuery()) {
+                                        if (!ar.next() || !security.PasswordUtil.verificar(s.autorizadorClave,ar.getString("password_hash")))
+                                            throw new SQLException("Autorización rechazada: credenciales de administrador inválidas.");
+                                        autorizadorId=ar.getInt("id_usuario");
+                                        autorizadorNombre=ar.getString("nombre_completo");
+                                    }
+                                }
+                            }
+                            excepcionesStock.add(l.nombre+" [antes="+anterior.toPlainString()+", después="+posterior.toPlainString()+"]");
+                        }
                         int actualizados;
                         try(PreparedStatement ps=c.prepareStatement("UPDATE stock_producto SET cantidad=? WHERE id_producto=? AND id_deposito=?")){
                             bind(ps,posterior,l.id,s.depositoId);actualizados=ps.executeUpdate();
@@ -172,6 +204,11 @@ public final class VentaService {
                     pago.importeRecibido=money(recibido);pago.cambio=money(recibido.subtract(p.monto));
                     pago.referencia=p.referencia;
                     pagoDao.insertar(c,pago);
+                }
+                if (!excepcionesStock.isEmpty()) {
+                    String registro="AUTORIZACIÓN STOCK POR " + autorizadorNombre + " (ID " + autorizadorId + "): " + String.join("; ",excepcionesStock);
+                    update(c,"UPDATE venta SET observaciones=CONCAT(COALESCE(observaciones,''), ?, ?) WHERE id_venta=?",
+                        (s.observaciones==null || s.observaciones.isBlank())?"":" | ",registro,id);
                 }
                 ventaDao.registrarFinalizacion(c,id,s.usuarioId);
                 c.commit();return new Resultado(id,numero,bruto,descuentosLineas.add(general),total,money(cambio));

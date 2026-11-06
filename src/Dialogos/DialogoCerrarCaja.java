@@ -1,6 +1,5 @@
 package Dialogos;
 
-import Diseños.EstiloBotones;
 import java.awt.*;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
@@ -153,17 +152,16 @@ public class DialogoCerrarCaja extends JDialog {
         setTitle("Cierre de Caja");
         setModal(true);
 
-        setSize(760, 790);
-        setMinimumSize(new Dimension(700, 700));
+        setSize(740, 625);
+        setMinimumSize(new Dimension(670, 530));
 
-        setResizable(false);
+        setResizable(true);
 
         setDefaultCloseOperation(
                 JDialog.DISPOSE_ON_CLOSE
         );
-        EstiloBotones.corregirBotones(
-                getContentPane()
-        );
+        // Botones con pintura propia, independientes del Look & Feel.
+
         setLocationRelativeTo(parent);
     }
 
@@ -322,10 +320,10 @@ public class DialogoCerrarCaja extends JDialog {
 
         contenido.setBorder(
                 new EmptyBorder(
+                        10,
                         18,
-                        22,
-                        18,
-                        22
+                        10,
+                        18
                 )
         );
 
@@ -398,7 +396,7 @@ public class DialogoCerrarCaja extends JDialog {
         contenido.add(panel);
 
         contenido.add(
-                Box.createVerticalStrut(12)
+                Box.createVerticalStrut(8)
         );
     }
 
@@ -422,10 +420,10 @@ public class DialogoCerrarCaja extends JDialog {
 
         panel.setBorder(
                 new EmptyBorder(
-                        18,
-                        25,
-                        16,
-                        25
+                        12,
+                        20,
+                        10,
+                        20
                 )
         );
 
@@ -817,7 +815,7 @@ public class DialogoCerrarCaja extends JDialog {
                         new FlowLayout(
                                 FlowLayout.RIGHT,
                                 10,
-                                12
+                                8
                         )
                 );
 
@@ -1488,132 +1486,46 @@ public class DialogoCerrarCaja extends JDialog {
     //==========================================================
     // BOTON BASE
     //==========================================================
-    private JButton crearBotonBase(
-            String texto,
-            int ancho) {
-
-        JButton boton
-                = new JButton(texto);
-
-        boton.setPreferredSize(
-                new Dimension(
-                        ancho,
-                        40
-                )
-        );
-
-        boton.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        11
-                )
-        );
-
+    private JButton crearBotonBase(String texto, int ancho) {
+        JButton boton = new JButton(texto) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                Color base = (Color) getClientProperty("serenaColor");
+                if (base == null) base = AZUL_SERENA;
+                if (!isEnabled()) base = new Color(153, 163, 179);
+                else if (getModel().isPressed()) base = base.darker();
+                else if (getModel().isRollover()) base = base.brighter();
+                g2.setColor(base);
+                g2.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                g2.setFont(getFont());
+                g2.setColor(Color.WHITE);
+                FontMetrics fm = g2.getFontMetrics();
+                g2.drawString(getText(), (getWidth()-fm.stringWidth(getText()))/2,
+                        (getHeight()-fm.getHeight())/2+fm.getAscent());
+                g2.dispose();
+            }
+        };
+        boton.setPreferredSize(new Dimension(ancho, 40));
+        boton.setMinimumSize(new Dimension(ancho, 40));
+        boton.setFont(new Font("Segoe UI", Font.BOLD, 12));
         boton.setFocusPainted(false);
-
-        boton.setCursor(
-                new Cursor(
-                        Cursor.HAND_CURSOR
-                )
-        );
-
+        boton.setContentAreaFilled(false);
+        boton.setBorderPainted(false);
+        boton.setOpaque(false);
+        boton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return boton;
     }
 
-    //==========================================================
-    // BOTON ROJO
-    //==========================================================
-    private JButton crearBotonRojo(
-            String texto,
-            int ancho) {
-
-        JButton boton
-                = crearBotonBase(
-                        texto,
-                        ancho
-                );
-
-        boton.setBackground(
-                ROJO
-        );
-
-        boton.setForeground(
-                Color.WHITE
-        );
-
-        boton.addMouseListener(
-                new java.awt.event.MouseAdapter() {
-
-            @Override
-            public void mouseEntered(
-                    java.awt.event.MouseEvent e) {
-
-                boton.setBackground(
-                        new Color(
-                                210,
-                                65,
-                                75
-                        )
-                );
-            }
-
-            @Override
-            public void mouseExited(
-                    java.awt.event.MouseEvent e) {
-
-                boton.setBackground(
-                        ROJO
-                );
-            }
-        });
-
+    private JButton crearBotonRojo(String texto, int ancho) {
+        JButton boton = crearBotonBase(texto, ancho);
+        boton.putClientProperty("serenaColor", ROJO);
         return boton;
     }
 
-    //==========================================================
-    // BOTON METAL
-    //==========================================================
-    private JButton crearBotonMetal(
-            String texto,
-            int ancho) {
-
-        JButton boton
-                = crearBotonBase(
-                        texto,
-                        ancho
-                );
-
-        boton.setBackground(
-                GRIS_METAL
-        );
-
-        boton.setForeground(
-                Color.WHITE
-        );
-
-        boton.addMouseListener(
-                new java.awt.event.MouseAdapter() {
-
-            @Override
-            public void mouseEntered(
-                    java.awt.event.MouseEvent e) {
-
-                boton.setBackground(
-                        GRIS_METAL_HOVER
-                );
-            }
-
-            @Override
-            public void mouseExited(
-                    java.awt.event.MouseEvent e) {
-
-                boton.setBackground(
-                        GRIS_METAL
-                );
-            }
-        });
-
+    private JButton crearBotonMetal(String texto, int ancho) {
+        JButton boton = crearBotonBase(texto, ancho);
+        boton.putClientProperty("serenaColor", GRIS_METAL);
         return boton;
     }
 
