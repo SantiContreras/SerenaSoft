@@ -4,6 +4,20 @@
  */
 package Paneles;
 
+import Configuracion.conexion;
+import services.CajaService;
+import java.sql.*;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.util.Locale;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.BasicStroke;
+import java.awt.geom.Path2D;
+import javax.swing.SwingWorker;
+import java.util.List;
+import java.util.ArrayList;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -56,6 +70,9 @@ public class PanelDashboard extends javax.swing.JPanel {
     // ALERTAS
     //==========================================================
     private JPanel panelAlertas;
+    private final GraficoVentas graficoVentas = new GraficoVentas();
+    private boolean cargando = false;
+    private final NumberFormat moneda = NumberFormat.getCurrencyInstance(new Locale("es", "AR"));
 
     //==========================================================
     // ACCESOS RAPIDOS
@@ -86,10 +103,10 @@ public class PanelDashboard extends javax.swing.JPanel {
     private final Color GRIS
             = new Color(105, 115, 130);
    private final Color FONDO =
-        new Color(205, 216, 230);
+        new Color(242, 246, 252);
 
     private final Color BORDE
-            = new Color(215, 222, 232);
+            = new Color(218, 227, 240);
 
     private final Color TEXTO_SECUNDARIO
             = new Color(100, 110, 125);
@@ -101,8 +118,9 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         inicializarComponentes();
         construirPanel();
-        cargarDatosPrueba();
+        actualizarDatos();
         configurarEventos();
+        addHierarchyListener(e -> { if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED)!=0 && isShowing()) actualizarDatos(); });
     }
 
     //==========================================================
@@ -112,24 +130,24 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         lblVentasHoy
                 = crearValorPrincipal(
-                        "$ 185.400",
+                        "$ 0,00",
                         VERDE
                 );
 
         lblCantidadVentas
                 = crearTextoSecundario(
-                        "12 ventas realizadas"
+                        "Consultando ventas..."
                 );
 
         lblCajaActual
                 = crearValorPrincipal(
-                        "$ 239.900",
+                        "$ 0,00",
                         AZUL_OSCURO
                 );
 
         lblEstadoCaja
                 = crearTextoEstado(
-                        "● CAJA ABIERTA",
+                        "Consultando caja...",
                         VERDE
                 );
 
@@ -141,18 +159,18 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         lblSinStock
                 = crearTextoSecundario(
-                        "2 productos sin stock"
+                        "Consultando stock..."
                 );
 
         lblVentasMes
                 = crearValorPrincipal(
-                        "$ 3.850.000",
+                        "$ 0,00",
                         AZUL
                 );
 
         lblCantidadMes
                 = crearTextoSecundario(
-                        "284 ventas este mes"
+                        "Consultando ventas..."
                 );
 
         btnNuevaVenta
@@ -163,7 +181,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         btnEntradaMercaderia
                 = crearBotonRapido(
-                        "ENTRADA MERCADERÍA",
+                        "STOCK / ENTRADAS",
                         AZUL
                 );
 
@@ -178,6 +196,15 @@ public class PanelDashboard extends javax.swing.JPanel {
                         "VER CAJA",
                         NARANJA
                 );
+
+        btnNuevaVenta.setIcon(new IconoAtajo(0));
+        btnEntradaMercaderia.setIcon(new IconoAtajo(1));
+        btnNuevoCliente.setIcon(new IconoAtajo(2));
+        btnVerCaja.setIcon(new IconoAtajo(3));
+        btnNuevaVenta.setIconTextGap(8);
+        btnEntradaMercaderia.setIconTextGap(8);
+        btnNuevoCliente.setIconTextGap(8);
+        btnVerCaja.setIconTextGap(8);
 
         inicializarTablaUltimasVentas();
         inicializarTablaMasVendidos();
@@ -451,12 +478,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         );
 
         contenido.setBorder(
-                new EmptyBorder(
-                        18,
-                        22,
-                        18,
-                        22
-                )
+                new EmptyBorder(10, 12, 12, 12)
         );
 
         //======================================================
@@ -471,9 +493,32 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         contenido.add(header);
 
-        contenido.add(
-                Box.createVerticalStrut(15)
-        );
+        contenido.add(Box.createVerticalStrut(8));
+        JPanel franja = new JPanel(new BorderLayout(12, 0));
+        franja.setBackground(AZUL_OSCURO);
+        franja.setBorder(new EmptyBorder(8, 14, 8, 14));
+        JLabel mensaje = new JLabel("TU NEGOCIO, BAJO CONTROL");
+        mensaje.setForeground(Color.WHITE);
+        mensaje.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        JLabel descripcionFranja = new JLabel("Ventas  •  Stock  •  Caja  •  Clientes  •  Reportes");
+        descripcionFranja.setForeground(new Color(210, 229, 255));
+        descripcionFranja.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        JPanel textosFranja = new JPanel();
+        textosFranja.setOpaque(false);
+        textosFranja.setLayout(new BoxLayout(textosFranja, BoxLayout.Y_AXIS));
+        textosFranja.add(mensaje);
+        textosFranja.add(Box.createVerticalStrut(4));
+        textosFranja.add(descripcionFranja);
+        franja.add(textosFranja, BorderLayout.WEST);
+        JLabel demo = new JLabel("DATOS EN VIVO");
+        demo.setForeground(new Color(255, 218, 120));
+        demo.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        franja.add(demo, BorderLayout.EAST);
+        franja.setAlignmentX(LEFT_ALIGNMENT);
+        franja.setMaximumSize(new Dimension(Integer.MAX_VALUE, 54));
+        contenido.add(franja);
+
+        contenido.add(Box.createVerticalStrut(8));
 
         //======================================================
         // TARJETAS
@@ -488,7 +533,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         tarjetas.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        110
+                        90
                 )
         );
 
@@ -498,6 +543,7 @@ public class PanelDashboard extends javax.swing.JPanel {
                 Box.createVerticalStrut(15)
         );
 
+        // Gráfico retirado del inicio compacto. Se conserva la clase para una futura vista de estadísticas.
         //======================================================
         // CENTRO
         //======================================================
@@ -511,7 +557,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         zonaCentral.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        320
+                        225
                 )
         );
 
@@ -534,11 +580,28 @@ public class PanelDashboard extends javax.swing.JPanel {
         zonaInferior.setMaximumSize(
                 new Dimension(
                         Integer.MAX_VALUE,
-                        260
+                        190
                 )
         );
 
         contenido.add(zonaInferior);
+
+        // Reorganizar columnas al reducir la ventana.
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override public void componentResized(java.awt.event.ComponentEvent e) {
+                int w = getWidth();
+                ((GridLayout) tarjetas.getLayout()).setRows(w < 940 ? 2 : 1);
+                ((GridLayout) tarjetas.getLayout()).setColumns(w < 940 ? 2 : 4);
+                ((GridLayout) zonaCentral.getLayout()).setRows(w < 760 ? 2 : 1);
+                ((GridLayout) zonaCentral.getLayout()).setColumns(w < 760 ? 1 : 2);
+                ((GridLayout) zonaInferior.getLayout()).setRows(w < 760 ? 2 : 1);
+                ((GridLayout) zonaInferior.getLayout()).setColumns(w < 760 ? 1 : 2);
+                tarjetas.setMaximumSize(new Dimension(Integer.MAX_VALUE, w < 940 ? 172 : 90));
+                zonaCentral.setMaximumSize(new Dimension(Integer.MAX_VALUE, w < 760 ? 410 : 225));
+                zonaInferior.setMaximumSize(new Dimension(Integer.MAX_VALUE, w < 760 ? 340 : 190));
+                contenido.revalidate();
+            }
+        });
 
         contenido.add(
                 Box.createVerticalStrut(10)
@@ -600,7 +663,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
     JLabel titulo
             = new JLabel(
-                    "INICIO"
+                    "CENTRO DE CONTROL"
             );
 
     titulo.setFont(
@@ -684,7 +747,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
     JLabel subtitulo
             = new JLabel(
-                    "Resumen general de la actividad del comercio"
+                    "INDICADORES EN VIVO  |  Información registrada en la base de datos"
             );
 
     subtitulo.setFont(
@@ -843,7 +906,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         JPanel panel
                 = crearPanelSeccion(
-                        "ÚLTIMAS VENTAS"
+                        "ÚLTIMAS OPERACIONES  |  Seguimiento de ventas"
                 );
 
         panel.setLayout(
@@ -874,7 +937,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         JPanel exterior
                 = crearPanelSeccion(
-                        "ALERTAS"
+                        "ALERTAS Y SEGUIMIENTO  |  Atención requerida"
                 );
 
         exterior.setLayout(
@@ -904,49 +967,7 @@ public class PanelDashboard extends javax.swing.JPanel {
                 )
         );
 
-        panelAlertas.add(
-                crearAlerta(
-                        "Stock bajo",
-                        "5 productos necesitan reposición",
-                        NARANJA
-                )
-        );
-
-        panelAlertas.add(
-                Box.createVerticalStrut(8)
-        );
-
-        panelAlertas.add(
-                crearAlerta(
-                        "Productos sin stock",
-                        "2 artículos no tienen existencias",
-                        ROJO
-                )
-        );
-
-        panelAlertas.add(
-                Box.createVerticalStrut(8)
-        );
-
-        panelAlertas.add(
-                crearAlerta(
-                        "Caja abierta",
-                        "Caja iniciada a las 08:30",
-                        VERDE
-                )
-        );
-
-        panelAlertas.add(
-                Box.createVerticalStrut(8)
-        );
-
-        panelAlertas.add(
-                crearAlerta(
-                        "Copia de seguridad",
-                        "Último backup: ayer 19:30",
-                        AZUL
-                )
-        );
+        panelAlertas.add(crearAlerta("Actualizando", "Consultando indicadores de MariaDB...", AZUL));
 
         exterior.add(
                 panelAlertas,
@@ -963,7 +984,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         JPanel panel
                 = crearPanelSeccion(
-                        "PRODUCTOS MÁS VENDIDOS"
+                        "PRODUCTOS MÁS VENDIDOS  |  Ranking comercial"
                 );
 
         panel.setLayout(
@@ -994,7 +1015,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         JPanel exterior
                 = crearPanelSeccion(
-                        "ACCESOS RÁPIDOS"
+                        "ACCESOS RÁPIDOS  |  Operaciones frecuentes"
                 );
 
         exterior.setLayout(
@@ -1003,12 +1024,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         JPanel botones
                 = new JPanel(
-                        new GridLayout(
-                                2,
-                                2,
-                                12,
-                                12
-                        )
+                        new GridLayout(2, 2, 7, 7)
                 );
 
         botones.setBackground(
@@ -1016,12 +1032,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         );
 
         botones.setBorder(
-                new EmptyBorder(
-                        18,
-                        18,
-                        18,
-                        18
-                )
+                new EmptyBorder(8, 12, 8, 12)
         );
 
         botones.add(
@@ -1066,23 +1077,19 @@ public class PanelDashboard extends javax.swing.JPanel {
                 )
         );
 
-        panel.setBackground(
-                Color.WHITE
-        );
-
-        panel.setBorder(
+        Color acento = titulo.contains("STOCK") ? NARANJA
+                : titulo.contains("CAJA") ? AZUL
+                : titulo.contains("MES") ? new Color(109, 71, 174) : VERDE;
+        Color suave = titulo.contains("STOCK") ? new Color(255, 247, 233)
+                : titulo.contains("CAJA") ? new Color(233, 241, 255)
+                : titulo.contains("MES") ? new Color(245, 239, 255)
+                : new Color(232, 249, 241);
+        panel.setBackground(suave);
+        panel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(
-                                BORDE
-                        ),
-                        new EmptyBorder(
-                                12,
-                                15,
-                                12,
-                                15
-                        )
-                )
-        );
+                        BorderFactory.createLineBorder(BORDE),
+                        BorderFactory.createMatteBorder(0, 5, 0, 0, acento)),
+                new EmptyBorder(15, 17, 12, 12)));
 
         JLabel lblTitulo
                 = new JLabel(
@@ -1205,7 +1212,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         );
 
         JLabel punto
-                = new JLabel("●");
+                = new JLabel("!");
 
         punto.setForeground(
                 color
@@ -1280,146 +1287,204 @@ public class PanelDashboard extends javax.swing.JPanel {
     //==========================================================
     // DATOS DE PRUEBA
     //==========================================================
-    private void cargarDatosPrueba() {
+    private static class Datos {
+        BigDecimal hoy=BigDecimal.ZERO, mes=BigDecimal.ZERO;
+        int cantidadHoy, cantidadMes, bajo, sinStock;
+        CajaService.Resumen caja;
+        List<Object[]> ventas=new ArrayList<>(), productos=new ArrayList<>();
+        List<String> faltantes=new ArrayList<>();
+        double[] grafico=new double[7];
+        String[] dias=new String[7];
+    }
 
-        modeloUltimasVentas.setRowCount(
-                0
-        );
+    private String dinero(BigDecimal n) { return moneda.format(n==null?BigDecimal.ZERO:n); }
 
-        modeloUltimasVentas.addRow(
-                new Object[]{
-                    "00000125",
-                    "10:42",
-                    "Consumidor Final",
-                    "Efectivo",
-                    "$ 38.800"
+    public final void actualizarDatos() {
+        if(cargando) return;
+        cargando=true;
+        new SwingWorker<Datos,Void>() {
+            @Override protected Datos doInBackground() throws Exception { return consultarDatos(); }
+            @Override protected void done() {
+                cargando=false;
+                try { aplicarDatos(get()); }
+                catch(Exception e) {
+                    Throwable t=e.getCause()==null?e:e.getCause();
+                    lblVentasHoy.setText("—"); lblVentasMes.setText("—"); lblCajaActual.setText("—"); lblStockBajo.setText("—");
+                    lblCantidadVentas.setText("Consulta pendiente"); lblCantidadMes.setText("Consulta pendiente"); lblSinStock.setText("Consulta pendiente");
+                    modeloUltimasVentas.setRowCount(0); modeloMasVendidos.setRowCount(0);
+                    lblEstadoCaja.setText("Error al consultar datos");
+                    panelAlertas.removeAll();
+                    panelAlertas.add(crearAlerta("Sin conexión o consulta fallida", t.getMessage()==null?"Revisar conexión":t.getMessage(), ROJO));
+                    panelAlertas.revalidate(); panelAlertas.repaint();
                 }
-        );
+            }
+        }.execute();
+    }
 
-        modeloUltimasVentas.addRow(
-                new Object[]{
-                    "00000124",
-                    "10:35",
-                    "Juan Pérez",
-                    "Tarjeta",
-                    "$ 25.600"
-                }
-        );
+    @Override public void addNotify() {
+        super.addNotify();
+        if(lblVentasHoy!=null) actualizarDatos();
+    }
 
-        modeloUltimasVentas.addRow(
-                new Object[]{
-                    "00000123",
-                    "10:17",
-                    "María López",
-                    "Transferencia",
-                    "$ 18.900"
-                }
-        );
+    private Datos consultarDatos() throws Exception {
+        Datos d=new Datos();
+        try(Connection c=conexion.getConexion()) {
+            // Los totales representan ventas finalizadas sin anulaciones ni devoluciones totales.
+            // Las devoluciones parciales requieren un cálculo neto específico para evitar inflar ingresos.
+            String base=" FROM venta WHERE estado IN ('FINALIZADA','DEVUELTA_PARCIAL') ";
+            try(PreparedStatement p=c.prepareStatement("SELECT COALESCE(SUM(total),0),COUNT(*)"+base+"AND fecha>=CURDATE() AND fecha<CURDATE()+INTERVAL 1 DAY"); ResultSet r=p.executeQuery()) {
+                if(r.next()){d.hoy=r.getBigDecimal(1);d.cantidadHoy=r.getInt(2);}
+            }
+            try(PreparedStatement p=c.prepareStatement("SELECT COALESCE(SUM(total),0),COUNT(*)"+base+"AND fecha>=DATE_FORMAT(CURDATE(),'%Y-%m-01') AND fecha<DATE_FORMAT(CURDATE()+INTERVAL 1 MONTH,'%Y-%m-01')");ResultSet r=p.executeQuery()) {
+                if(r.next()){d.mes=r.getBigDecimal(1);d.cantidadMes=r.getInt(2);}
+            }
+            String stock=" FROM producto p LEFT JOIN (SELECT id_producto,SUM(cantidad) cantidad FROM stock_producto GROUP BY id_producto) sp ON sp.id_producto=p.id_producto WHERE p.activo=1 AND p.controla_stock=1 ";
+            try(PreparedStatement p=c.prepareStatement("SELECT SUM(CASE WHEN COALESCE(sp.cantidad,0)<=0 THEN 1 ELSE 0 END), SUM(CASE WHEN COALESCE(sp.cantidad,0)>0 AND COALESCE(sp.cantidad,0)<p.stock_minimo THEN 1 ELSE 0 END)"+stock);ResultSet r=p.executeQuery()) {
+                if(r.next()){d.sinStock=r.getInt(1);d.bajo=r.getInt(2);}
+            }
+            try(PreparedStatement p=c.prepareStatement("SELECT p.nombre,COALESCE(sp.cantidad,0) cantidad"+stock+" AND COALESCE(sp.cantidad,0)<p.stock_minimo ORDER BY cantidad ASC LIMIT 3");ResultSet r=p.executeQuery()) {
+                while(r.next())d.faltantes.add(r.getString(1)+" ("+r.getBigDecimal(2).stripTrailingZeros().toPlainString()+")");
+            }
+            try(PreparedStatement p=c.prepareStatement("SELECT v.numero_venta,DATE_FORMAT(v.fecha,'%H:%i'),COALESCE(NULLIF(TRIM(CONCAT(COALESCE(cl.nombre,''),' ',COALESCE(cl.apellido,''))),''),NULLIF(cl.razon_social,''),'Consumidor Final'),COALESCE((SELECT GROUP_CONCAT(DISTINCT mp.nombre SEPARATOR ' + ') FROM venta_pago vp JOIN medio_pago mp ON mp.id_medio_pago=vp.id_medio_pago WHERE vp.id_venta=v.id_venta),'Sin pago'),v.total FROM venta v LEFT JOIN cliente cl ON cl.id_cliente=v.id_cliente WHERE v.estado IN ('FINALIZADA','DEVUELTA_PARCIAL','DEVUELTA_TOTAL') ORDER BY v.fecha DESC,v.id_venta DESC LIMIT 8");ResultSet r=p.executeQuery()) {
+                while(r.next())d.ventas.add(new Object[]{String.format("%08d",r.getLong(1)),r.getString(2),r.getString(3),r.getString(4),dinero(r.getBigDecimal(5))});
+            }
+            try(PreparedStatement p=c.prepareStatement("SELECT vd.descripcion_producto,SUM(vd.cantidad),SUM(vd.subtotal) FROM venta_detalle vd JOIN venta v ON v.id_venta=vd.id_venta WHERE v.estado IN ('FINALIZADA','DEVUELTA_PARCIAL') AND v.fecha>=DATE_FORMAT(CURDATE(),'%Y-%m-01') GROUP BY vd.id_producto,vd.descripcion_producto ORDER BY SUM(vd.cantidad) DESC LIMIT 8");ResultSet r=p.executeQuery()) {
+                while(r.next())d.productos.add(new Object[]{r.getString(1),r.getBigDecimal(2).stripTrailingZeros().toPlainString(),dinero(r.getBigDecimal(3))});
+            }
+            java.time.LocalDate today=java.time.LocalDate.now();
+            for(int i=0;i<7;i++) d.dias[i]=today.minusDays(6-i).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"));
+            try(PreparedStatement p=c.prepareStatement("SELECT DATE(fecha),SUM(total) FROM venta WHERE estado IN ('FINALIZADA','DEVUELTA_PARCIAL') AND fecha>=CURDATE()-INTERVAL 6 DAY AND fecha<CURDATE()+INTERVAL 1 DAY GROUP BY DATE(fecha)");ResultSet r=p.executeQuery()) {
+                while(r.next()){int i=(int)java.time.temporal.ChronoUnit.DAYS.between(today.minusDays(6),r.getDate(1).toLocalDate());if(i>=0&&i<7)d.grafico[i]=r.getDouble(2);}
+            }
+        }
+        try { d.caja=new CajaService().obtenerResumen(); } catch(Exception cajaError) { System.err.println("Dashboard: caja no disponible: "+cajaError.getMessage()); }
+        return d;
+    }
 
-        modeloUltimasVentas.addRow(
-                new Object[]{
-                    "00000122",
-                    "09:58",
-                    "Consumidor Final",
-                    "Efectivo",
-                    "$ 12.500"
-                }
-        );
+    private void aplicarDatos(Datos d) {
+        lblVentasHoy.setText(dinero(d.hoy));
+        lblCantidadVentas.setText(d.cantidadHoy+" ventas realizadas hoy");
+        lblVentasMes.setText(dinero(d.mes));
+        lblCantidadMes.setText(d.cantidadMes+" ventas este mes");
+        lblStockBajo.setText(String.valueOf(d.bajo));
+        lblSinStock.setText(d.sinStock+" productos sin stock");
+        boolean abierta=d.caja!=null&&d.caja.idSesion>0;
+        lblCajaActual.setText(abierta?dinero(d.caja.efectivoEsperado):dinero(BigDecimal.ZERO));
+        lblEstadoCaja.setText(abierta?"CAJA ABIERTA #"+d.caja.idSesion:"SIN CAJA ABIERTA / NO DISPONIBLE");
+        lblEstadoCaja.setForeground(abierta?VERDE:ROJO);
+        modeloUltimasVentas.setRowCount(0);
+        for(Object[] fila:d.ventas)modeloUltimasVentas.addRow(fila);
+        modeloMasVendidos.setRowCount(0);
+        for(Object[] fila:d.productos)modeloMasVendidos.addRow(fila);
+        graficoVentas.setDatos(d.dias,d.grafico);
+        panelAlertas.removeAll();
+        panelAlertas.add(crearAlerta("Stock bajo",d.bajo+" productos por debajo del mínimo",NARANJA));
+        panelAlertas.add(Box.createVerticalStrut(8));
+        panelAlertas.add(crearAlerta("Sin stock",d.sinStock+" productos sin existencias",ROJO));
+        panelAlertas.add(Box.createVerticalStrut(8));
+        panelAlertas.add(crearAlerta(abierta?"Caja abierta":"Caja cerrada",abierta?"Sesión #"+d.caja.idSesion+" · "+d.caja.cajero:"No tenés una caja abierta",abierta?VERDE:GRIS));
+        for(String item:d.faltantes){panelAlertas.add(Box.createVerticalStrut(8));panelAlertas.add(crearAlerta("Reponer",item,NARANJA));}
+        panelAlertas.revalidate();panelAlertas.repaint();
+    }
 
-        modeloUltimasVentas.addRow(
-                new Object[]{
-                    "00000121",
-                    "09:40",
-                    "Comercial NEA",
-                    "Cuenta corriente",
-                    "$ 42.700"
-                }
-        );
-
-        //======================================================
-        // PRODUCTOS MAS VENDIDOS
-        //======================================================
-        modeloMasVendidos.setRowCount(
-                0
-        );
-
-        modeloMasVendidos.addRow(
-                new Object[]{
-                    "Coca Cola 2.25 L",
-                    "42",
-                    "$ 109.200"
-                }
-        );
-
-        modeloMasVendidos.addRow(
-                new Object[]{
-                    "Aceite Natura 900 ml",
-                    "27",
-                    "$ 86.400"
-                }
-        );
-
-        modeloMasVendidos.addRow(
-                new Object[]{
-                    "Yerba Playadito 1 Kg",
-                    "19",
-                    "$ 93.100"
-                }
-        );
-
-        modeloMasVendidos.addRow(
-                new Object[]{
-                    "Papel Higiénico Elite x4",
-                    "16",
-                    "$ 56.000"
-                }
-        );
+    private static class GraficoVentas extends JPanel {
+        private String[] dias=new String[7];
+        private double[] valores=new double[7];
+        GraficoVentas(){setBackground(Color.WHITE);setPreferredSize(new Dimension(100,145));}
+        void setDatos(String[] d,double[] v){dias=d.clone();valores=v.clone();repaint();}
+        @Override protected void paintComponent(Graphics g){
+            super.paintComponent(g);
+            Graphics2D x=(Graphics2D)g.create();
+            x.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            int w=getWidth(),h=getHeight(),left=45,right=w-25,top=14,bottom=h-30;
+            if(right<=left||bottom<=top){x.dispose();return;}
+            double max=1;for(double v:valores)max=Math.max(max,v);
+            x.setColor(new Color(231,236,246));
+            for(int i=0;i<=3;i++){int y=top+(bottom-top)*i/3;x.drawLine(left,y,right,y);}
+            Path2D line=new Path2D.Double(),fill=new Path2D.Double();
+            for(int i=0;i<7;i++){
+                double xx=left+(right-left)*i/6.0,yy=bottom-(bottom-top)*valores[i]/max;
+                if(i==0){line.moveTo(xx,yy);fill.moveTo(xx,bottom);fill.lineTo(xx,yy);}else{line.lineTo(xx,yy);fill.lineTo(xx,yy);}
+            }
+            fill.lineTo(right,bottom);fill.closePath();
+            x.setColor(new Color(228,241,255));x.fill(fill);
+            x.setStroke(new BasicStroke(2.8f));x.setColor(new Color(24,83,171));x.draw(line);
+            for(int i=0;i<7;i++){
+                int xx=left+(right-left)*i/6,yy=bottom-(int)Math.round((bottom-top)*valores[i]/max);
+                x.setColor(Color.WHITE);x.fillOval(xx-5,yy-5,10,10);
+                x.setColor(new Color(24,83,171));x.setStroke(new BasicStroke(2));x.drawOval(xx-5,yy-5,10,10);
+                x.setFont(new Font("Segoe UI",Font.PLAIN,11));x.setColor(new Color(95,110,135));
+                if(dias[i]!=null)x.drawString(dias[i],xx-14,h-9);
+            }
+            x.dispose();
+        }
     }
 
     //==========================================================
     // EVENTOS
     //==========================================================
     private void configurarEventos() {
+        btnNuevaVenta.addActionListener(e -> abrirAccesoRapido("VENTAS"));
+        btnEntradaMercaderia.addActionListener(e -> abrirAccesoRapido("STOCK"));
+        btnNuevoCliente.addActionListener(e -> abrirAccesoRapido("CLIENTES"));
+        btnVerCaja.addActionListener(e -> abrirAccesoRapido("CAJA"));
+    }
 
-        btnNuevaVenta.addActionListener(e -> {
+    /** Reutiliza la navegacion existente del panel principal, sin crear ventanas extras. */
+    private void abrirAccesoRapido(String destino) {
+        java.awt.Window ventana = javax.swing.SwingUtilities.getWindowAncestor(this);
+        if (!(ventana instanceof Principal.PanelPrincipal)) {
+            JOptionPane.showMessageDialog(this,
+                    "No se encontro la ventana principal para abrir " + destino + ".",
+                    "Serena Soft", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        Principal.PanelPrincipal principal = (Principal.PanelPrincipal) ventana;
+        switch (destino) {
+            case "VENTAS":
+                principal.mostrarVentas();
+                break;
+            case "STOCK":
+                // El boton ENTRADA ya existe en PanelStock; no se duplica su circuito.
+                principal.mostrarPanel(new PanelStock());
+                break;
+            case "CLIENTES":
+                principal.mostrarPanel(new PanelClientes());
+                break;
+            case "CAJA":
+                principal.mostrarPanel(new PanelCaja());
+                break;
+            default:
+                break;
+        }
+    }
 
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Aquí navegaremos directamente a Ventas.",
-                    "Nueva Venta",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-        });
-
-        btnEntradaMercaderia.addActionListener(e -> {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Abrirá Entrada de Mercadería.",
-                    "Stock",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-        });
-
-        btnNuevoCliente.addActionListener(e -> {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Abrirá Nuevo Cliente.",
-                    "Clientes",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-        });
-
-        btnVerCaja.addActionListener(e -> {
-
-            JOptionPane.showMessageDialog(
-                    this,
-                    "Navegará al módulo Caja.",
-                    "Caja",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-        });
+    /** Iconos vectoriales: no dependen de fuentes Emoji ni archivos externos. */
+    private static class IconoAtajo implements javax.swing.Icon {
+        private final int tipo;
+        IconoAtajo(int tipo) { this.tipo = tipo; }
+        @Override public int getIconWidth() { return 19; }
+        @Override public int getIconHeight() { return 19; }
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D d = (Graphics2D) g.create();
+            d.translate(x, y);
+            d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            d.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            d.setColor(new Color(255, 229, 125));
+            if (tipo == 0) { // venta
+                d.drawRoundRect(2, 2, 15, 15, 4, 4);
+                d.drawLine(9, 5, 9, 14); d.drawLine(5, 9, 13, 9);
+            } else if (tipo == 1) { // stock
+                d.drawRect(2, 6, 15, 11); d.drawLine(2, 6, 9, 2);
+                d.drawLine(9, 2, 17, 6); d.drawLine(9, 2, 9, 17);
+            } else if (tipo == 2) { // cliente
+                d.drawOval(6, 2, 7, 7); d.drawArc(2, 9, 15, 10, 0, 180);
+            } else { // caja
+                d.drawRoundRect(2, 5, 15, 11, 3, 3);
+                d.drawLine(5, 2, 14, 2); d.drawOval(8, 8, 4, 4);
+            }
+            d.dispose();
+        }
     }
 
     //==========================================================
@@ -1438,7 +1503,7 @@ public class PanelDashboard extends javax.swing.JPanel {
                 new Font(
                         "Segoe UI",
                         Font.BOLD,
-                        21
+                        25
                 )
         );
 
@@ -1526,7 +1591,7 @@ public class PanelDashboard extends javax.swing.JPanel {
                 new Font(
                         "Segoe UI",
                         Font.BOLD,
-                        12
+                        11
                 )
         );
 

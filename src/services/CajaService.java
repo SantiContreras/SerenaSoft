@@ -161,15 +161,76 @@ public final class CajaService {
             }catch(Exception e){c.rollback();if(e instanceof SQLException)throw(SQLException)e;throw new SQLException(e.getMessage(),e);}finally{c.setAutoCommit(true);}
         }
     }
+
+    /** Calcula el efectivo dentro de la transacción que bloqueó la sesión. */
+    private static BigDecimal efectivoBajoBloqueo(Connection c, long sesion) throws SQLException {
+        BigDecimal inicial;
+        try (PreparedStatement p=c.prepareStatement("SELECT monto_inicial FROM caja_sesion WHERE id_sesion=?")) {
+            p.setLong(1,sesion);
+            try(ResultSet rs=p.executeQuery()) { if(!rs.next()) throw new SQLException("Sesión inexistente."); inicial=money(rs,1); }
+        }
+        BigDecimal ventas=BigDecimal.ZERO;
+        try(PreparedStatement p=c.prepareStatement("SELECT COALESCE(SUM(vp.monto),0) FROM venta_pago vp JOIN venta v ON v.id_venta=vp.id_venta JOIN medio_pago mp ON mp.id_medio_pago=vp.id_medio_pago WHERE v.id_caja_sesion=? AND UPPER(mp.nombre) LIKE '%EFECTIVO%' AND v.estado IN ('FINALIZADA','DEVUELTA_PARCIAL','DEVUELTA_TOTAL','ANULADA')")) {
+            p.setLong(1,sesion);try(ResultSet rs=p.executeQuery()){if(rs.next())ventas=money(rs,1);}
+        }
+        BigDecimal ajuste=BigDecimal.ZERO;
+        try(PreparedStatement p=c.prepareStatement("SELECT COALESCE(SUM(CASE WHEN tipo='INGRESO' THEN monto ELSE -monto END),0) FROM caja_movimiento WHERE id_sesion=? AND medio_pago='EFECTIVO'")) {
+            p.setLong(1,sesion);try(ResultSet rs=p.executeQuery()){if(rs.next())ajuste=money(rs,1);}
+        }
+        return inicial.add(ventas).add(ajuste);
+    }
+    private static void validarDiferencia(BigDecimal diferencia, String observacion) {
+        if(diferencia.signum()!=0 && (observacion==null || observacion.trim().isEmpty()))
+            throw new IllegalArgumentException("Para registrar un faltante o sobrante debés escribir una observación.");
+    }
+
+    public static final class SesionAuditada {
+        public long id; public String cajero, apertura, cierre, estado, observacion;
+        public BigDecimal inicial, esperado, contado, diferencia;
+    }
+    public static final class ArqueoAuditado {
+        public String fecha, usuario, observacion;
+        public BigDecimal esperado, contado, diferencia;
+    }
+    public List<SesionAuditada> historial(java.sql.Date desde,java.sql.Date hasta,int cajero,String estado) throws SQLException {
+        if(!SesionUsuario.esAdministrador())throw new SQLException("Solo el administrador puede consultar todas las cajas.");
+        String sql="SELECT s.id_sesion,u.nombre_completo,DATE_FORMAT(s.fecha_apertura,'%d/%m/%Y %H:%i'),"+
+          "DATE_FORMAT(s.fecha_cierre,'%d/%m/%Y %H:%i'),s.estado,s.monto_inicial,s.efectivo_esperado,"+
+          "s.efectivo_contado,s.diferencia,s.observacion_cierre FROM caja_sesion s JOIN usuario u ON u.id_usuario=s.id_usuario_apertura "+
+          "WHERE DATE(s.fecha_apertura) BETWEEN ? AND ? AND (?=0 OR s.id_usuario_apertura=?) AND (?='TODAS' OR s.estado=?) ORDER BY s.id_sesion DESC LIMIT 1000";
+        List<SesionAuditada> lista=new ArrayList<>();
+        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement(sql)){
+            p.setDate(1,desde);p.setDate(2,hasta);p.setInt(3,cajero);p.setInt(4,cajero);p.setString(5,estado);p.setString(6,estado);
+            try(ResultSet rs=p.executeQuery()){while(rs.next()){
+                SesionAuditada a=new SesionAuditada();a.id=rs.getLong(1);a.cajero=rs.getString(2);a.apertura=rs.getString(3);
+                a.cierre=rs.getString(4);a.estado=rs.getString(5);a.inicial=money(rs,6);a.esperado=money(rs,7);
+                a.contado=money(rs,8);a.diferencia=money(rs,9);a.observacion=rs.getString(10);lista.add(a);
+            }}
+        }
+        return lista;
+    }
+    public List<ArqueoAuditado> arqueosHistoricos(long sesion) throws SQLException {
+        if(!SesionUsuario.esAdministrador())throw new SQLException("Acceso reservado al administrador.");
+        List<ArqueoAuditado> lista=new ArrayList<>();
+        String sql="SELECT DATE_FORMAT(a.fecha,'%d/%m/%Y %H:%i'),u.nombre_completo,a.efectivo_esperado,a.efectivo_contado,a.diferencia,a.observaciones FROM arqueo_caja a JOIN usuario u ON u.id_usuario=a.id_usuario WHERE a.id_sesion=? ORDER BY a.fecha";
+        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement(sql)){
+            p.setLong(1,sesion);try(ResultSet rs=p.executeQuery()){while(rs.next()){
+                ArqueoAuditado a=new ArqueoAuditado();a.fecha=rs.getString(1);a.usuario=rs.getString(2);
+                a.esperado=money(rs,3);a.contado=money(rs,4);a.diferencia=money(rs,5);a.observacion=rs.getString(6);lista.add(a);
+            }}
+        }
+        return lista;
+    }
     public void arquear(long sesion,int usuario,BigDecimal contado,String obs) throws SQLException {
         if(contado==null || contado.signum()<0)throw new IllegalArgumentException("Conteo inválido.");
         if (usuario != SesionUsuario.getIdUsuario()) throw new SQLException("Usuario de caja no coincide con la sesión actual.");
-        Resumen r=obtenerResumen();if(r.idSesion!=sesion)throw new SQLException("La sesión cambió.");
+
         try(Connection c=conexion.getConexion()) {
             c.setAutoCommit(false);
             try {verificarPropietario(c, sesion, usuario);bloquearSesion(c,sesion);
+                BigDecimal esperado=efectivoBajoBloqueo(c,sesion);BigDecimal diferencia=contado.subtract(esperado);validarDiferencia(diferencia,obs);
                 try(PreparedStatement p=c.prepareStatement("INSERT INTO arqueo_caja(id_sesion,id_usuario,efectivo_esperado,efectivo_contado,diferencia,observaciones) VALUES(?,?,?,?,?,?)")) {
-                    p.setLong(1,sesion);p.setInt(2,usuario);p.setBigDecimal(3,r.efectivoEsperado);p.setBigDecimal(4,contado);p.setBigDecimal(5,contado.subtract(r.efectivoEsperado));p.setString(6,obs);p.executeUpdate();}
+                    p.setLong(1,sesion);p.setInt(2,usuario);p.setBigDecimal(3,esperado);p.setBigDecimal(4,contado);p.setBigDecimal(5,diferencia);p.setString(6,obs);p.executeUpdate();}
                 c.commit();
             }catch(Exception e){c.rollback();if(e instanceof SQLException)throw(SQLException)e;throw new SQLException(e.getMessage(),e);}finally{c.setAutoCommit(true);}
         }
@@ -177,12 +238,13 @@ public final class CajaService {
     public void cerrar(long sesion,int usuario,BigDecimal contado,String obs) throws SQLException {
         if(contado==null || contado.signum()<0)throw new IllegalArgumentException("Conteo inválido.");
         if (usuario != SesionUsuario.getIdUsuario()) throw new SQLException("Usuario de caja no coincide con la sesión actual.");
-        Resumen r=obtenerResumen();if(r.idSesion!=sesion)throw new SQLException("La sesión cambió.");
+
         try(Connection c=conexion.getConexion()) {
             c.setAutoCommit(false);
             try {verificarPropietario(c, sesion, usuario);bloquearSesion(c,sesion);
+                BigDecimal esperado=efectivoBajoBloqueo(c,sesion);BigDecimal diferencia=contado.subtract(esperado);validarDiferencia(diferencia,obs);
                 try(PreparedStatement p=c.prepareStatement("UPDATE caja_sesion SET estado='CERRADA',id_usuario_cierre=?,fecha_cierre=NOW(),efectivo_esperado=?,efectivo_contado=?,diferencia=?,observacion_cierre=? WHERE id_sesion=? AND estado='ABIERTA'")) {
-                    p.setInt(1,usuario);p.setBigDecimal(2,r.efectivoEsperado);p.setBigDecimal(3,contado);p.setBigDecimal(4,contado.subtract(r.efectivoEsperado));p.setString(5,obs);p.setLong(6,sesion);if(p.executeUpdate()!=1)throw new SQLException("No se pudo cerrar la caja.");}
+                    p.setInt(1,usuario);p.setBigDecimal(2,esperado);p.setBigDecimal(3,contado);p.setBigDecimal(4,diferencia);p.setString(5,obs);p.setLong(6,sesion);if(p.executeUpdate()!=1)throw new SQLException("No se pudo cerrar la caja.");}
                 c.commit();
             }catch(Exception e){c.rollback();if(e instanceof SQLException)throw(SQLException)e;throw new SQLException(e.getMessage(),e);}finally{c.setAutoCommit(true);}
         }

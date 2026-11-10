@@ -1465,10 +1465,32 @@ public class DialogoEntradaManual extends JDialog {
                 BorderLayout.CENTER
         );
 
-        panelBuscar.add(
-                btnBuscarProducto,
-                BorderLayout.EAST
-        );
+        JButton btnNuevoArticuloRapido = crearBoton("+ NUEVO ARTÍCULO", new Color(0,151,92), 165);
+        btnNuevoArticuloRapido.setPreferredSize(new Dimension(165,40));
+        btnNuevoArticuloRapido.setToolTipText("Crear artículo sin salir de la entrada de mercadería");
+        btnNuevoArticuloRapido.addActionListener(e -> {
+            DialogoNuevoArticulo alta = new DialogoNuevoArticulo(this);
+            alta.setVisible(true);
+            if (!alta.isGuardado()) return;
+            try {
+                Producto creado = productoDaoFiscal.buscarPorCodigo(alta.getCodigo());
+                if (creado == null) {
+                    JOptionPane.showMessageDialog(this,"El artículo se guardó, pero no se pudo cargar en esta entrada. Buscalo manualmente.");
+                    return;
+                }
+                cargarProductoSeleccionado(creado);
+                JOptionPane.showMessageDialog(this,
+                    "Artículo creado y seleccionado: " + creado.getNombre() + "\nAhora cargá cantidad, presentación y costo en esta factura.",
+                    "Alta rápida completada", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,"El artículo se guardó, pero no pudo seleccionarse: " + ex.getMessage());
+            }
+        });
+        JPanel accionesBusqueda = new JPanel(new FlowLayout(FlowLayout.RIGHT,7,0));
+        accionesBusqueda.setOpaque(false);
+        accionesBusqueda.add(btnBuscarProducto);
+        accionesBusqueda.add(btnNuevoArticuloRapido);
+        panelBuscar.add(accionesBusqueda,BorderLayout.EAST);
 
         c.gridx = 0;
         c.gridy = 1;

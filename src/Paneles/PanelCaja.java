@@ -866,6 +866,14 @@ public class PanelCaja extends javax.swing.JPanel {
         panel.add(
                 btnCerrarCaja
         );
+        if (SesionUsuario.esAdministrador()) {
+            JButton auditoria = crearBotonAccion("HISTORIAL", AZUL_OSCURO);
+            auditoria.addActionListener(e -> {
+                try { new Dialogos.DialogoAuditoriaCajas(SwingUtilities.getWindowAncestor(this)).setVisible(true); }
+                catch(Exception ex) { error(ex); }
+            });
+            panel.add(auditoria);
+        }
 
         return panel;
     }
@@ -1031,7 +1039,7 @@ public class PanelCaja extends javax.swing.JPanel {
                     r.tarjeta.doubleValue(), r.transferencia.doubleValue(), r.mercadoPago.doubleValue());
                 d.setVisible(true);
                 if (d.isConfirmado()) {
-                    cajaService.arquear(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), "Arqueo manual");
+                    cajaService.arquear(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), d.getObservaciones());
                     refrescarCaja();
                 }
             } catch (Exception ex) { error(ex); }
@@ -1046,7 +1054,7 @@ public class PanelCaja extends javax.swing.JPanel {
                     r.tarjeta.doubleValue(), r.transferencia.doubleValue(), r.mercadoPago.doubleValue());
                 d.setVisible(true);
                 if (d.isConfirmado()) {
-                    cajaService.cerrar(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), "Cierre de caja");
+                    cajaService.cerrar(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), d.getObservaciones());
                     refrescarCaja();
                 }
             } catch (Exception ex) { error(ex); }

@@ -34,8 +34,8 @@ public class DialogoNuevoArticulo extends JDialog {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());getContentPane().setBackground(BG);
         Rectangle area=GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
-        setSize(Math.min(1100,area.width-40),Math.min(760,area.height-50));
-        setMinimumSize(new Dimension(740,470));
+        setSize(Math.min(1050,area.width-60),Math.min(720,area.height-60));
+        setMinimumSize(new Dimension(820,520));
         JPanel head=new JPanel(new BorderLayout());head.setBackground(NAVY);head.setBorder(new EmptyBorder(18,22,18,22));
         JLabel titulo=new JLabel("  NUEVO ARTÍCULO  ·  SERENA SOFT", new SymbolIcon("box", Color.WHITE, 27), SwingConstants.LEFT);titulo.setIconTextGap(14);titulo.setForeground(Color.WHITE);titulo.setFont(new Font("Segoe UI",Font.BOLD,22));head.add(titulo);add(head,BorderLayout.NORTH);
         // Tres pestañas compactas: sin desplazamiento horizontal ni formulario interminable.
@@ -44,7 +44,7 @@ public class DialogoNuevoArticulo extends JDialog {
         tabs.setForeground(NAVY);tabs.setBackground(Color.WHITE);
 
         JPanel datos=pagina();
-        JPanel identificacion=grid(3);
+        JPanel identificacion=grid(2);
         codigo.setEditable(false);codigo.setBackground(new Color(210,231,255));codigo.setFont(new Font("Segoe UI",Font.BOLD,18));
         identificacion.add(cell("Código automático",codigo));
         identificacion.add(cell("Código de barras / escáner",barra));
@@ -58,12 +58,20 @@ public class DialogoNuevoArticulo extends JDialog {
         codigoInfo.add(aviso,BorderLayout.SOUTH);
         section(datos,"01  IDENTIFICACIÓN DEL ARTÍCULO",codigoInfo);
 
-        JPanel clasif=grid(3);
+        JPanel clasif=grid(2);
         JPanel marcaBox=new JPanel(new BorderLayout(5,0));marcaBox.setOpaque(false);
         marcaBox.add(marca,BorderLayout.CENTER);
         JButton addMarca=button("NUEVA",GREEN);addMarca.setIcon(new SymbolIcon("plus",Color.WHITE,15));
-        marcaBox.add(addMarca,BorderLayout.EAST);addMarca.addActionListener(e->nuevaMarca());
-        clasif.add(cell("Rubro",rubro));clasif.add(cell("Categoría *",categoria));clasif.add(cell("Marca",marcaBox));
+        JButton buscarMarca=button("BUSCAR",BLUE);buscarMarca.setIcon(new SymbolIcon("search",Color.WHITE,14));
+        JPanel accionesMarca=new JPanel(new GridLayout(1,2,5,0));accionesMarca.setOpaque(false);
+        accionesMarca.add(buscarMarca);accionesMarca.add(addMarca);
+        marcaBox.add(accionesMarca,BorderLayout.EAST);
+        buscarMarca.addActionListener(e->buscarMarca());addMarca.addActionListener(e->nuevaMarca());
+        JPanel categoriaBox=new JPanel(new BorderLayout(5,0));categoriaBox.setOpaque(false);
+        categoriaBox.add(categoria,BorderLayout.CENTER);
+        JButton addCategoria=button("NUEVA",GREEN);addCategoria.setIcon(new SymbolIcon("plus",Color.WHITE,14));
+        addCategoria.addActionListener(e->nuevaCategoria());categoriaBox.add(addCategoria,BorderLayout.EAST);
+        clasif.add(cell("Rubro",rubro));clasif.add(cell("Categoría *",categoriaBox));clasif.add(cell("Marca · buscá entre todas las marcas",marcaBox));
         JPanel provBox=new JPanel(new BorderLayout(5,0));provBox.setOpaque(false);
         proveedor.setEditable(false);provBox.add(proveedor,BorderLayout.CENTER);
         JButton buscar=button("BUSCAR",BLUE);buscar.setIcon(new SymbolIcon("search",Color.WHITE,15));
@@ -126,7 +134,7 @@ public class DialogoNuevoArticulo extends JDialog {
         JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,10,10));footer.setBackground(Color.WHITE);JButton limpiar=button("LIMPIAR",new Color(75,104,148)), cancelar=button("CANCELAR",new Color(75,82,95)), guardar=button("GUARDAR ARTÍCULO",GREEN);
         limpiar.setIcon(new SymbolIcon("clear",Color.WHITE,15));cancelar.setIcon(new SymbolIcon("close",Color.WHITE,15));guardar.setIcon(new SymbolIcon("check",Color.WHITE,17));
         limpiar.addActionListener(e->limpiar());cancelar.addActionListener(e->dispose());guardar.addActionListener(e->guardar());footer.add(limpiar);footer.add(cancelar);footer.add(guardar);add(footer,BorderLayout.SOUTH);getRootPane().setDefaultButton(guardar);
-        cargarCatalogos();rubro.addActionListener(e->{if(!cargando)cargarCategorias();});categoria.addActionListener(e->{if(!cargando)previsualizar();});
+        cargarCatalogos();rubro.addActionListener(e->{if(!cargando)cargarCategorias();});categoria.addActionListener(e->{if(!cargando)sincronizarRubroDeCategoria();});
         compra.addActionListener(e->actualizarCostos());venta.addActionListener(e->actualizarCostos());
         pesable.addActionListener(e->{if(!pesable.isSelected())pesoVariable.setSelected(false);actualizarCostos();});
         pesoVariable.addActionListener(e->actualizarCostos());
@@ -176,7 +184,113 @@ public class DialogoNuevoArticulo extends JDialog {
     private void cargarCombo(Connection cn,JComboBox<String> cb,String sql)throws SQLException{cb.removeAllItems();cb.addItem("Seleccione...");Map<String,Integer> m=new HashMap<>();try(PreparedStatement ps=cn.prepareStatement(sql);ResultSet rs=ps.executeQuery()){while(rs.next()){String n=rs.getString(2);cb.addItem(n);m.put(n,rs.getInt(1));}}ids.put(cb,m);}
     private Integer id(JComboBox<String> cb){Map<String,Integer> m=ids.get(cb);return m==null?null:m.get((String)cb.getSelectedItem());}
     private void cargarCatalogos(){cargando=true;try(Connection cn=conexion.getConexion()){cargarCombo(cn,marca,"SELECT id_marca,nombre FROM marca WHERE activo=1 ORDER BY nombre");cargarCombo(cn,rubro,"SELECT id_rubro,nombre FROM rubro WHERE activo=1 ORDER BY nombre");cargarCombo(cn,compra,"SELECT id_unidad,CONCAT(nombre,' (',codigo,')') FROM unidad_medida WHERE activo=1 ORDER BY nombre");cargarCombo(cn,venta,"SELECT id_unidad,CONCAT(nombre,' (',codigo,')') FROM unidad_medida WHERE activo=1 ORDER BY nombre");cargarCombo(cn,iva,"SELECT id_iva,CONCAT(nombre,' (',porcentaje,'%)') FROM tipo_iva WHERE activo=1 ORDER BY porcentaje");}catch(SQLException e){error("Error cargando catálogos",e);}finally{cargando=false;}cargarCategorias();}
-    private void cargarCategorias(){cargando=true;try(Connection cn=conexion.getConexion()){Integer r=id(rubro);String sql="SELECT id_categoria,nombre FROM categoria WHERE activo=1"+(r==null?"":" AND id_rubro=?")+" ORDER BY nombre";categoria.removeAllItems();categoria.addItem("Seleccione...");Map<String,Integer> m=new HashMap<>();try(PreparedStatement ps=cn.prepareStatement(sql)){if(r!=null)ps.setInt(1,r);try(ResultSet rs=ps.executeQuery()){while(rs.next()){String n=rs.getString(2);categoria.addItem(n);m.put(n,rs.getInt(1));}}}ids.put(categoria,m);}catch(SQLException e){error("Error cargando categorías",e);}finally{cargando=false;}previsualizar();}
+    private void cargarCategorias(){
+        Integer seleccionAnterior=id(categoria);
+        cargando=true;
+        try(Connection cn=conexion.getConexion()){
+            Integer r=id(rubro);
+            String sql="SELECT id_categoria,nombre FROM categoria WHERE activo=1"+(r==null?"":" AND id_rubro=?")+" ORDER BY nombre";
+            categoria.removeAllItems();categoria.addItem("Seleccione...");
+            Map<String,Integer> m=new HashMap<>();
+            String nombreRestaurado=null;
+            try(PreparedStatement ps=cn.prepareStatement(sql)){
+                if(r!=null)ps.setInt(1,r);
+                try(ResultSet rs=ps.executeQuery()){
+                    while(rs.next()){
+                        int idCategoria=rs.getInt(1);String n=rs.getString(2);
+                        categoria.addItem(n);m.put(n,idCategoria);
+                        if(seleccionAnterior!=null && seleccionAnterior==idCategoria)nombreRestaurado=n;
+                    }
+                }
+            }
+            ids.put(categoria,m);
+            if(nombreRestaurado!=null)categoria.setSelectedItem(nombreRestaurado);
+        }catch(SQLException e){error("Error cargando categorías",e);}
+        finally{cargando=false;}
+        previsualizar();
+    }
+    // Si el usuario elige primero una categoría, seleccionamos su rubro automáticamente.
+    // Así no se borra la categoría ni el código al completar el rubro después.
+    private void sincronizarRubroDeCategoria(){
+        Integer cat=id(categoria);
+        if(cat==null){previsualizar();return;}
+        try(Connection cn=conexion.getConexion();
+            PreparedStatement ps=cn.prepareStatement("SELECT id_rubro FROM categoria WHERE id_categoria=?")){
+            ps.setInt(1,cat);
+            try(ResultSet rs=ps.executeQuery()){
+                if(rs.next()){
+                    int rubroCategoria=rs.getInt(1);
+                    Integer rubroActual=id(rubro);
+                    if(rubroActual==null || rubroActual!=rubroCategoria){
+                        Map<String,Integer> rubros=ids.get(rubro);
+                        if(rubros!=null){
+                            for(Map.Entry<String,Integer> entry:rubros.entrySet()){
+                                if(entry.getValue()!=null && entry.getValue()==rubroCategoria){
+                                    cargando=true;
+                                    try{rubro.setSelectedItem(entry.getKey());}
+                                    finally{cargando=false;}
+                                    cargarCategorias();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }catch(SQLException e){error("No se pudo identificar el rubro de la categoría",e);}
+        previsualizar();
+    }
+    private void buscarMarca(){
+        JDialog dlg=new JDialog(this,"Buscar marca · Serena Soft",true);
+        dlg.setLayout(new BorderLayout(10,10));dlg.getContentPane().setBackground(Color.WHITE);
+        JPanel superior=new JPanel(new BorderLayout(8,5));superior.setBackground(Color.WHITE);
+        superior.setBorder(new EmptyBorder(14,16,8,16));
+        JLabel titulo=new JLabel("SELECCIONAR MARCA");titulo.setForeground(NAVY);
+        titulo.setFont(new Font("Segoe UI",Font.BOLD,17));superior.add(titulo,BorderLayout.NORTH);
+        JTextField filtro=field();filtro.setToolTipText("Escribí el nombre o parte de la marca");
+        superior.add(filtro,BorderLayout.CENTER);dlg.add(superior,BorderLayout.NORTH);
+        DefaultListModel<String> modelo=new DefaultListModel<>();JList<String> lista=new JList<>(modelo);
+        lista.setFont(new Font("Segoe UI",Font.PLAIN,14));lista.setFixedCellHeight(34);
+        lista.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane scroll=new JScrollPane(lista);scroll.setBorder(new EmptyBorder(0,16,0,16));dlg.add(scroll,BorderLayout.CENTER);
+        java.util.List<String> marcas=new ArrayList<>();
+        for(int i=1;i<marca.getItemCount();i++)marcas.add(marca.getItemAt(i));
+        Runnable actualizar=()->{modelo.clear();String q=Normalizer.normalize(filtro.getText().trim(),Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT);
+            for(String n:marcas){String normal=Normalizer.normalize(n,Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT);
+                if(normal.contains(q))modelo.addElement(n);}
+            if(!modelo.isEmpty())lista.setSelectedIndex(0);
+        };actualizar.run();
+        filtro.getDocument().addDocumentListener(new javax.swing.event.DocumentListener(){
+            public void insertUpdate(javax.swing.event.DocumentEvent e){actualizar.run();}
+            public void removeUpdate(javax.swing.event.DocumentEvent e){actualizar.run();}
+            public void changedUpdate(javax.swing.event.DocumentEvent e){actualizar.run();}
+        });
+        Runnable elegir=()->{String n=lista.getSelectedValue();if(n!=null){marca.setSelectedItem(n);dlg.dispose();}};
+        lista.addMouseListener(new java.awt.event.MouseAdapter(){public void mouseClicked(java.awt.event.MouseEvent e){if(e.getClickCount()==2)elegir.run();}});
+        JPanel pie=new JPanel(new FlowLayout(FlowLayout.RIGHT,10,10));pie.setBackground(Color.WHITE);
+        JButton cancelar=button("CANCELAR",new Color(75,82,95)),seleccionar=button("SELECCIONAR",BLUE);
+        cancelar.addActionListener(e->dlg.dispose());seleccionar.addActionListener(e->elegir.run());
+        pie.add(cancelar);pie.add(seleccionar);dlg.add(pie,BorderLayout.SOUTH);
+        dlg.getRootPane().setDefaultButton(seleccionar);dlg.setSize(530,490);dlg.setLocationRelativeTo(this);
+        SwingUtilities.invokeLater(()->filtro.requestFocusInWindow());dlg.setVisible(true);
+    }
+    private void nuevaCategoria(){
+        Integer idRubro=id(rubro);
+        if(idRubro==null){JOptionPane.showMessageDialog(this,"Seleccioná primero el rubro de la nueva categoría.");return;}
+        JTextField nombreCat=field();JPanel panel=grid(1);panel.add(cell("Nombre de categoría *",nombreCat));
+        if(JOptionPane.showConfirmDialog(this,panel,"Nueva categoría",JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;
+        String nombreNuevo=nombreCat.getText().trim();if(nombreNuevo.isEmpty()){JOptionPane.showMessageDialog(this,"Ingresá un nombre.");return;}
+        try(Connection cn=conexion.getConexion()){
+            try(PreparedStatement check=cn.prepareStatement("SELECT id_categoria FROM categoria WHERE id_rubro=? AND LOWER(nombre)=LOWER(?)")){
+                check.setInt(1,idRubro);check.setString(2,nombreNuevo);
+                try(ResultSet rs=check.executeQuery()){if(rs.next()){JOptionPane.showMessageDialog(this,"La categoría ya existe en este rubro.");return;}}
+            }
+            try(PreparedStatement ps=cn.prepareStatement("INSERT INTO categoria(id_rubro,nombre,activo) VALUES(?,?,1)")){
+                ps.setInt(1,idRubro);ps.setString(2,nombreNuevo);ps.executeUpdate();
+            }
+            cargarCategorias();categoria.setSelectedItem(nombreNuevo);
+        }catch(SQLException e){error("No se pudo crear la categoría",e);}
+    }
     private void nuevaMarca(){JTextField n=field(),d=field();JPanel p=grid(1);p.add(cell("Nombre de la marca *",n));p.add(cell("Descripción opcional",d));if(JOptionPane.showConfirmDialog(this,p,"Nueva marca",JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;if(n.getText().isBlank()){JOptionPane.showMessageDialog(this,"Ingresá una marca.");return;}try(Connection cn=conexion.getConexion()){try(PreparedStatement ps=cn.prepareStatement("INSERT INTO marca(nombre,descripcion,activo) VALUES(?,?,1)")){ps.setString(1,n.getText().trim());ps.setString(2,d.getText().trim());ps.executeUpdate();}cargarCombo(cn,marca,"SELECT id_marca,nombre FROM marca WHERE activo=1 ORDER BY nombre");marca.setSelectedItem(n.getText().trim());}catch(SQLException e){error("No se pudo crear la marca; comprobá que no exista",e);}}
     private void buscarProveedor(){DialogoBuscarProveedor d=new DialogoBuscarProveedor(this);d.setVisible(true);if(d.isSeleccionado()){idProveedor=d.getIdSeleccionado();proveedor.setText(d.getRazonSocialSeleccionada());}}
     private static String prefijo(String nombre){String s=Normalizer.normalize(nombre,Normalizer.Form.NFD).replaceAll("\\p{M}","").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]","");return s.substring(0,Math.min(3,s.length()));}
