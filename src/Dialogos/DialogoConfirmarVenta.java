@@ -29,13 +29,15 @@ public class DialogoConfirmarVenta extends JDialog {
         this.pagoInicial=formaPago;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setContentPane(crearContenido(cliente,comprobante,subtotal,descuento));
+        // Mantener los medios de pago compatibles con el catálogo usado por PanelVentas.
+        medios.setModel(new DefaultComboBoxModel<>(new String[]{"Efectivo","Tarjeta","Transferencia","Mercado Pago"}));
         medios.setSelectedItem(formaPago);
         recibido.setText(recibe>0 ? BigDecimal.valueOf(recibe).stripTrailingZeros().toPlainString() : "");
         actualizarCambio();
         recibido.getDocument().addDocumentListener(new DocumentListener(){public void insertUpdate(DocumentEvent e){actualizarCambio();}public void removeUpdate(DocumentEvent e){actualizarCambio();}public void changedUpdate(DocumentEvent e){actualizarCambio();}});
         medios.addActionListener(e -> { if(!"Efectivo".equals(getFormaPago())){recibido.setText(DialogoConfirmarVenta.this.total.toPlainString());recibido.setEnabled(false);}else{recibido.setEnabled(true);recibido.selectAll();} actualizarCambio();});
         getRootPane().registerKeyboardAction(e -> dispose(),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
-        setSize(760,740);setMinimumSize(new Dimension(700,690));setLocationRelativeTo(parent);
+        setSize(700,620);setMinimumSize(new Dimension(620,560));setLocationRelativeTo(parent);
         SwingUtilities.invokeLater(() -> recibido.requestFocusInWindow());
     }
     private JPanel crearContenido(String cliente,String comprobante,double subtotal,double descuento){
@@ -72,6 +74,7 @@ public class DialogoConfirmarVenta extends JDialog {
     private void confirmar(){try{if(parsear().compareTo(total)<0){JOptionPane.showMessageDialog(this,"El importe recibido es inferior al total.","Cobro insuficiente",JOptionPane.WARNING_MESSAGE);return;}confirmado=true;dispose();}catch(Exception e){JOptionPane.showMessageDialog(this,"Ingresá un importe válido.","Importe incorrecto",JOptionPane.WARNING_MESSAGE);}}
     public boolean isVentaConfirmada(){return confirmado;}
     public boolean isImprimirComprobante(){return imprimir.isSelected();}
+    public void setObservaciones(String texto){observaciones.setText(texto == null ? "" : texto);}
     public String getObservaciones(){return observaciones.getText().trim();}
     public String getFormaPago(){return String.valueOf(medios.getSelectedItem());}
     public BigDecimal getImporteRecibido(){return parsear();}

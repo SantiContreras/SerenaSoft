@@ -46,6 +46,11 @@ public class DialogoVentaFinalizada extends JDialog {
     private boolean nuevaVenta = false;
     private boolean imprimir = false;
     private long ventaId;
+    private boolean impresionSolicitada = true;
+    public void setImpresionSolicitada(boolean valor) {
+        impresionSolicitada = valor;
+        btnImprimir.setText(valor ? "IMPRIMIR TICKET" : "IMPRIMIR (OPCIONAL)");
+    }
     public void setVentaId(long id) { this.ventaId=id; }
 
     //==========================================================
@@ -106,19 +111,9 @@ public class DialogoVentaFinalizada extends JDialog {
 
         setModal(true);
 
-        setSize(
-                new Dimension(
-                        620,
-                        650
-                )
-        );
+        setSize(new Dimension(620, 610));
 
-        setMinimumSize(
-                new Dimension(
-                        580,
-                        600
-                )
-        );
+        setMinimumSize(new Dimension(580, 580));
 
         setResizable(false);
 

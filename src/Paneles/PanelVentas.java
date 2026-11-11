@@ -58,6 +58,34 @@ public class PanelVentas extends javax.swing.JPanel {
     private JLabel lblDescuentoVentaReal;
     private JLabel lblNumeroVentaActual, lblItemsActual, lblUnidadesActual;
     private java.math.BigDecimal descuentoGeneralVenta = java.math.BigDecimal.ZERO;
+    private String observacionesVenta = "";
+    private java.util.LinkedHashMap<Integer, LineaCarrito> ventaPendiente = null;
+    private java.math.BigDecimal descuentoPendiente = java.math.BigDecimal.ZERO;
+    private String observacionesPendientes = "";
+    private boolean procesandoCobro = false;
+    private java.math.BigDecimal descuentoPromociones = java.math.BigDecimal.ZERO;
+    private boolean promocionesCargadas = false;
+    private final java.util.Set<Integer> productosPromocionados = new java.util.HashSet<>();
+    private java.math.BigDecimal descuentoPromoCarrito() {
+        java.math.BigDecimal total=java.math.BigDecimal.ZERO;
+        productosPromocionados.clear();
+        // El servidor es la fuente definitiva; si falla la consulta, no habilitar cobros.
+        try(java.sql.Connection c=Configuracion.conexion.getConexion()) {
+            for(LineaCarrito l:carrito.values()) {
+                if(!l.producto.isPesable() && l.cantidad.stripTrailingZeros().scale()<=0 &&
+                        services.PromocionService.tieneDosPorUno(c,l.producto.getIdProducto())) {
+                    productosPromocionados.add(l.producto.getIdProducto());
+                    total=total.add(services.PromocionService.descuentoDosPorUno(
+                        l.producto.getPrecioVenta(),l.cantidad));
+                }
+            }
+            promocionesCargadas=true;
+        }catch(java.sql.SQLException ex){
+            promocionesCargadas=false;
+            System.err.println("Error al consultar promociones: "+ex.getMessage());
+        }
+        return dinero(total);
+    }
     private static final class LineaCarrito {
         model.Producto producto;
         java.math.BigDecimal cantidad;
@@ -73,6 +101,8 @@ public class PanelVentas extends javax.swing.JPanel {
     private RSButtonRound btnEliminar;
 
     private RSButtonRound btnCobrar;
+    private RSButtonRound btnPendienteAccion;
+    private RSButtonRound btnObservacionAccion;
 
     private JLabel lblProducto;
 
@@ -304,6 +334,7 @@ public class PanelVentas extends javax.swing.JPanel {
             txtCodigo.requestFocusInWindow();
         }
         if(txtImporteRecibido!=null)txtImporteRecibido.setText("");
+        observacionesVenta = "";
         actualizarCarrito();
     }
 
@@ -311,22 +342,26 @@ public class PanelVentas extends javax.swing.JPanel {
         // WHEN_IN_FOCUSED_WINDOW permite usarlos incluso con el foco en la tabla.
         javax.swing.InputMap teclas = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         javax.swing.ActionMap acciones = getActionMap();
-        registrarAtajo(teclas, acciones, "F2", "buscarProducto", () -> btnAgregar.doClick());
+        registrarAtajo(teclas, acciones, "F1", "buscarProducto", () -> btnAgregar.doClick());
+        registrarAtajo(teclas, acciones, "F2", "cobrar", () -> btnCobrar.doClick());
         registrarAtajo(teclas, acciones, "F3", "pesable", () -> btnPesable.doClick());
         registrarAtajo(teclas, acciones, "F4", "manual", () -> btnManual.doClick());
-        registrarAtajo(teclas, acciones, "F6", "quitar", () -> btnEliminar.doClick());
+        registrarAtajo(teclas, acciones, "DELETE", "quitar", () -> btnEliminar.doClick());
+        registrarAtajo(teclas, acciones, "F6", "pendiente", () -> btnPendienteAccion.doClick());
         registrarAtajo(teclas, acciones, "F7", "clienteFacturacion", () -> abrirClienteFacturacion());
-        registrarAtajo(teclas, acciones, "F8", "nuevaVenta", () -> limpiarVentaActual());
-        registrarAtajo(teclas, acciones, "F9", "cobrar", () -> btnCobrar.doClick());
+        registrarAtajo(teclas, acciones, "F8", "observacion", () -> btnObservacionAccion.doClick());
+        registrarAtajo(teclas, acciones, "ctrl N", "nuevaVenta", () -> limpiarVentaActual());
+        registrarAtajo(teclas, acciones, "F9", "cobrarAlternativo", () -> btnCobrar.doClick());
+        registrarAtajo(teclas, acciones, "F5", "descuento", () -> aplicarDescuento());
         registrarAtajo(teclas, acciones, "F10", "codigo", () -> {
             txtCodigo.requestFocusInWindow();
             txtCodigo.selectAll();
         });
-        btnAgregar.setToolTipText("F2 - Buscar producto");
+        btnAgregar.setToolTipText("F1 - Buscar producto");
         btnPesable.setToolTipText("F3 - Producto pesable");
         btnManual.setToolTipText("F4 - Venta manual (pendiente)");
-        btnEliminar.setToolTipText("F6 - Quitar producto seleccionado");
-        btnCobrar.setToolTipText("F9 - Cobrar venta");
+        btnEliminar.setToolTipText("Supr - Quitar producto seleccionado");
+        btnCobrar.setToolTipText("F2 / F9 - Cobrar venta");
         btnScan.setToolTipText("Ingresá un código y presioná Enter (o hacé clic aquí)");
     }
 
@@ -355,6 +390,7 @@ public class PanelVentas extends javax.swing.JPanel {
         model.Producto p=dao.buscarPorCodigoBarra(codigo);
         if(p==null)p=dao.buscarPorCodigo(codigo);
         if(p==null){javax.swing.JOptionPane.showMessageDialog(this,"No se encontró el código: "+codigo);txtCodigo.selectAll();txtCodigo.requestFocusInWindow();return;}
+        lblProducto.setText("Último: " + p.getNombre());
         if (p.isPesable()) {
             abrirDialogoPesable(p);
         } else {
@@ -379,7 +415,7 @@ public class PanelVentas extends javax.swing.JPanel {
         return new java.math.BigDecimal(t);
     }
     private java.math.BigDecimal totalVentaActual() {
-        return subtotalCarrito().subtract(descuentoGeneralVenta).max(java.math.BigDecimal.ZERO);
+        return subtotalCarrito().subtract(descuentoPromociones).subtract(descuentoGeneralVenta).max(java.math.BigDecimal.ZERO);
     }
     private void calcularCambio(boolean avisar) {
         if (txtImporteRecibido==null || lblCambioCalculado==null) return;
@@ -413,20 +449,27 @@ public class PanelVentas extends javax.swing.JPanel {
     private void actualizarCarrito() {
         if(tabla==null)return;
         DefaultTableModel m=(DefaultTableModel)tabla.getModel();m.setRowCount(0);
+        descuentoPromociones=descuentoPromoCarrito();
         for(LineaCarrito l:carrito.values()){
-            m.addRow(new Object[]{l.producto.getIdProducto(),l.producto.getNombre(),l.cantidad,
+            String nombre=l.producto.getNombre();
+            if(productosPromocionados.contains(l.producto.getIdProducto())) nombre += "  [PROMO 2x1]";
+            m.addRow(new Object[]{l.producto.getIdProducto(),nombre,l.cantidad,
                 dinero(l.producto.getPrecioVenta()),dinero(l.producto.getPrecioVenta().multiply(l.cantidad))});
         }
-        if(lblTotalVentaReal!=null)lblTotalVentaReal.setText(formatoPeso(subtotalCarrito().subtract(descuentoGeneralVenta)));
+        if(lblTotalVentaReal!=null)lblTotalVentaReal.setText(formatoPeso(totalVentaActual()));
         if(lblSubtotalVentaReal!=null)lblSubtotalVentaReal.setText(formatoPeso(subtotalCarrito()));
-        if(lblDescuentoVentaReal!=null)lblDescuentoVentaReal.setText(formatoPeso(descuentoGeneralVenta));
+        if(lblDescuentoVentaReal!=null) {
+            lblDescuentoVentaReal.setText(formatoPeso(descuentoGeneralVenta.add(descuentoPromociones)));
+            lblDescuentoVentaReal.setToolTipText("Promociones 2x1: "+formatoPeso(descuentoPromociones)
+                +" | Descuento manual: "+formatoPeso(descuentoGeneralVenta));
+        }
         if(lblItemsActual!=null) lblItemsActual.setText("Items: " + carrito.size());
         if(lblUnidadesActual!=null) {
             java.math.BigDecimal unidades=java.math.BigDecimal.ZERO;
             for(LineaCarrito linea:carrito.values()) unidades=unidades.add(linea.cantidad);
             lblUnidadesActual.setText("Unidades: " + unidades.stripTrailingZeros().toPlainString().replace('.',','));
         }
-        if(btnCobrar!=null)btnCobrar.setText("COBRAR   "+formatoPeso(totalVentaActual()));
+        if(btnCobrar!=null)btnCobrar.setText("COBRAR F2   "+formatoPeso(totalVentaActual()));
         calcularCambio(false);
     }
     private String formatoPeso(java.math.BigDecimal importe) {
@@ -469,7 +512,11 @@ public class PanelVentas extends javax.swing.JPanel {
     }
     /** El cajero confirma todos los datos en una sola ventana, sin prompts intermedios. */
     private void confirmarVentaReal() {
+        if (procesandoCobro) return;
+        actualizarCarrito();
+        if(!promocionesCargadas){javax.swing.JOptionPane.showMessageDialog(this,"No se pudo verificar las promociones. Revisá la conexión a MariaDB.");return;}
         if(carrito.isEmpty()) {javax.swing.JOptionPane.showMessageDialog(this,"Agregá productos al carrito.");return;}
+        procesandoCobro = true;
         try {
             java.math.BigDecimal total=totalVentaActual();
             if(total.signum()<=0)throw new IllegalArgumentException("El total de la venta debe ser positivo.");
@@ -479,11 +526,13 @@ public class PanelVentas extends javax.swing.JPanel {
             Dialogos.DialogoConfirmarVenta d=new Dialogos.DialogoConfirmarVenta(ventana,
                 txtCliente.getText(),txtDocumento.getText(),String.valueOf(comboCondicionIVA.getSelectedItem()),
                 String.valueOf(comboComprobante.getSelectedItem()),String.valueOf(comboPago.getSelectedItem()),
-                subtotalCarrito().doubleValue(),descuentoGeneralVenta.doubleValue(),total.doubleValue(),
+                subtotalCarrito().doubleValue(),descuentoGeneralVenta.add(descuentoPromociones).doubleValue(),total.doubleValue(),
                 inicial.doubleValue(),java.math.BigDecimal.ZERO.doubleValue());
+            d.setObservaciones(observacionesVenta);
             d.setVisible(true);
             if(!d.isVentaConfirmada())return;
             // Los IDs se resuelven después de confirmar la ventana, antes de registrar la transacción.
+            String comprobanteConfirmado = String.valueOf(comboComprobante.getSelectedItem());
             int medio=medioPagoSeleccionado(d.getFormaPago());
             int deposito=depositoPrincipalActivo();
             java.math.BigDecimal recibido=d.getImporteRecibido();
@@ -530,6 +579,7 @@ public class PanelVentas extends javax.swing.JPanel {
                 }
             }
             carrito.clear();descuentoGeneralVenta=java.math.BigDecimal.ZERO;
+            observacionesVenta = "";
             txtImporteRecibido.setText("");
             txtCliente.setText("Consumidor Final");
             txtDocumento.setText("");
@@ -539,13 +589,17 @@ public class PanelVentas extends javax.swing.JPanel {
             lblResumenCliente.setText("Consumidor Final  |  Minorista  |  Ticket");
             actualizarCarrito();
             Dialogos.DialogoVentaFinalizada fin=new Dialogos.DialogoVentaFinalizada(ventana,
-                String.format("%08d",resultado.numero),String.valueOf(comboComprobante.getSelectedItem()),d.getFormaPago(),
+                String.format("%08d",resultado.numero),comprobanteConfirmado,d.getFormaPago(),
                 resultado.total.doubleValue(),recibido.doubleValue(),resultado.cambio.doubleValue(),
                 sesion.SesionUsuario.getNombreUsuario());
             fin.setVentaId(resultado.ventaId);
+            fin.setImpresionSolicitada(d.isImprimirComprobante());
             fin.setVisible(true);
         }catch(Exception ex){javax.swing.JOptionPane.showMessageDialog(this,
-            "No se registró la venta: "+ex.getMessage(),"Venta no confirmada",javax.swing.JOptionPane.ERROR_MESSAGE);}
+            "No se pudo completar la operación: "+ex.getMessage(),"Venta",javax.swing.JOptionPane.ERROR_MESSAGE);
+        } finally {
+            procesandoCobro = false;
+        }
     }
     private int depositoPrincipalActivo() throws java.sql.SQLException {
         try(java.sql.Connection c=Configuracion.conexion.getConexion();
@@ -674,9 +728,7 @@ public class PanelVentas extends javax.swing.JPanel {
                 )
         );
 
-        txtCodigo.setText(
-                "LAC009"
-        );
+        txtCodigo.setText("");
 
         txtCodigo.setPreferredSize(
                 new Dimension(
@@ -740,7 +792,7 @@ public class PanelVentas extends javax.swing.JPanel {
         //====================================================
         lblProducto
                 = new JLabel(
-                        "Jamón La Piamontesa x kg"
+                        "Listo para escanear productos"
                 );
 
         lblProducto.setFont(
@@ -805,10 +857,10 @@ public class PanelVentas extends javax.swing.JPanel {
         btnEliminar
                 = new RSButtonRound();
 
-        btnPesable.setText("Pesable");
-        btnAgregar.setText("Agregar");
-        btnManual.setText("Manual");
-        btnEliminar.setText("Eliminar");
+        btnPesable.setText("Pesable  F3");
+        btnAgregar.setText("Agregar  F1");
+        btnManual.setText("Manual  F4");
+        btnEliminar.setText("Eliminar  Supr");
 
         btnPesable.setBackground(AZUL_PRESION);
         btnAgregar.setBackground(AZUL_PRESION);
@@ -1874,53 +1926,94 @@ public class PanelVentas extends javax.swing.JPanel {
     }
 
     private void armarPanelAcciones(JPanel panel) {
-
         panel.removeAll();
+        panel.setLayout(new GridLayout(2, 2, 6, 6));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        RSButtonRound descuento = crearBotonAccion("DESCUENTO  F5");
+        RSButtonRound pendiente = crearBotonAccion("PENDIENTE  F6");
+        btnPendienteAccion = pendiente;
+        RSButtonRound observacion = crearBotonAccion("OBSERVACIÓN  F8");
+        btnObservacionAccion = observacion;
+        RSButtonRound limpiar = crearBotonAccion("LIMPIAR  Ctrl+N");
+        descuento.addActionListener(e -> aplicarDescuento());
+        pendiente.addActionListener(e -> alternarVentaPendiente());
+        observacion.addActionListener(e -> editarObservaciones());
+        limpiar.addActionListener(e -> limpiarVentaActual());
+        descuento.setToolTipText("F5 - Aplicar descuento general");
+        pendiente.setToolTipText("F6 - Guardar o recuperar una venta pendiente en esta sesión");
+        observacion.setToolTipText("F8 - Observaciones que se registrarán con la venta");
+        limpiar.setToolTipText("Ctrl+N - Vaciar carrito (solicita confirmación)");
+        panel.add(descuento); panel.add(pendiente);
+        panel.add(observacion); panel.add(limpiar);
+        panel.revalidate(); panel.repaint();
+    }
 
-        panel.setLayout(
-                new GridLayout(
-                        2,
-                        2,
-                        10,
-                        10
-                )
-        );
+    private void aplicarDescuento() {
+        if (carrito.isEmpty()) {
+            javax.swing.JOptionPane.showMessageDialog(this, "Agregá productos antes de aplicar un descuento.");
+            return;
+        }
+        String actual = descuentoGeneralVenta.stripTrailingZeros().toPlainString();
+        String texto = (String) javax.swing.JOptionPane.showInputDialog(this,
+                "Descuento general en pesos (0 para quitar):", "Descuento de venta",
+                javax.swing.JOptionPane.QUESTION_MESSAGE, null, null, actual);
+        if (texto == null) return;
+        try {
+            java.math.BigDecimal valor = dinero(parsearImporte(texto));
+            if (valor.signum() < 0 || valor.compareTo(subtotalCarrito().subtract(descuentoPromociones)) >= 0)
+                throw new IllegalArgumentException("El descuento debe ser mayor o igual a cero y menor al subtotal.");
+            descuentoGeneralVenta = valor;
+            actualizarCarrito();
+        } catch (Exception ex) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Descuento inválido. Ingresá un importe menor al subtotal después de promociones.",
+                    "Descuento", javax.swing.JOptionPane.WARNING_MESSAGE);
+        }
+    }
 
-        panel.setBorder(
-                new EmptyBorder(
-                        18,
-                        20,
-                        18,
-                        20
-                )
-        );
+    private void editarObservaciones() {
+        javax.swing.JTextArea area = new javax.swing.JTextArea(observacionesVenta, 5, 35);
+        area.setLineWrap(true); area.setWrapStyleWord(true);
+        int opcion = javax.swing.JOptionPane.showConfirmDialog(this,
+                new javax.swing.JScrollPane(area), "Observaciones de la venta",
+                javax.swing.JOptionPane.OK_CANCEL_OPTION, javax.swing.JOptionPane.PLAIN_MESSAGE);
+        if (opcion == javax.swing.JOptionPane.OK_OPTION) observacionesVenta = area.getText().trim();
+    }
 
-        panel.add(
-                crearBotonAccion(
-                        "DESCUENTO"
-                )
-        );
-
-        panel.add(
-                crearBotonAccion(
-                        "PENDIENTE"
-                )
-        );
-
-        panel.add(
-                crearBotonAccion(
-                        "OBSERVACIÓN"
-                )
-        );
-
-        panel.add(
-                crearBotonAccion(
-                        "LIMPIAR"
-                )
-        );
-
-        panel.revalidate();
-        panel.repaint();
+    /** Pendiente temporal: sólo en memoria, no se registra en MariaDB. */
+    private void alternarVentaPendiente() {
+        if (ventaPendiente == null) {
+            if (carrito.isEmpty()) {
+                javax.swing.JOptionPane.showMessageDialog(this, "No hay productos para dejar pendientes.");
+                return;
+            }
+            int ok = javax.swing.JOptionPane.showConfirmDialog(this,
+                    "¿Guardar este carrito como pendiente y comenzar otro?\n"
+                    + "Se conserva sólo mientras esta pantalla siga abierta.",
+                    "Venta pendiente", javax.swing.JOptionPane.YES_NO_OPTION);
+            if (ok != javax.swing.JOptionPane.YES_OPTION) return;
+            ventaPendiente = new java.util.LinkedHashMap<>();
+            for (java.util.Map.Entry<Integer, LineaCarrito> e : carrito.entrySet())
+                ventaPendiente.put(e.getKey(), new LineaCarrito(e.getValue().producto, e.getValue().cantidad));
+            descuentoPendiente = descuentoGeneralVenta;
+            observacionesPendientes = observacionesVenta;
+            carrito.clear(); descuentoGeneralVenta = java.math.BigDecimal.ZERO;
+            observacionesVenta = "";
+            actualizarCarrito();
+            txtCodigo.requestFocusInWindow();
+        } else {
+            if (!carrito.isEmpty()) {
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "Terminá o limpiá la venta actual antes de recuperar la pendiente.");
+                return;
+            }
+            carrito.putAll(ventaPendiente);
+            descuentoGeneralVenta = descuentoPendiente;
+            observacionesVenta = observacionesPendientes;
+            ventaPendiente = null;
+            actualizarCarrito();
+            txtCodigo.requestFocusInWindow();
+        }
     }
 
     private RSButtonRound crearBotonAccion(String texto) {

@@ -53,7 +53,7 @@ public final class VentaService {
     }
     private static final class Linea {
         int id; String nombre; BigDecimal cantidad, precio, costo, iva, descuentoPorcentaje, descuentoImporte, subtotal, ivaImporte;
-        boolean controla, sinStock;
+        boolean controla, sinStock, pesable;
     }
     private static BigDecimal money(BigDecimal v){return v.setScale(MONEY,RoundingMode.HALF_UP);}
     private static void validar(boolean ok,String msg){if(!ok)throw new IllegalArgumentException(msg);}
@@ -86,17 +86,25 @@ public final class VentaService {
                     validar(item.cantidad!=null && item.cantidad.signum()>0,"Cantidad inválida");
                     validar(item.descuentoPorcentaje!=null && item.descuentoPorcentaje.signum()>=0 && item.descuentoPorcentaje.compareTo(CIEN)<=0,"Descuento de línea inválido");
                     Linea l=new Linea();l.id=item.productoId;l.cantidad=item.cantidad;l.descuentoPorcentaje=item.descuentoPorcentaje;
-                    String q="SELECT p.nombre,p.precio_venta,p.precio_compra,p.controla_stock,p.permite_venta_sin_stock,p.permite_descuento,COALESCE(t.porcentaje,0) iva FROM producto p LEFT JOIN tipo_iva t ON t.id_iva=p.id_iva WHERE p.id_producto=? AND p.activo=1";
+                    String q="SELECT p.nombre,p.precio_venta,p.precio_compra,p.controla_stock,p.permite_venta_sin_stock,p.permite_descuento,p.es_pesable,COALESCE(t.porcentaje,0) iva FROM producto p LEFT JOIN tipo_iva t ON t.id_iva=p.id_iva WHERE p.id_producto=? AND p.activo=1";
                     try(PreparedStatement ps=c.prepareStatement(q)){
                         ps.setInt(1,l.id);try(ResultSet rs=ps.executeQuery()){
                             validar(rs.next(),"Producto inexistente/inactivo: "+l.id);
                             l.nombre=rs.getString("nombre");l.precio=rs.getBigDecimal("precio_venta");l.costo=nz(rs.getBigDecimal("precio_compra"));l.iva=nz(rs.getBigDecimal("iva"));
-                            l.controla=rs.getBoolean("controla_stock");l.sinStock=rs.getBoolean("permite_venta_sin_stock");
+                            l.controla=rs.getBoolean("controla_stock");l.sinStock=rs.getBoolean("permite_venta_sin_stock");l.pesable=rs.getBoolean("es_pesable");
                             validar(item.descuentoPorcentaje.signum()==0 || rs.getBoolean("permite_descuento"),"Producto sin permiso de descuento: "+l.nombre);
                         }
                     }
                     BigDecimal base=money(l.precio.multiply(l.cantidad));
                     l.descuentoImporte=money(base.multiply(l.descuentoPorcentaje).divide(CIEN,8,RoundingMode.HALF_UP));
+                    // Una bonificación por cada par completo; se calcula en la transacción.
+                    // La promoción no se acumula con un descuento porcentual de línea.
+                    if (!l.pesable && l.descuentoPorcentaje.signum()==0 &&
+                            l.cantidad.stripTrailingZeros().scale()<=0 &&
+                            services.PromocionService.tieneDosPorUno(c,l.id)) {
+                        l.descuentoImporte=l.descuentoImporte.add(
+                            services.PromocionService.descuentoDosPorUno(l.precio,l.cantidad));
+                    }
                     l.subtotal=base.subtract(l.descuentoImporte);
                     bruto=bruto.add(base);lineas.add(l);
                 }
@@ -116,7 +124,7 @@ public final class VentaService {
                     validar(recibido.compareTo(p.monto)>=0,"Importe recibido insuficiente");
                     cambio=cambio.add(recibido.subtract(p.monto));
                 }
-                validar(totalPagos.compareTo(total)==0,"Pagos no coinciden con total: "+totalPagos+" vs "+total);
+                validar(totalPagos.compareTo(total)==0,"El total cambió (promoción, precio o descuento). Actualizá el carrito antes de cobrar: "+totalPagos+" vs "+total);
                 // No vincular jamás una venta a la última caja global.
                 // Bloquear la sesión del cajero dentro de la misma transacción de venta.
                 Integer sesionParaVenta = null;
