@@ -1149,6 +1149,14 @@ public class DialogoArqueoCaja extends JDialog {
                     "FALTANTE";
         }
 
+        if (Math.abs(diferencia) >= 0.01 && txtObservaciones.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Para registrar un faltante o sobrante debe ingresar una observación.",
+                    "Observación obligatoria", JOptionPane.WARNING_MESSAGE);
+            txtObservaciones.requestFocusInWindow();
+            return;
+        }
+
         int opcion =
                 JOptionPane.showConfirmDialog(
                         this,
@@ -1184,22 +1192,8 @@ public class DialogoArqueoCaja extends JDialog {
         confirmado =
                 true;
 
-        //======================================================
-        // MAS ADELANTE SE GUARDA EN MYSQL
-        //======================================================
-        JOptionPane.showMessageDialog(
-                this,
-                "Arqueo registrado correctamente.\n\n"
-                + "Resultado: "
-                + estado
-                + "\n"
-                + "Diferencia: "
-                + formatoMoneda.format(
-                        diferencia
-                ),
-                "Arqueo Registrado",
-                JOptionPane.INFORMATION_MESSAGE
-        );
+        // El mensaje de éxito se muestra en PanelCaja tras confirmar MariaDB.
+
 
         dispose();
     }
@@ -1207,41 +1201,11 @@ public class DialogoArqueoCaja extends JDialog {
     //==========================================================
     // OBTENER MONTO
     //==========================================================
-    private Double obtenerMonto(
-            String texto) {
-
-        try {
-
-            if (texto == null) {
-
-                return null;
-            }
-
-            texto =
-                    texto.trim();
-
-            if (texto.isEmpty()) {
-
-                return null;
-            }
-
-            texto =
-                    texto
-                            .replace("$", "")
-                            .replace(" ", "")
-                            .replace(".", "")
-                            .replace(",", ".");
-
-            return Double.parseDouble(
-                    texto
-            );
-
-        } catch (
-                NumberFormatException e) {
-
-            return null;
-        }
+    private Double obtenerMonto(String texto) {
+        java.math.BigDecimal valor = ImporteCaja.parsear(texto);
+        return valor == null ? null : valor.doubleValue();
     }
+
 
     //==========================================================
     // CREAR TARJETA

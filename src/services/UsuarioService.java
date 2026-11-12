@@ -42,6 +42,10 @@ public class UsuarioService {
             String confirmarPassword,
             String email,
             Rol rol) {
+        if (!SesionUsuario.esAdministrador()) {
+            return ResultadoOperacion.error("Operación reservada al administrador.");
+        }
+
 
         nombreCompleto =
                 limpiar(nombreCompleto);
@@ -199,6 +203,10 @@ public class UsuarioService {
             String username,
             String email,
             Rol rol) {
+        if (!SesionUsuario.esAdministrador()) {
+            return ResultadoOperacion.error("Operación reservada al administrador.");
+        }
+
 
         Usuario usuario =
                 usuarioDao.buscarPorId(
@@ -286,6 +294,14 @@ public class UsuarioService {
         }
 
 
+        if (usuario.getIdUsuario().equals(SesionUsuario.getIdUsuario())
+                && usuario.getRol() != null && usuario.getRol().getIdRol() != rol.getIdRol()) {
+            return ResultadoOperacion.error("No puede modificar su propio rol.");
+        }
+        if (esUltimoAdministrador(usuario) && !"ADMINISTRADOR".equalsIgnoreCase(rol.getNombre())) {
+            return ResultadoOperacion.error("No puede quitar el rol al último administrador activo.");
+        }
+
         // -----------------------------------------------------
         // ACTUALIZAR OBJETO
         // -----------------------------------------------------
@@ -335,6 +351,10 @@ public class UsuarioService {
             int idUsuario,
             String password,
             String confirmarPassword) {
+        if (!SesionUsuario.esAdministrador()) {
+            return ResultadoOperacion.error("Operación reservada al administrador.");
+        }
+
 
         Usuario usuario =
                 usuarioDao.buscarPorId(
@@ -389,6 +409,10 @@ public class UsuarioService {
 
     public ResultadoOperacion activarUsuario(
             int idUsuario) {
+        if (!SesionUsuario.esAdministrador()) {
+            return ResultadoOperacion.error("Operación reservada al administrador.");
+        }
+
 
         Usuario usuario =
                 usuarioDao.buscarPorId(
@@ -434,6 +458,10 @@ public class UsuarioService {
 
     public ResultadoOperacion desactivarUsuario(
             int idUsuario) {
+        if (!SesionUsuario.esAdministrador()) {
+            return ResultadoOperacion.error("Operación reservada al administrador.");
+        }
+
 
         Usuario usuario =
                 usuarioDao.buscarPorId(
@@ -475,6 +503,10 @@ public class UsuarioService {
             );
         }
 
+
+        if (esUltimoAdministrador(usuario)) {
+            return ResultadoOperacion.error("No puede desactivar al último administrador activo.");
+        }
 
         if (usuarioDao.cambiarEstado(
                 idUsuario,
@@ -577,5 +609,17 @@ public class UsuarioService {
         return valor == null
                 ? ""
                 : valor.trim();
+    }
+    private boolean esUltimoAdministrador(Usuario objetivo) {
+        if (objetivo == null || objetivo.getRol() == null || !objetivo.estaActivo()
+                || !"ADMINISTRADOR".equalsIgnoreCase(objetivo.getRol().getNombre())) return false;
+        int cantidad = 0;
+        List<Usuario> lista = usuarioDao.listar();
+        if (lista == null) return true;
+        for (Usuario u : lista) {
+            if (u != null && u.estaActivo() && u.getRol() != null
+                    && "ADMINISTRADOR".equalsIgnoreCase(u.getRol().getNombre())) cantidad++;
+        }
+        return cantidad <= 1;
     }
 }

@@ -5,6 +5,7 @@ import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.math.BigDecimal;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -68,6 +69,42 @@ public class DialogoCerrarCaja extends JDialog {
     private JLabel lblTransferencia;
     private JLabel lblMercadoPago;
 
+    /** Resumen informativo por medio: ventas + ingresos adicionales - egresos. */
+    private JPanel crearPanelFinanciero() {
+        panelFinanciero = crearTarjeta("CIERRE FINANCIERO DEL TURNO");
+        panelFinanciero.setLayout(new GridBagLayout());
+        panelFinanciero.setMaximumSize(new Dimension(Integer.MAX_VALUE, 340));
+        llenarResumenFinanciero(panelFinanciero);
+        return panelFinanciero;
+    }
+
+    private void llenarResumenFinanciero(JPanel panel) {
+        if (resumenFinanciero == null) {
+            JLabel aviso = crearLabel("Detalle por medio disponible al confirmar los datos del turno.");
+            panel.add(aviso);
+            return;
+        }
+        services.CajaService.Resumen r = resumenFinanciero;
+        GridBagConstraints c = crearConstraints();
+        int fila = 0;
+        fila = filaFinanciera(panel, c, fila, "Ventas del turno (todos los medios)", r.ventas);
+        fila = filaFinanciera(panel, c, fila, "Otros ingresos (todos los medios)", r.ingresos);
+        fila = filaFinanciera(panel, c, fila, "Egresos totales (todos los medios)", r.egresos.negate());
+        fila = filaFinanciera(panel, c, fila, "Transferencias recibidas", r.transferencia.add(r.ingresosTransferencia));
+        fila = filaFinanciera(panel, c, fila, "Transferencias enviadas", r.egresosTransferencia.negate());
+        fila = filaFinanciera(panel, c, fila, "Neto transferencias", r.transferencia.add(r.ingresosTransferencia).subtract(r.egresosTransferencia));
+        fila = filaFinanciera(panel, c, fila, "Tarjetas: neto", r.tarjeta.add(r.ingresosTarjeta).subtract(r.egresosTarjeta));
+        fila = filaFinanciera(panel, c, fila, "Mercado Pago: neto", r.mercadoPago.add(r.ingresosMercadoPago).subtract(r.egresosMercadoPago));
+        filaFinanciera(panel, c, fila, "Efectivo esperado (arqueo físico)", r.efectivoEsperado);
+    }
+
+    private int filaFinanciera(JPanel panel, GridBagConstraints c, int fila, String nombre, BigDecimal valor) {
+        JLabel monto = crearValorMoneda();
+        monto.setText(formatoMoneda.format(valor));
+        agregarFila(panel, c, fila, nombre, monto);
+        return fila + 1;
+    }
+
     //==========================================================
     // CONTEO FINAL
     //==========================================================
@@ -104,6 +141,20 @@ public class DialogoCerrarCaja extends JDialog {
     private double efectivoEsperado;
     private double efectivoContado;
     private double diferencia;
+
+    private javax.swing.JPanel panelFinanciero;
+    private services.CajaService.Resumen resumenFinanciero;
+
+    /** Muestra ingresos y egresos bancarios sin alterar el arqueo de efectivo. */
+    public void setResumenFinanciero(services.CajaService.Resumen resumen) {
+        this.resumenFinanciero = resumen;
+        if (panelFinanciero != null) {
+            panelFinanciero.removeAll();
+            llenarResumenFinanciero(panelFinanciero);
+            panelFinanciero.revalidate();
+            panelFinanciero.repaint();
+        }
+    }
 
     private boolean confirmado = false;
 
@@ -341,6 +392,8 @@ public class DialogoCerrarCaja extends JDialog {
                 contenido,
                 crearPanelOtrosMedios()
         );
+
+        agregarPanel(contenido, crearPanelFinanciero());
 
         agregarPanel(
                 contenido,
@@ -1168,35 +1221,12 @@ public class DialogoCerrarCaja extends JDialog {
         //======================================================
         // SI EXISTE DIFERENCIA Y NO HAY OBSERVACION
         //======================================================
-        if (Math.abs(diferencia) >= 0.01
-                && txtObservaciones
-                        .getText()
-                        .trim()
-                        .isEmpty()) {
-
-            int continuar
-                    = JOptionPane.showConfirmDialog(
-                            this,
-                            "Existe una diferencia de "
-                            + formatoMoneda.format(
-                                    diferencia
-                            )
-                            + ".\n\n"
-                            + "No ingresó una observación.\n"
-                            + "¿Desea continuar igualmente?",
-                            "Diferencia de Caja",
-                            JOptionPane.YES_NO_OPTION,
-                            JOptionPane.WARNING_MESSAGE
-                    );
-
-            if (continuar
-                    != JOptionPane.YES_OPTION) {
-
-                txtObservaciones
-                        .requestFocus();
-
-                return;
-            }
+        if (Math.abs(diferencia) >= 0.01 && txtObservaciones.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Para registrar un faltante o sobrante debe ingresar una observación.",
+                    "Observación obligatoria", JOptionPane.WARNING_MESSAGE);
+            txtObservaciones.requestFocusInWindow();
+            return;
         }
 
         //======================================================
@@ -1239,32 +1269,8 @@ public class DialogoCerrarCaja extends JDialog {
 
         confirmado = true;
 
-        //======================================================
-        // POR AHORA NO MODIFICAMOS MYSQL
-        //======================================================
-        JOptionPane.showMessageDialog(
-                this,
-                "Caja cerrada correctamente.\n\n"
-                + "Efectivo esperado: "
-                + formatoMoneda.format(
-                        efectivoEsperado
-                )
-                + "\n"
-                + "Efectivo contado: "
-                + formatoMoneda.format(
-                        efectivoContado
-                )
-                + "\n"
-                + "Diferencia: "
-                + formatoMoneda.format(
-                        diferencia
-                )
-                + "\n"
-                + "Resultado: "
-                + estado,
-                "Caja Cerrada",
-                JOptionPane.INFORMATION_MESSAGE
-        );
+        // El mensaje de éxito se muestra en PanelCaja tras confirmar MariaDB.
+
 
         dispose();
     }
@@ -1290,34 +1296,11 @@ public class DialogoCerrarCaja extends JDialog {
     //==========================================================
     // OBTENER MONTO
     //==========================================================
-    private Double obtenerMonto(
-            String texto) {
-
-        try {
-
-            if (texto == null
-                    || texto.trim().isEmpty()) {
-
-                return null;
-            }
-
-            texto
-                    = texto
-                            .trim()
-                            .replace("$", "")
-                            .replace(" ", "")
-                            .replace(".", "")
-                            .replace(",", ".");
-
-            return Double.parseDouble(
-                    texto
-            );
-
-        } catch (NumberFormatException e) {
-
-            return null;
-        }
+    private Double obtenerMonto(String texto) {
+        java.math.BigDecimal valor = ImporteCaja.parsear(texto);
+        return valor == null ? null : valor.doubleValue();
     }
+
 
     //==========================================================
     // TARJETA

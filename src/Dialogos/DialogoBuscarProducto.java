@@ -65,6 +65,8 @@ public class DialogoBuscarProducto extends JDialog {
             = new DepositoDao();
 
     private Deposito depositoPrincipal;
+    private final java.util.Map<Integer,BigDecimal> stockCache = new java.util.HashMap<>();
+    private final java.util.Map<Integer,String> promociones = new java.util.HashMap<>();
 
     private List<Producto> productosActivos
             = new ArrayList<>();
@@ -102,6 +104,7 @@ public class DialogoBuscarProducto extends JDialog {
         );
         setLocationRelativeTo(parent);
         setResizable(true);
+        SwingUtilities.invokeLater(() -> txtBuscar.requestFocusInWindow());
     }
 
     private void inicializarComponentes() {
@@ -162,6 +165,9 @@ private void cargarProductos() {
     productosActivos
             = productoService.listarActivos();
 
+    // Consultar promociones vigentes antes de construir las filas.
+    cargarPromociones();
+
     mostrarProductos(
             productosActivos
     );
@@ -170,6 +176,18 @@ private void cargarProductos() {
 //==========================================================
 // MOSTRAR PRODUCTOS
 //==========================================================
+    private void cargarPromociones() {
+        promociones.clear();
+        String sql = "SELECT id_producto FROM promocion_2x1 WHERE activo=1 AND fecha_inicio<=CURRENT_DATE AND fecha_fin>=CURRENT_DATE";
+        try (java.sql.Connection cn=Configuracion.conexion.getConexion();
+             java.sql.PreparedStatement ps=cn.prepareStatement(sql);
+             java.sql.ResultSet rs=ps.executeQuery()) {
+            while(rs.next()) promociones.put(rs.getInt(1), "2 x 1");
+        } catch (java.sql.SQLException ex) {
+            System.err.println("No se pudieron consultar promociones: " + ex.getMessage());
+        }
+    }
+
     private void mostrarProductos(
             List<Producto> productos) {
 
@@ -278,7 +296,8 @@ private void agregarProductoTabla(
                 marca,
                 stockMostrar,
                 precio,
-                "Disponible"
+                stock.signum() <= 0 ? "SIN STOCK" : stock.compareTo(new BigDecimal("5")) <= 0 ? "STOCK BAJO" : "DISPONIBLE",
+                promociones.getOrDefault(producto.getIdProducto(), "—")
             }
     );
 }
@@ -345,7 +364,7 @@ private String formatearStock(
                             "Marca",
                             "Stock",
                             "Precio",
-                            "Estado"
+                            "Estado", "Promoción"
                         },
                         0
                 ) {
@@ -410,6 +429,22 @@ private String formatearStock(
                 );
 
         aplicarHeaderAzul();
+        tablaProductos.setRowHeight(36);
+        tablaProductos.setShowVerticalLines(false);
+        tablaProductos.setGridColor(new Color(229,235,245));
+        tablaProductos.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override public Component getTableCellRendererComponent(JTable t,Object value,boolean selected,boolean focus,int row,int col) {
+                super.getTableCellRendererComponent(t,value,selected,focus,row,col);
+                setBorder(new EmptyBorder(0,9,0,9));
+                if(!selected) {
+                    setBackground(row%2==0 ? Color.WHITE : new Color(246,249,253));
+                    setForeground(AZUL_OSCURO);
+                    if(col==5) setForeground("SIN STOCK".equals(value)?new Color(190,45,45):"STOCK BAJO".equals(value)?new Color(175,110,10):VERDE);
+                    if(col==6 && "2 x 1".equals(value)) setForeground(VERDE);
+                }
+                return this;
+            }
+        });
     }
 
     private void aplicarHeaderAzul() {
@@ -724,9 +759,22 @@ private String formatearStock(
         });
 
         txtBuscar.addActionListener(e -> {
-
-            filtrar();
+            if (tablaProductos.getRowCount() > 0) {
+                if(tablaProductos.getSelectedRow()<0) tablaProductos.setRowSelectionInterval(0,0);
+                seleccionarProducto();
+            }
         });
+        txtBuscar.getInputMap().put(KeyStroke.getKeyStroke("DOWN"), "irTabla");
+        txtBuscar.getActionMap().put("irTabla", new AbstractAction(){
+            @Override public void actionPerformed(java.awt.event.ActionEvent e){
+                if(tablaProductos.getRowCount()>0){tablaProductos.requestFocusInWindow();tablaProductos.setRowSelectionInterval(0,0);}
+            }
+        });
+        tablaProductos.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke("ENTER"),"elegir");
+        tablaProductos.getActionMap().put("elegir",new AbstractAction(){
+            @Override public void actionPerformed(java.awt.event.ActionEvent e){seleccionarProducto();}
+        });
+        getRootPane().registerKeyboardAction(e -> dispose(), KeyStroke.getKeyStroke("ESCAPE"), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         tablaProductos.addMouseListener(
                 new java.awt.event.MouseAdapter() {
@@ -822,8 +870,7 @@ private String formatearStock(
             precioSeleccionado = 0;
         }
 
-        // El stock real lo resolveremos según depósito.
-        stockSeleccionado = 0;
+        stockSeleccionado = stockCache.getOrDefault(producto.getIdProducto(), BigDecimal.ZERO).doubleValue();
 
         seleccionado = true;
 

@@ -769,16 +769,8 @@ public class DialogoAperturaCaja extends JDialog {
 
         confirmado = true;
 
-        JOptionPane.showMessageDialog(
-                this,
-                "Caja abierta correctamente.\n\n"
-                + "Saldo inicial: "
-                + formatoMoneda.format(
-                        saldoInicial
-                ),
-                "Caja Abierta",
-                JOptionPane.INFORMATION_MESSAGE
-        );
+        // El mensaje de éxito se muestra en PanelCaja tras confirmar MariaDB.
+
 
         dispose();
     }
@@ -787,48 +779,10 @@ public class DialogoAperturaCaja extends JDialog {
     // OBTENER SALDO
     //==========================================================
     private Double obtenerSaldoInicial() {
-
-        try {
-
-            String texto =
-                    txtSaldoInicial
-                            .getText()
-                            .trim();
-
-            if (texto.isEmpty()) {
-
-                return null;
-            }
-
-            texto =
-                    texto
-                            .replace(
-                                    "$",
-                                    ""
-                            )
-                            .replace(
-                                    " ",
-                                    ""
-                            )
-                            .replace(
-                                    ".",
-                                    ""
-                            )
-                            .replace(
-                                    ",",
-                                    "."
-                            );
-
-            return Double.parseDouble(
-                    texto
-            );
-
-        } catch (
-                NumberFormatException e) {
-
-            return null;
-        }
+        java.math.BigDecimal valor = ImporteCaja.parsear(txtSaldoInicial.getText());
+        return valor == null ? null : valor.doubleValue();
     }
+
 
     //==========================================================
     // TARJETA

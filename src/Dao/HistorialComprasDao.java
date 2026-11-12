@@ -10,16 +10,17 @@ public class HistorialComprasDao {
         public long id;
         public Timestamp fecha;
         public String proveedor, comprobante, estado, letra;
+        public int idProveedor;
         public BigDecimal total;
         public CompraFila(ResultSet r) throws SQLException {
-            id=r.getLong("id_compra"); fecha=r.getTimestamp("fecha");
+            id=r.getLong("id_compra"); idProveedor=r.getInt("id_proveedor"); fecha=r.getTimestamp("fecha");
             proveedor=r.getString("proveedor"); comprobante=r.getString("comprobante");
             estado=r.getString("estado"); letra=r.getString("letra"); total=r.getBigDecimal("total");
         }
     }
     public List<CompraFila> listar(String filtro, boolean soloConfirmadas) throws SQLException {
         List<CompraFila> lista=new ArrayList<>();
-        String sql="SELECT c.id_compra,c.fecha,p.razon_social proveedor,c.numero_comprobante comprobante,c.estado,c.total,COALESCE(cf.letra,'-') letra "
+        String sql="SELECT c.id_compra,c.id_proveedor,c.fecha,p.razon_social proveedor,c.numero_comprobante comprobante,c.estado,c.total,COALESCE(cf.letra,'-') letra "
           +"FROM compra c JOIN proveedor p ON p.id_proveedor=c.id_proveedor "
           +"LEFT JOIN compra_fiscal cf ON cf.id_compra=c.id_compra "
           +"WHERE (?=0 OR c.estado='CONFIRMADA') AND (CAST(c.id_compra AS CHAR) LIKE ? OR p.razon_social LIKE ? OR COALESCE(c.numero_comprobante,'') LIKE ?) "
@@ -31,6 +32,33 @@ public class HistorialComprasDao {
         }
         return lista;
     }
+
+    /** Consulta filtrada sin LIMIT para reportes; las fechas incluyen ambos extremos. */
+    public List<CompraFila> listarReporte(String filtro, boolean soloConfirmadas, int proveedorId,
+            java.time.LocalDate desde, java.time.LocalDate hasta) throws SQLException {
+        StringBuilder sql=new StringBuilder("SELECT c.id_compra,c.id_proveedor,c.fecha,p.razon_social proveedor,"
+          +"c.numero_comprobante comprobante,c.estado,c.total,COALESCE(cf.letra,'-') letra "
+          +"FROM compra c JOIN proveedor p ON p.id_proveedor=c.id_proveedor "
+          +"LEFT JOIN compra_fiscal cf ON cf.id_compra=c.id_compra WHERE 1=1 ");
+        if(soloConfirmadas)sql.append("AND c.estado='CONFIRMADA' ");
+        if(proveedorId>0)sql.append("AND c.id_proveedor=? ");
+        if(desde!=null)sql.append("AND c.fecha>=? ");
+        if(hasta!=null)sql.append("AND c.fecha<? ");
+        sql.append("AND (CAST(c.id_compra AS CHAR) LIKE ? OR p.razon_social LIKE ? OR COALESCE(c.numero_comprobante,'') LIKE ?) ");
+        sql.append("ORDER BY c.fecha DESC,c.id_compra DESC");
+        List<CompraFila> lista=new ArrayList<>();
+        try(Connection cn=conexion.getConexion();PreparedStatement ps=cn.prepareStatement(sql.toString())){
+            int i=1;
+            if(proveedorId>0)ps.setInt(i++,proveedorId);
+            if(desde!=null)ps.setTimestamp(i++,Timestamp.valueOf(desde.atStartOfDay()));
+            if(hasta!=null)ps.setTimestamp(i++,Timestamp.valueOf(hasta.plusDays(1).atStartOfDay()));
+            String q="%"+(filtro==null?"":filtro.trim())+"%";
+            for(int j=0;j<3;j++)ps.setString(i++,q);
+            try(ResultSet rs=ps.executeQuery()){while(rs.next())lista.add(new CompraFila(rs));}
+        }
+        return lista;
+    }
+
     public List<Object[]> detalles(long id) throws SQLException {
         List<Object[]> lista=new ArrayList<>();
         String sql="SELECT p.codigo,p.nombre,cd.unidad_compra,cd.cantidad,cd.factor_conversion,cd.cantidad_stock,cd.costo_unitario,cd.subtotal "

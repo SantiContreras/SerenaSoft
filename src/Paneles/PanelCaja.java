@@ -889,7 +889,7 @@ public class PanelCaja extends javax.swing.JPanel {
             fondoTarjeta = new Color(235, 250, 243);
             bordeTarjeta = new Color(192, 230, 211);
             acento = VERDE;
-        } else if (titulo.equals("Egresos")) {
+        } else if (titulo.equals("Egresos totales")) {
             fondoTarjeta = new Color(255, 241, 239);
             bordeTarjeta = new Color(244, 210, 205);
             acento = ROJO;
@@ -1024,6 +1024,7 @@ public class PanelCaja extends javax.swing.JPanel {
                 d.setVisible(true);
                 if (d.isConfirmado()) {
                     cajaService.abrir(usuarioId(), BigDecimal.valueOf(d.getSaldoInicial()), d.getObservaciones());
+                    JOptionPane.showMessageDialog(this, "Caja abierta correctamente.", "Serena Soft - Caja", JOptionPane.INFORMATION_MESSAGE);
                     refrescarCaja();
                 }
             } catch (Exception ex) { error(ex); }
@@ -1040,6 +1041,7 @@ public class PanelCaja extends javax.swing.JPanel {
                 d.setVisible(true);
                 if (d.isConfirmado()) {
                     cajaService.arquear(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), d.getObservaciones());
+                    JOptionPane.showMessageDialog(this, "Arqueo registrado correctamente.", "Serena Soft - Caja", JOptionPane.INFORMATION_MESSAGE);
                     refrescarCaja();
                 }
             } catch (Exception ex) { error(ex); }
@@ -1052,9 +1054,11 @@ public class PanelCaja extends javax.swing.JPanel {
                     SesionUsuario.getNombreUsuario(), r.inicial.doubleValue(), r.ventasEfectivo.doubleValue(),
                     r.ingresosEfectivo.doubleValue(), r.egresosEfectivo.doubleValue(),
                     r.tarjeta.doubleValue(), r.transferencia.doubleValue(), r.mercadoPago.doubleValue());
+                d.setResumenFinanciero(r);
                 d.setVisible(true);
                 if (d.isConfirmado()) {
                     cajaService.cerrar(r.idSesion, usuarioId(), BigDecimal.valueOf(d.getEfectivoContado()), d.getObservaciones());
+                    JOptionPane.showMessageDialog(this, "Caja cerrada correctamente.", "Serena Soft - Caja", JOptionPane.INFORMATION_MESSAGE);
                     refrescarCaja();
                 }
             } catch (Exception ex) { error(ex); }

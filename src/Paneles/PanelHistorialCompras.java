@@ -4,6 +4,12 @@ import Dao.HistorialComprasDao;
 import Configuracion.conexion;
 import Dialogos.DialogoRegistrarPagoProveedor;
 import java.sql.*;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.nio.charset.StandardCharsets;
+import java.io.FileOutputStream;
+import net.sf.jasperreports.engine.*;
+import net.sf.jasperreports.view.JasperViewer;
 import Dao.HistorialComprasDao.CompraFila;
 import java.awt.*;
 import java.awt.event.*;
@@ -26,6 +32,12 @@ public class PanelHistorialCompras extends JPanel {
     private final DefaultTableModel modelo=new DefaultTableModel(new Object[]{"ID","Fecha","Proveedor","Comprobante","Letra","Estado","Total"},0){@Override public boolean isCellEditable(int r,int c){return false;}};
     private final JTable tabla=new JTable(modelo);
     private final JTextField buscar=new JTextField();
+    private final JComboBox<ProveedorOpcion> proveedorFiltro=new JComboBox<>();
+    private final JComboBox<String> periodo=new JComboBox<>(new String[]{"Todas las fechas","Hoy","Esta semana","Este mes","Personalizado"});
+    private final JTextField desde=new JTextField(10), hasta=new JTextField(10);
+    private final JButton calendarioDesde=botonCalendario(), calendarioHasta=botonCalendario();
+    private static JasperReport reporteCompilado;
+    private final JLabel ayudaFechas=new JLabel("Fechas: dd/MM/yyyy");
     private final JCheckBox confirmadas=new JCheckBox("Solo confirmadas",true);
     private final JLabel resumen=new JLabel("Cargando compras...");
     private List<CompraFila> compras=new ArrayList<>();
@@ -33,28 +45,157 @@ public class PanelHistorialCompras extends JPanel {
     private final SimpleDateFormat fecha=new SimpleDateFormat("dd/MM/yyyy HH:mm");
 
     public PanelHistorialCompras(){
-        setLayout(new BorderLayout(0,14));setBackground(FONDO);setBorder(new EmptyBorder(22,24,22,24));
-        JPanel arriba=new JPanel(new BorderLayout(0,12));arriba.setOpaque(false);
-        JLabel titulo=new JLabel("Historial de compras");titulo.setFont(new Font("Segoe UI",Font.BOLD,26));titulo.setForeground(AZUL);
-        JLabel subtitulo=new JLabel("Compras por proveedor, comprobantes, productos e impuestos");subtitulo.setFont(new Font("Segoe UI",Font.PLAIN,13));subtitulo.setForeground(new Color(100,115,135));
-        JPanel titulos=new JPanel(new GridLayout(2,1,0,3));titulos.setOpaque(false);titulos.add(titulo);titulos.add(subtitulo);arriba.add(titulos,BorderLayout.NORTH);
-        JPanel filtros=new JPanel(new BorderLayout(10,0));filtros.setOpaque(false);
-        buscar.setFont(new Font("Segoe UI",Font.PLAIN,14));buscar.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(212,221,233)),new EmptyBorder(9,12,9,12)));
-        buscar.setToolTipText("Buscar proveedor, comprobante o ID de compra");
-        buscar.getDocument().addDocumentListener(new javax.swing.event.DocumentListener(){public void insertUpdate(javax.swing.event.DocumentEvent e){cargar();}public void removeUpdate(javax.swing.event.DocumentEvent e){cargar();}public void changedUpdate(javax.swing.event.DocumentEvent e){cargar();}});
-        filtros.add(buscar,BorderLayout.CENTER);
-        JPanel acciones=new JPanel(new FlowLayout(FlowLayout.RIGHT,8,0));acciones.setOpaque(false);
-        confirmadas.setOpaque(false);confirmadas.setFont(new Font("Segoe UI",Font.PLAIN,12));confirmadas.addActionListener(e->cargar());acciones.add(confirmadas);
-        RSButtonRound refrescar=boton("ACTUALIZAR",120);refrescar.addActionListener(e->cargar());acciones.add(refrescar);
-        RSButtonRound ver=boton("VER DETALLE",135);ver.addActionListener(e->abrirDetalle());acciones.add(ver);
-        RSButtonRound pagar=boton("PAGAR COMPRA",145);pagar.addActionListener(e->pagarCompra());acciones.add(pagar);
-        filtros.add(acciones,BorderLayout.EAST);arriba.add(filtros,BorderLayout.SOUTH);add(arriba,BorderLayout.NORTH);
+        setLayout(new BorderLayout(0,10));
+        setBackground(FONDO);
+        setBorder(new EmptyBorder(10,14,12,14));
+
+        JPanel cabecera=new JPanel(new BorderLayout(0,4));
+        cabecera.setBackground(AZUL);
+        cabecera.setBorder(new EmptyBorder(12,18,12,18));
+        JLabel titulo=new JLabel("HISTORIAL DE COMPRAS");
+        titulo.setFont(new Font("Segoe UI",Font.BOLD,22));
+        titulo.setForeground(Color.WHITE);
+        JLabel subtitulo=new JLabel("Consultá compras, proveedores y comprobantes · Imprimí o exportá el período seleccionado");
+        subtitulo.setFont(new Font("Segoe UI",Font.PLAIN,12));
+        subtitulo.setForeground(new Color(220,232,252));
+        cabecera.add(titulo,BorderLayout.NORTH);
+        cabecera.add(subtitulo,BorderLayout.SOUTH);
+
+        buscar.setFont(new Font("Segoe UI",Font.PLAIN,13));
+        buscar.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDE,1,true),new EmptyBorder(6,10,6,10)));
+        buscar.setToolTipText("Buscar por proveedor, comprobante o ID de compra");
+        buscar.getDocument().addDocumentListener(new javax.swing.event.DocumentListener(){
+            public void insertUpdate(javax.swing.event.DocumentEvent e){cargar();}
+            public void removeUpdate(javax.swing.event.DocumentEvent e){cargar();}
+            public void changedUpdate(javax.swing.event.DocumentEvent e){cargar();}
+        });
+        estilizarCombo(proveedorFiltro);
+        estilizarCombo(periodo);
+        proveedorFiltro.setPreferredSize(new Dimension(185,35));
+        periodo.setPreferredSize(new Dimension(135,35));
+        buscar.setPreferredSize(new Dimension(205,35));
+
+        calendarioDesde.addActionListener(e->mostrarCalendario(desde,calendarioDesde));
+        calendarioHasta.addActionListener(e->mostrarCalendario(hasta,calendarioHasta));
+        desde.setEditable(false);
+        hasta.setEditable(false);
+        desde.setToolTipText("Elegí una fecha desde el calendario");
+        hasta.setToolTipText("Elegí una fecha desde el calendario");
+        desde.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        hasta.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        desde.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){mostrarCalendario(desde,calendarioDesde);}});
+        hasta.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){mostrarCalendario(hasta,calendarioHasta);}});
+
+        JPanel filtros=new JPanel(new FlowLayout(FlowLayout.LEFT,8,4));
+        filtros.setBackground(Color.WHITE);
+        filtros.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDE),new EmptyBorder(5,8,5,8)));
+        filtros.add(etiqueta("BUSCAR"));filtros.add(buscar);
+        filtros.add(etiqueta("PROVEEDOR"));filtros.add(proveedorFiltro);
+        filtros.add(etiqueta("PERÍODO"));filtros.add(periodo);
+        filtros.add(etiqueta("DESDE"));filtros.add(campoFecha(desde,calendarioDesde));
+        filtros.add(etiqueta("HASTA"));filtros.add(campoFecha(hasta,calendarioHasta));
+
+        JPanel acciones=new JPanel(new FlowLayout(FlowLayout.LEFT,8,4));
+        acciones.setOpaque(false);
+        confirmadas.setOpaque(false);
+        confirmadas.setFont(new Font("Segoe UI",Font.BOLD,12));
+        confirmadas.setForeground(AZUL);
+        confirmadas.addActionListener(e->cargar());
+        acciones.add(confirmadas);
+        RSButtonRound aplicar=boton("APLICAR FILTROS",125);
+        aplicar.addActionListener(e->cargar());acciones.add(aplicar);
+        RSButtonRound refrescar=boton("ACTUALIZAR",105);
+        refrescar.addActionListener(e->cargar());acciones.add(refrescar);
+        RSButtonRound ver=boton("VER DETALLE",112);
+        ver.addActionListener(e->abrirDetalle());acciones.add(ver);
+        RSButtonRound pagar=boton("PAGAR COMPRA",125);
+        pagar.addActionListener(e->pagarCompra());acciones.add(pagar);
+        RSButtonRound pdf=boton("REPORTE PDF",118);
+        pdf.addActionListener(e->reportePdf());acciones.add(pdf);
+        RSButtonRound csv=boton("EXPORTAR EXCEL",135);
+        csv.addActionListener(e->exportarCsv());acciones.add(csv);
+
+        JPanel superior=new JPanel(new BorderLayout(0,7));
+        superior.setOpaque(false);
+        superior.add(cabecera,BorderLayout.NORTH);
+        JPanel barra=new JPanel(new BorderLayout(0,2));
+        barra.setOpaque(false);
+        barra.add(filtros,BorderLayout.NORTH);
+        barra.add(acciones,BorderLayout.SOUTH);
+        superior.add(barra,BorderLayout.CENTER);
+        add(superior,BorderLayout.NORTH);
+
+        periodo.addActionListener(e->actualizarPeriodo());
+        proveedorFiltro.addActionListener(e->{if(proveedorFiltro.getItemCount()>0)cargar();});
+        cargarProveedores();actualizarPeriodo();
         estilizar(tabla);tabla.setAutoCreateRowSorter(true);tabla.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tabla.addMouseListener(new MouseAdapter(){@Override public void mouseClicked(MouseEvent e){if(e.getClickCount()==2)abrirDetalle();}});
-        tabla.getColumnModel().getColumn(0).setPreferredWidth(45);tabla.getColumnModel().getColumn(2).setPreferredWidth(240);
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(45);
+        tabla.getColumnModel().getColumn(2).setPreferredWidth(240);
         tabla.getColumnModel().getColumn(3).setPreferredWidth(180);
-        JScrollPane scroll=scrollTabla(tabla);add(scroll,BorderLayout.CENTER);
-        resumen.setForeground(TEXTO);resumen.setFont(new Font("Segoe UI",Font.BOLD,13));add(resumen,BorderLayout.SOUTH);
+        add(scrollTabla(tabla),BorderLayout.CENTER);
+        resumen.setForeground(TEXTO);resumen.setFont(new Font("Segoe UI",Font.BOLD,13));
+        add(resumen,BorderLayout.SOUTH);
+        cargar();
+    }
+    private static JLabel etiqueta(String texto){
+        JLabel l=new JLabel(texto);l.setFont(new Font("Segoe UI",Font.BOLD,11));l.setForeground(AZUL);return l;
+    }
+    private static void estilizarCombo(JComboBox<?> combo){
+        combo.setFont(new Font("Segoe UI",Font.PLAIN,12));combo.setBackground(Color.WHITE);combo.setForeground(TEXTO);
+        combo.setBorder(BorderFactory.createLineBorder(BORDE));
+    }
+    private static JButton botonCalendario(){
+        JButton b=new JButton("▦");b.setToolTipText("Elegir fecha en calendario");
+        b.setFont(new Font("Segoe UI Symbol",Font.BOLD,17));b.setForeground(Color.WHITE);b.setBackground(AZUL_BOTON);
+        b.setFocusPainted(false);b.setBorderPainted(false);b.setPreferredSize(new Dimension(32,34));return b;
+    }
+    private static JPanel campoFecha(JTextField campo,JButton calendario){
+        JPanel p=new JPanel(new BorderLayout(0,0));p.setOpaque(false);p.setPreferredSize(new Dimension(130,35));
+        campo.setFont(new Font("Segoe UI",Font.PLAIN,12));campo.setForeground(TEXTO);
+        campo.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDE),new EmptyBorder(3,7,3,3)));
+        campo.setToolTipText("dd/MM/yyyy");p.add(campo,BorderLayout.CENTER);p.add(calendario,BorderLayout.EAST);return p;
+    }
+    private void mostrarCalendario(JTextField destino,JButton boton){
+        // El calendario siempre se puede abrir, incluso desde un período predefinido.
+        LocalDate base;
+        try{base=LocalDate.parse(destino.getText().trim(),FORMATO);}catch(Exception ex){base=LocalDate.now();}
+        JDialog dialogo=new JDialog(SwingUtilities.getWindowAncestor(this),"Seleccionar fecha",Dialog.ModalityType.APPLICATION_MODAL);
+        dialogo.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        JPanel raiz=new JPanel(new BorderLayout(0,10));raiz.setBackground(Color.WHITE);raiz.setBorder(new EmptyBorder(12,12,12,12));
+        JPanel cab=new JPanel(new BorderLayout());cab.setOpaque(false);
+        JButton anterior=new JButton("◀"),siguiente=new JButton("▶");
+        JLabel mes=new JLabel("",SwingConstants.CENTER);mes.setFont(new Font("Segoe UI",Font.BOLD,15));mes.setForeground(AZUL);
+        cab.add(anterior,BorderLayout.WEST);cab.add(mes,BorderLayout.CENTER);cab.add(siguiente,BorderLayout.EAST);raiz.add(cab,BorderLayout.NORTH);
+        JPanel dias=new JPanel(new GridLayout(0,7,3,3));dias.setOpaque(false);raiz.add(dias,BorderLayout.CENTER);
+        final java.time.YearMonth[] actual={java.time.YearMonth.from(base)};
+        Runnable dibujar=()->{
+            dias.removeAll();mes.setText(actual[0].getMonth().getDisplayName(java.time.format.TextStyle.FULL,new Locale("es","AR"))+" "+actual[0].getYear());
+            for(String nombre:new String[]{"Lu","Ma","Mi","Ju","Vi","Sa","Do"}){
+                JLabel d=new JLabel(nombre,SwingConstants.CENTER);d.setForeground(AZUL);d.setFont(new Font("Segoe UI",Font.BOLD,12));dias.add(d);
+            }
+            int inicio=actual[0].atDay(1).getDayOfWeek().getValue();
+            for(int i=1;i<inicio;i++)dias.add(new JLabel(""));
+            for(int dia=1;dia<=actual[0].lengthOfMonth();dia++){
+                final int numero=dia;JButton d=new JButton(String.valueOf(dia));d.setFocusPainted(false);
+                d.setFont(new Font("Segoe UI",Font.PLAIN,12));d.setBackground(Color.WHITE);d.setForeground(TEXTO);
+                if(actual[0].atDay(dia).equals(LocalDate.now())){d.setBackground(new Color(216,232,252));d.setForeground(AZUL);}
+                d.addActionListener(e->{seleccionarFecha(destino,actual[0].atDay(numero));dialogo.dispose();});dias.add(d);
+            }
+            dias.revalidate();dias.repaint();dialogo.pack();
+        };
+        anterior.addActionListener(e->{actual[0]=actual[0].minusMonths(1);dibujar.run();});
+        siguiente.addActionListener(e->{actual[0]=actual[0].plusMonths(1);dibujar.run();});
+        JPanel pie=new JPanel(new FlowLayout(FlowLayout.RIGHT));pie.setOpaque(false);
+        JButton limpiar=new JButton("Sin fecha");limpiar.addActionListener(e->{seleccionarFecha(destino,null);dialogo.dispose();});pie.add(limpiar);
+        JButton hoy=new JButton("Hoy");hoy.addActionListener(e->{seleccionarFecha(destino,LocalDate.now());dialogo.dispose();});pie.add(hoy);
+        raiz.add(pie,BorderLayout.SOUTH);dialogo.setContentPane(raiz);dibujar.run();dialogo.setLocationRelativeTo(this);dialogo.setVisible(true);
+    }
+    private void seleccionarFecha(JTextField destino,LocalDate valor){
+        if(periodo.getSelectedIndex()!=4){
+            periodo.setSelectedIndex(4);
+        }
+        destino.setText(valor==null?"":valor.format(FORMATO));
         cargar();
     }
     private static RSButtonRound boton(String texto,int ancho){
@@ -124,8 +265,12 @@ public class PanelHistorialCompras extends JPanel {
     }
     private void cargar(){
         String filtro=buscar.getText();boolean solo=confirmadas.isSelected();
+        LocalDate[] rango;
+        try{rango=rangoFechas();}catch(Exception ex){resumen.setText("Fechas inválidas: usá dd/MM/yyyy");return;}
+        ProveedorOpcion opt=(ProveedorOpcion)proveedorFiltro.getSelectedItem();
+        int idProveedor=opt==null?0:opt.id;
         new SwingWorker<List<CompraFila>,Void>(){
-            @Override protected List<CompraFila> doInBackground() throws Exception{return dao.listar(filtro,solo);}
+            @Override protected List<CompraFila> doInBackground() throws Exception{return dao.listarReporte(filtro,solo,idProveedor,rango[0],rango[1]);}
             @Override protected void done(){try{
                 compras=get();modelo.setRowCount(0);java.math.BigDecimal total=java.math.BigDecimal.ZERO;
                 for(CompraFila c:compras){modelo.addRow(new Object[]{c.id,c.fecha==null?"":fecha.format(c.fecha),c.proveedor,c.comprobante==null?"Sin número":c.comprobante,c.letra,c.estado,dinero.format(c.total)});total=total.add(c.total);}
@@ -133,6 +278,79 @@ public class PanelHistorialCompras extends JPanel {
             }catch(Exception ex){resumen.setText("No se pudo consultar el historial");error(ex);}}
         }.execute();
     }
+
+    private static final DateTimeFormatter FORMATO=DateTimeFormatter.ofPattern("dd/MM/uuuu")
+        .withResolverStyle(java.time.format.ResolverStyle.STRICT);
+    private static final class ProveedorOpcion {
+        final int id;final String nombre;
+        ProveedorOpcion(int id,String nombre){this.id=id;this.nombre=nombre;}
+        @Override public String toString(){return nombre;}
+    }
+    private void cargarProveedores(){
+        proveedorFiltro.addItem(new ProveedorOpcion(0,"Todos los proveedores"));
+        try(Connection c=conexion.getConexion();PreparedStatement ps=c.prepareStatement(
+            "SELECT id_proveedor,razon_social FROM proveedor ORDER BY razon_social");ResultSet r=ps.executeQuery()){
+            while(r.next())proveedorFiltro.addItem(new ProveedorOpcion(r.getInt(1),r.getString(2)));
+        }catch(SQLException ex){error(ex);}
+    }
+    private void actualizarPeriodo(){
+        LocalDate hoy=LocalDate.now();int p=periodo.getSelectedIndex();
+        LocalDate inicio=null,fin=null;
+        if(p==1){inicio=hoy;fin=hoy;}
+        if(p==2){inicio=hoy.with(java.time.DayOfWeek.MONDAY);fin=inicio.plusDays(6);}
+        if(p==3){inicio=hoy.withDayOfMonth(1);fin=hoy.withDayOfMonth(hoy.lengthOfMonth());}
+        if(p!=4){desde.setText(inicio==null?"":inicio.format(FORMATO));hasta.setText(fin==null?"":fin.format(FORMATO));}
+        desde.setEditable(false);hasta.setEditable(false);calendarioDesde.setEnabled(true);calendarioHasta.setEnabled(true);
+        cargar();
+    }
+    private LocalDate[] rangoFechas(){
+        LocalDate a=desde.getText().trim().isEmpty()?null:LocalDate.parse(desde.getText().trim(),FORMATO);
+        LocalDate b=hasta.getText().trim().isEmpty()?null:LocalDate.parse(hasta.getText().trim(),FORMATO);
+        if(a!=null&&b!=null&&a.isAfter(b))throw new IllegalArgumentException("Desde es posterior a Hasta");
+        return new LocalDate[]{a,b};
+    }
+    private List<CompraFila> datosReporte() throws Exception {
+        LocalDate[] r=rangoFechas();ProveedorOpcion o=(ProveedorOpcion)proveedorFiltro.getSelectedItem();
+        return dao.listarReporte(buscar.getText(),confirmadas.isSelected(),o==null?0:o.id,r[0],r[1]);
+    }
+    private void exportarCsv(){
+        JFileChooser fc=new JFileChooser();fc.setSelectedFile(new File("SerenaSoft_Compras.csv"));
+        if(fc.showSaveDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+        try{
+            List<CompraFila> filas=datosReporte();
+            try(java.io.Writer w=new java.io.OutputStreamWriter(new FileOutputStream(fc.getSelectedFile()),StandardCharsets.UTF_8)){
+                w.write('\ufeff');w.write("ID;Fecha;Proveedor;Comprobante;Letra;Estado;Total\n");
+                for(CompraFila c:filas){w.write(c.id+";"+csv(c.fecha==null?"":fecha.format(c.fecha))+";"+csv(c.proveedor)+";"+csv(c.comprobante)+";"+csv(c.letra)+";"+csv(c.estado)+";"+c.total.toPlainString().replace('.',',')+"\n");}
+            }
+            JOptionPane.showMessageDialog(this,"Archivo CSV compatible con Excel generado correctamente.\n"+fc.getSelectedFile());
+        }catch(Exception ex){error(ex);}
+    }
+    private static String csv(String s){return "\""+(s==null?"":s).replace("\"","\"\"")+"\"";}
+    private void reportePdf(){
+        try{
+            LocalDate[] r=rangoFechas();ProveedorOpcion o=(ProveedorOpcion)proveedorFiltro.getSelectedItem();
+            List<CompraFila> filas=datosReporte();
+            if(filas.isEmpty()){JOptionPane.showMessageDialog(this,"No hay compras para los filtros seleccionados.");return;}
+            try(java.io.InputStream in=getClass().getResourceAsStream("/reportes/reporte_compras_proveedores.jrxml")){
+                if(in==null)throw new IllegalStateException("Falta src/reportes/reporte_compras_proveedores.jrxml");
+                if(reporteCompilado==null){reporteCompilado=JasperCompileManager.compileReport(in);}
+                JasperReport jr=reporteCompilado;
+                java.util.Map<String,Object> pars=new java.util.HashMap<>();
+                pars.put("PROVEEDOR",o==null?"Todos":o.nombre);
+                pars.put("DESDE",r[0]==null?"Sin límite":r[0].format(FORMATO));
+                pars.put("HASTA",r[1]==null?"Sin límite":r[1].format(FORMATO));
+                pars.put("ESTADO",confirmadas.isSelected()?"Solo confirmadas":"Todos los estados");
+                java.util.List<java.util.Map<String,?>> registros=new java.util.ArrayList<>();
+                for(CompraFila f:filas){java.util.Map<String,Object> m=new java.util.HashMap<>();
+                    m.put("id",String.valueOf(f.id));m.put("fecha",f.fecha==null?"":fecha.format(f.fecha));
+                    m.put("proveedor",f.proveedor);m.put("comprobante",comprobante(f.comprobante));
+                    m.put("estado",f.estado);m.put("total",f.total);registros.add(m);}
+                JasperPrint jp=JasperFillManager.fillReport(jr,pars,new net.sf.jasperreports.engine.data.JRMapCollectionDataSource(registros));
+                JasperViewer.viewReport(jp,false);
+            }
+        }catch(Exception ex){error(ex);}
+    }
+
     private void pagarCompra(){
         int fila=tabla.getSelectedRow();
         if(fila<0){JOptionPane.showMessageDialog(this,"Seleccioná primero una compra de la tabla.");return;}

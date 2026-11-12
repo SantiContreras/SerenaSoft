@@ -20,6 +20,10 @@ public class DialogoPromociones extends JDialog {
     private final DefaultListModel<Product> results=new DefaultListModel<>();
     private final JList<Product> productList=new JList<>(results);
     private final JTextField search=new JTextField();
+    private final JLabel stockInfo=new JLabel("Seleccioná un producto para consultar existencias");
+    private final JLabel pairsInfo=new JLabel("Pares 2 x 1 posibles: —");
+    private final java.util.Map<Integer,java.math.BigDecimal> stocks=new HashMap<>();
+    private boolean stockConsultado=false;
     private final JButton start=button("Elegir fecha",BLUE), end=button("Elegir fecha",BLUE);
     private LocalDate startDate=LocalDate.now(), endDate=LocalDate.now().plusDays(7);
     private final java.util.List<Product> catalog=new ArrayList<>();
@@ -35,7 +39,13 @@ public class DialogoPromociones extends JDialog {
         search.setFont(new Font("Segoe UI",Font.PLAIN,14));search.setPreferredSize(new Dimension(300,38));search.setToolTipText("Escribí para filtrar el catálogo; no necesitás recorrer miles de productos");search.setBorder(new CompoundBorder(new LineBorder(new Color(165,187,219)),new EmptyBorder(6,11,6,11)));searchPane.add(search,BorderLayout.CENTER);
         editor.add(searchPane,BorderLayout.NORTH);
         productList.setFont(new Font("Segoe UI",Font.PLAIN,13));productList.setFixedCellHeight(32);productList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);productList.setSelectionBackground(new Color(214,232,255));productList.setSelectionForeground(NAVY);
-        JScrollPane candidates=new JScrollPane(productList);candidates.setPreferredSize(new Dimension(300,115));candidates.setBorder(new LineBorder(new Color(216,226,241)));editor.add(candidates,BorderLayout.CENTER);
+        JScrollPane candidates=new JScrollPane(productList);candidates.setPreferredSize(new Dimension(300,115));candidates.setBorder(new LineBorder(new Color(216,226,241)));JPanel mid=new JPanel(new BorderLayout(0,7));mid.setOpaque(false);mid.add(candidates,BorderLayout.CENTER);
+        JPanel stockPanel=new JPanel(new GridLayout(2,1,0,3));stockPanel.setBackground(new Color(235,245,255));stockPanel.setBorder(new EmptyBorder(9,12,9,12));
+        stockInfo.setFont(new Font("Segoe UI",Font.BOLD,13));stockInfo.setForeground(NAVY);
+        pairsInfo.setFont(new Font("Segoe UI",Font.PLAIN,12));pairsInfo.setForeground(GREEN);
+        stockPanel.add(stockInfo);stockPanel.add(pairsInfo);mid.add(stockPanel,BorderLayout.SOUTH);
+        editor.add(mid,BorderLayout.CENTER);
+        productList.addListSelectionListener(e->{if(!e.getValueIsAdjusting())updateStockInfo();});
         JPanel dates=new JPanel(new GridLayout(1,2,12,0));dates.setOpaque(false);dates.add(dateCell("FECHA DE INICIO",start,()->chooseDate(startDate,d->{startDate=d;updateDates();})));dates.add(dateCell("FECHA DE FIN",end,()->chooseDate(endDate,d->{endDate=d;updateDates();})));editor.add(dates,BorderLayout.SOUTH);
         content.add(editor,BorderLayout.NORTH);
         table.setRowHeight(35);table.setFont(new Font("Segoe UI",Font.PLAIN,13));table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);table.setShowVerticalLines(false);table.setGridColor(new Color(231,237,245));table.setSelectionBackground(new Color(217,233,255));table.setSelectionForeground(NAVY);
@@ -58,11 +68,35 @@ public class DialogoPromociones extends JDialog {
         JPanel grid=new JPanel(new GridLayout(0,7,4,4));grid.setBackground(Color.WHITE);grid.setBorder(new EmptyBorder(8,12,12,12));dlg.add(grid,BorderLayout.CENTER);
         Runnable redraw=()->{grid.removeAll();monthLabel.setText(month[0].getMonth().getDisplayName(java.time.format.TextStyle.FULL,new Locale("es","AR")).toUpperCase(new Locale("es","AR"))+" "+month[0].getYear());for(String day:new String[]{"L","M","X","J","V","S","D"}){JLabel l=label(day);l.setHorizontalAlignment(SwingConstants.CENTER);grid.add(l);}int offset=month[0].atDay(1).getDayOfWeek().getValue()-1;for(int i=0;i<offset;i++)grid.add(new JLabel());for(int day=1;day<=month[0].lengthOfMonth();day++){final LocalDate date=month[0].atDay(day);JButton d=new JButton(String.valueOf(day));d.setFont(new Font("Segoe UI",Font.PLAIN,13));d.setBackground(date.equals(initial)?new Color(207,230,255):Color.WHITE);d.setForeground(NAVY);d.setFocusPainted(false);d.addActionListener(e->{chosen.accept(date);dlg.dispose();});grid.add(d);}grid.revalidate();grid.repaint();};prev.addActionListener(e->{month[0]=month[0].minusMonths(1);redraw.run();});next.addActionListener(e->{month[0]=month[0].plusMonths(1);redraw.run();});redraw.run();dlg.setSize(390,360);dlg.setLocationRelativeTo(this);dlg.setVisible(true);}
     private void filter(){Product selected=productList.getSelectedValue();results.clear();String q=search.getText().trim().toLowerCase(Locale.ROOT);int added=0;for(Product p:catalog){if(p.name.toLowerCase(Locale.ROOT).contains(q)||p.code.toLowerCase(Locale.ROOT).contains(q)||p.barcode.toLowerCase(Locale.ROOT).contains(q)){results.addElement(p);if(++added>=100)break;}}if(selected!=null){for(int i=0;i<results.size();i++)if(results.get(i).id==selected.id){productList.setSelectedIndex(i);break;}}if(productList.getSelectedIndex()<0&&!results.isEmpty())productList.setSelectedIndex(0);}
+    private void updateStockInfo(){
+        Product p=productList.getSelectedValue();
+        if(p==null){stockInfo.setText("Seleccioná un producto para consultar existencias");pairsInfo.setText("Pares 2 x 1 posibles: —");return;}
+        if(!stockConsultado){stockInfo.setText("Stock no disponible (verificá depósito)");pairsInfo.setText("Pares 2 x 1 posibles: —");return;}
+        java.math.BigDecimal qty=stocks.getOrDefault(p.id,java.math.BigDecimal.ZERO);
+        stockInfo.setText("Stock disponible: " + qty.stripTrailingZeros().toPlainString() + " unidades");
+        pairsInfo.setText("Pares 2 x 1 posibles: " + qty.divideToIntegralValue(new java.math.BigDecimal("2")).toPlainString());
+        stockInfo.setForeground(qty.signum()<=0?new Color(185,45,45):NAVY);
+    }
+    private void cargarStock(Connection cn){
+        stocks.clear();stockConsultado=false;
+        // Suma las existencias de depósitos activos; no inventa disponibilidad si falla la consulta.
+        String sql="SELECT sp.id_producto, COALESCE(SUM(sp.cantidad),0) FROM stock_producto sp JOIN deposito d ON d.id_deposito=sp.id_deposito WHERE d.activo=1 GROUP BY sp.id_producto";
+        try(PreparedStatement ps=cn.prepareStatement(sql);ResultSet rs=ps.executeQuery()){
+            while(rs.next()) stocks.put(rs.getInt(1),rs.getBigDecimal(2));
+            stockConsultado=true;
+        }catch(SQLException ex){System.err.println("No se pudo consultar stock de promociones: "+ex.getMessage());}
+    }
     private void reload(){catalog.clear();model.setRowCount(0);try(Connection cn=conexion.getConexion()){
+        cargarStock(cn);
         try(PreparedStatement ps=cn.prepareStatement("SELECT id_producto,nombre,codigo,COALESCE(codigo_barra,'') FROM producto WHERE activo=1 AND es_pesable=0 ORDER BY nombre");ResultSet rs=ps.executeQuery()){while(rs.next())catalog.add(new Product(rs.getInt(1),rs.getString(2),rs.getString(3),rs.getString(4)));}
         try(PreparedStatement ps=cn.prepareStatement("SELECT pr.id_promocion,p.nombre,pr.fecha_inicio,pr.fecha_fin,pr.activo FROM promocion_2x1 pr JOIN producto p ON p.id_producto=pr.id_producto ORDER BY pr.id_promocion DESC");ResultSet rs=ps.executeQuery()){while(rs.next())model.addRow(new Object[]{rs.getInt(1),rs.getString(2),rs.getDate(3),rs.getDate(4),rs.getBoolean(5)?"Activa":"Inactiva"});}
-        filter();}catch(SQLException ex){JOptionPane.showMessageDialog(this,"No se pudieron cargar las promociones:\n"+ex.getMessage(),"Serena Soft",JOptionPane.ERROR_MESSAGE);}}
-    private void create(){Product p=productList.getSelectedValue();if(p==null){JOptionPane.showMessageDialog(this,"Buscá y seleccioná un producto.");return;}if(endDate.isBefore(startDate)){JOptionPane.showMessageDialog(this,"La fecha de fin debe ser igual o posterior a la de inicio.");return;}
+        filter();updateStockInfo();}catch(SQLException ex){JOptionPane.showMessageDialog(this,"No se pudieron cargar las promociones:\n"+ex.getMessage(),"Serena Soft",JOptionPane.ERROR_MESSAGE);}}
+    private void create(){Product p=productList.getSelectedValue();if(p==null){JOptionPane.showMessageDialog(this,"Buscá y seleccioná un producto.");return;}if(!stockConsultado){JOptionPane.showMessageDialog(this,"No se pudo consultar el stock. Verificá los depósitos antes de crear la promoción.");return;}
+        if(stocks.getOrDefault(p.id,java.math.BigDecimal.ZERO).compareTo(new java.math.BigDecimal("2"))<0){
+            int confirm=JOptionPane.showConfirmDialog(this,"El producto tiene menos de 2 unidades disponibles. ¿Querés registrar la promoción de todos modos?","Stock insuficiente",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+            if(confirm!=JOptionPane.YES_OPTION)return;
+        }
+        if(endDate.isBefore(startDate)){JOptionPane.showMessageDialog(this,"La fecha de fin debe ser igual o posterior a la de inicio.");return;}
         try(Connection cn=conexion.getConexion()){try(PreparedStatement ps=cn.prepareStatement("SELECT COUNT(*) FROM promocion_2x1 WHERE id_producto=? AND activo=1 AND fecha_inicio<=? AND fecha_fin>=?")){ps.setInt(1,p.id);ps.setDate(2,java.sql.Date.valueOf(endDate));ps.setDate(3,java.sql.Date.valueOf(startDate));try(ResultSet r=ps.executeQuery()){r.next();if(r.getInt(1)>0){JOptionPane.showMessageDialog(this,"Ya existe una promoción activa superpuesta para este producto.");return;}}}try(PreparedStatement ps=cn.prepareStatement("INSERT INTO promocion_2x1(id_producto,fecha_inicio,fecha_fin,activo) VALUES(?,?,?,1)")){ps.setInt(1,p.id);ps.setDate(2,java.sql.Date.valueOf(startDate));ps.setDate(3,java.sql.Date.valueOf(endDate));ps.executeUpdate();}reload();JOptionPane.showMessageDialog(this,"Promoción registrada. Su aplicación automática en caja requiere la integración con VentaService.");}catch(SQLException ex){JOptionPane.showMessageDialog(this,ex.getMessage(),"Serena Soft",JOptionPane.ERROR_MESSAGE);}}
     private void toggle(){int row=table.getSelectedRow();if(row<0){JOptionPane.showMessageDialog(this,"Seleccioná una promoción.");return;}int id=(Integer)table.getValueAt(row,0);boolean active="Activa".equals(table.getValueAt(row,4));try(Connection cn=conexion.getConexion();PreparedStatement ps=cn.prepareStatement("UPDATE promocion_2x1 SET activo=? WHERE id_promocion=?")){ps.setBoolean(1,!active);ps.setInt(2,id);ps.executeUpdate();reload();}catch(SQLException ex){JOptionPane.showMessageDialog(this,ex.getMessage(),"Serena Soft",JOptionPane.ERROR_MESSAGE);}}
 }

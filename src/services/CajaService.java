@@ -13,6 +13,9 @@ public final class CajaService {
         public long idSesion;
         public String cajero = "", apertura = "";
         public BigDecimal inicial = BigDecimal.ZERO, ventas = BigDecimal.ZERO,
+            ingresosTarjeta = BigDecimal.ZERO, egresosTarjeta = BigDecimal.ZERO,
+            ingresosTransferencia = BigDecimal.ZERO, egresosTransferencia = BigDecimal.ZERO,
+            ingresosMercadoPago = BigDecimal.ZERO, egresosMercadoPago = BigDecimal.ZERO,
             ingresos = BigDecimal.ZERO, egresos = BigDecimal.ZERO,
             ventasEfectivo = BigDecimal.ZERO, ingresosEfectivo = BigDecimal.ZERO,
             egresosEfectivo = BigDecimal.ZERO, efectivoEsperado = BigDecimal.ZERO,
@@ -75,7 +78,19 @@ public final class CajaService {
             }
             try(PreparedStatement p=c.prepareStatement("SELECT tipo,medio_pago,COALESCE(SUM(monto),0) FROM caja_movimiento WHERE id_sesion=? GROUP BY tipo,medio_pago")) {
                 p.setLong(1,r.idSesion);
-                try(ResultSet x=p.executeQuery()) {while(x.next()) {boolean in="INGRESO".equals(x.getString(1));String k=x.getString(2);BigDecimal m=money(x,3);if(in){r.ingresos=r.ingresos.add(m);if("EFECTIVO".equals(k))r.ingresosEfectivo=r.ingresosEfectivo.add(m);}else{r.egresos=r.egresos.add(m);if("EFECTIVO".equals(k))r.egresosEfectivo=r.egresosEfectivo.add(m);} }}
+                try(ResultSet x=p.executeQuery()) {while(x.next()) {boolean in="INGRESO".equals(x.getString(1));String k;try{k=medio(x.getString(2));}catch(IllegalArgumentException e){throw new SQLException("Medio de pago desconocido en movimientos: "+x.getString(2),e);}BigDecimal m=money(x,3);if(in){
+                    r.ingresos=r.ingresos.add(m);
+                    if("EFECTIVO".equals(k))r.ingresosEfectivo=r.ingresosEfectivo.add(m);
+                    else if("TARJETA".equals(k))r.ingresosTarjeta=r.ingresosTarjeta.add(m);
+                    else if("TRANSFERENCIA".equals(k))r.ingresosTransferencia=r.ingresosTransferencia.add(m);
+                    else if("MERCADO_PAGO".equals(k))r.ingresosMercadoPago=r.ingresosMercadoPago.add(m);
+                }else{
+                    r.egresos=r.egresos.add(m);
+                    if("EFECTIVO".equals(k))r.egresosEfectivo=r.egresosEfectivo.add(m);
+                    else if("TARJETA".equals(k))r.egresosTarjeta=r.egresosTarjeta.add(m);
+                    else if("TRANSFERENCIA".equals(k))r.egresosTransferencia=r.egresosTransferencia.add(m);
+                    else if("MERCADO_PAGO".equals(k))r.egresosMercadoPago=r.egresosMercadoPago.add(m);
+                } }}
             }
             r.efectivoEsperado=r.inicial.add(r.ventasEfectivo).add(r.ingresosEfectivo).subtract(r.egresosEfectivo);
         }
