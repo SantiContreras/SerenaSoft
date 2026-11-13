@@ -9,6 +9,7 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import javax.swing.*;
+import sesion.SesionUsuario;
 import javax.swing.border.EmptyBorder;
 
 /**
@@ -64,6 +65,7 @@ public class MenuUsuarioPopup extends JPopupMenu {
         inicializarComponentes();
         construirMenu();
         configurarEventos();
+        aplicarPermisosMenu();
   
     }
 
@@ -401,6 +403,12 @@ public class MenuUsuarioPopup extends JPopupMenu {
     //====================================================
     // EVENTOS
     //====================================================
+    private void aplicarPermisosMenu() {
+        btnConfiguracion.setVisible(SesionUsuario.tienePermiso("CONFIGURACION_VER"));
+        btnUsuarios.setVisible(SesionUsuario.tienePermiso("USUARIO_VER") && SesionUsuario.esAdministrador());
+        btnHistorialVentas.setVisible(SesionUsuario.tienePermiso("VENTA_VER"));
+    }
+
     private void configurarEventos() {
 
         //================================================
@@ -422,6 +430,7 @@ public class MenuUsuarioPopup extends JPopupMenu {
             setVisible(false);
 
             // Mostramos el panel Configuración
+            if (!SesionUsuario.tienePermiso("CONFIGURACION_VER")) return;
             panelPrincipal.mostrarPanel(
                     new PanelConfiguracion()
             );
@@ -435,6 +444,7 @@ public class MenuUsuarioPopup extends JPopupMenu {
 
             setVisible(false);
 
+            if (!SesionUsuario.esAdministrador() || !SesionUsuario.tienePermiso("USUARIO_VER")) return;
             abrirUsuarios();
         });
 
@@ -472,6 +482,7 @@ public class MenuUsuarioPopup extends JPopupMenu {
 // HISTORIAL DE VENTAS
 //================================================
         btnHistorialVentas.addActionListener(e -> {
+            if (!SesionUsuario.tienePermiso("VENTA_VER")) return;
 
             // Cerramos el menú desplegable
             setVisible(false);

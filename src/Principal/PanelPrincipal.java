@@ -136,6 +136,7 @@ public class PanelPrincipal extends javax.swing.JFrame {
         panelDerecho.setVisible(false);
 
         cargarUsuarioLogueado();
+        aplicarPermisosNavegacion();
     }
 
 // =========================================================
@@ -548,41 +549,44 @@ public class PanelPrincipal extends javax.swing.JFrame {
 
         btnVentas.addActionListener(e -> {
 
-            mostrarVentas();
+            if (permitir("VENTA_CREAR")) mostrarVentas();
 
         });
 
         btnArticulos.addActionListener(e -> {
 
-            mostrarArticulos();
+            if (permitir("PRODUCTO_VER")) mostrarArticulos();
 
         });
 
         btnClientes.addActionListener(e -> {
-            mostrarPanel(new PanelClientes());
+            if (permitir("CLIENTE_VER")) mostrarPanel(new PanelClientes());
         });
         btnStock.addActionListener(e -> {
 
-            abrirPanelStock();
+            if (permitir("STOCK_VER")) abrirPanelStock();
 
         });
 
         btnCaja.addActionListener(e -> {
 
-            mostrarPanel(
-                    new PanelCaja()
-            );
+            if (permitir("CAJA_VER")) mostrarPanel(new PanelCaja());
 
         });
 
         btnProveedores.addActionListener(e -> {
+            if (!SesionUsuario.tienePermiso("PROVEEDOR_VER") && !SesionUsuario.tienePermiso("COMPRA_VER")) {
+                permitir("PROVEEDOR_VER"); return;
+            }
             JPopupMenu menuCompras = new JPopupMenu();
             JMenuItem proveedores = new JMenuItem("Gestión de proveedores");
             JMenuItem historial = new JMenuItem("Historial de compras y facturas");
             proveedores.setFont(new Font("Segoe UI", Font.PLAIN, 13));
             historial.setFont(new Font("Segoe UI", Font.BOLD, 13));
-            proveedores.addActionListener(ev -> mostrarPanel(new PanelProveedores()));
-            historial.addActionListener(ev -> mostrarPanel(new Paneles.PanelHistorialCompras()));
+            proveedores.addActionListener(ev -> { if (permitir("PROVEEDOR_VER")) mostrarPanel(new PanelProveedores()); });
+            historial.addActionListener(ev -> { if (permitir("COMPRA_VER")) mostrarPanel(new Paneles.PanelHistorialCompras()); });
+            proveedores.setVisible(SesionUsuario.tienePermiso("PROVEEDOR_VER"));
+            historial.setVisible(SesionUsuario.tienePermiso("COMPRA_VER"));
             menuCompras.add(proveedores);
             menuCompras.addSeparator();
             menuCompras.add(historial);
@@ -942,7 +946,28 @@ public class PanelPrincipal extends javax.swing.JFrame {
         return b;
     }
 
+    private boolean permitir(String permiso) {
+        if (SesionUsuario.tienePermiso(permiso)) return true;
+        javax.swing.JOptionPane.showMessageDialog(this,
+                "No tenés autorización para esta operación (" + permiso + ").",
+                "Acceso restringido", javax.swing.JOptionPane.WARNING_MESSAGE);
+        return false;
+    }
+
+    private void aplicarPermisosNavegacion() {
+        btnVentas.setVisible(SesionUsuario.tienePermiso("VENTA_CREAR"));
+        btnArticulos.setVisible(SesionUsuario.tienePermiso("PRODUCTO_VER"));
+        btnClientes.setVisible(SesionUsuario.tienePermiso("CLIENTE_VER"));
+        btnStock.setVisible(SesionUsuario.tienePermiso("STOCK_VER"));
+        btnCaja.setVisible(SesionUsuario.tienePermiso("CAJA_VER"));
+        btnProveedores.setVisible(SesionUsuario.tienePermiso("PROVEEDOR_VER")
+                || SesionUsuario.tienePermiso("COMPRA_VER"));
+        panelBotones.revalidate();
+        panelBotones.repaint();
+    }
+
     public void mostrarVentas() {
+        if (!permitir("VENTA_CREAR")) return;
         panelContenido.removeAll();
         panelContenido.add(new PanelVentas(), BorderLayout.CENTER);
         panelContenido.revalidate();
@@ -950,6 +975,7 @@ public class PanelPrincipal extends javax.swing.JFrame {
     }
 
     private void mostrarArticulos() {
+        if (!permitir("PRODUCTO_VER")) return;
         panelContenido.removeAll();
         panelContenido.add(new PanelArticulos(), BorderLayout.CENTER);
         panelContenido.revalidate();
@@ -957,6 +983,7 @@ public class PanelPrincipal extends javax.swing.JFrame {
     }
 
     private void abrirPanelStock() {
+        if (!permitir("STOCK_VER")) return;
 
         panelContenido.removeAll();
 

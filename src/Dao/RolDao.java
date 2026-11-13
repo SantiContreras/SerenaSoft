@@ -2,6 +2,10 @@ package Dao;
 
 import Configuracion.conexion;
 import model.Rol;
+import model.Permiso;
+import java.util.Set;
+import java.util.HashSet;
+import java.sql.Statement;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -217,5 +221,44 @@ public class RolDao {
         );
 
         return rol;
+    }
+    /** Catálogo de permisos activos. */
+    public List<Permiso> listarPermisos() throws SQLException {
+        List<Permiso> salida = new ArrayList<>();
+        String sql = "SELECT id_permiso,codigo,nombre,modulo,descripcion,activo FROM permiso WHERE activo=TRUE ORDER BY modulo,nombre";
+        try(Connection cn=conexion.getConexion(); PreparedStatement ps=cn.prepareStatement(sql); ResultSet rs=ps.executeQuery()) {
+            while(rs.next()) {
+                Permiso p=new Permiso(); p.setIdPermiso(rs.getInt("id_permiso"));p.setCodigo(rs.getString("codigo"));
+                p.setNombre(rs.getString("nombre"));p.setModulo(rs.getString("modulo"));
+                p.setDescripcion(rs.getString("descripcion"));p.setActivo(rs.getBoolean("activo"));salida.add(p);
+            }
+        }
+        return salida;
+    }
+    public Set<Integer> permisosDeRol(int idRol) throws SQLException {
+        Set<Integer> ids=new HashSet<>();
+        try(Connection cn=conexion.getConexion();PreparedStatement ps=cn.prepareStatement("SELECT id_permiso FROM rol_permiso WHERE id_rol=?")) {
+            ps.setInt(1,idRol);
+            try(ResultSet rs=ps.executeQuery()){while(rs.next())ids.add(rs.getInt(1));}
+        }
+        return ids;
+    }
+    /** Actualización atómica de permisos. Nunca se altera el rol administrador desde esta pantalla. */
+    public void guardarPermisos(int idRol, Set<Integer> ids) throws SQLException {
+        try(Connection cn=conexion.getConexion()) {
+            cn.setAutoCommit(false);
+            try {
+                String nombre;
+                try(PreparedStatement ps=cn.prepareStatement("SELECT nombre FROM rol WHERE id_rol=? FOR UPDATE")) {
+                    ps.setInt(1,idRol);try(ResultSet rs=ps.executeQuery()) {if(!rs.next())throw new SQLException("Rol inexistente");nombre=rs.getString(1);}
+                }
+                if("ADMINISTRADOR".equalsIgnoreCase(nombre)) throw new SQLException("Los permisos del administrador están protegidos.");
+                try(PreparedStatement ps=cn.prepareStatement("DELETE FROM rol_permiso WHERE id_rol=?")) {ps.setInt(1,idRol);ps.executeUpdate();}
+                try(PreparedStatement ps=cn.prepareStatement("INSERT INTO rol_permiso (id_rol,id_permiso) SELECT ?,id_permiso FROM permiso WHERE id_permiso=? AND activo=TRUE")) {
+                    for(Integer id:ids){ps.setInt(1,idRol);ps.setInt(2,id);if(ps.executeUpdate()!=1)throw new SQLException("Permiso inválido: "+id);}
+                }
+                cn.commit();
+            } catch(SQLException | RuntimeException ex){cn.rollback();throw ex;} finally {cn.setAutoCommit(true);}
+        }
     }
 }

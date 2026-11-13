@@ -7,6 +7,7 @@ import model.Rol;
 import model.Usuario;
 
 import security.PasswordUtil;
+import Dao.SeguridadConfigDao;
 import sesion.SesionUsuario;
 
 import java.util.List;
@@ -574,14 +575,8 @@ public class UsuarioService {
         }
 
 
-        if (password.length() < 8) {
-
-            return ResultadoOperacion.error(
-                    "La contraseña debe tener "
-                    + "al menos 8 caracteres."
-            );
-        }
-
+        String errorClave = SeguridadConfigDao.validarClave(password, SeguridadConfigDao.leerOValoresSeguros());
+        if (errorClave != null) return ResultadoOperacion.error(errorClave);
 
         if (confirmarPassword == null
                 || !password.equals(

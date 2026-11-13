@@ -1,6 +1,7 @@
 package services;
 
 import Dao.UsuarioDao;
+import Dao.SeguridadConfigDao;
 import java.time.LocalDateTime;
 import model.Usuario;
 import security.PasswordUtil;

@@ -34,6 +34,7 @@ public class UsuarioDao {
                     u.email,
                     u.estado,
                     u.intentos_fallidos,
+                    u.ultimo_acceso,
 
                     r.id_rol,
                     r.nombre AS rol_nombre,
@@ -235,6 +236,7 @@ public class UsuarioDao {
                     u.email,
                     u.estado,
                     u.intentos_fallidos,
+                    u.ultimo_acceso,
 
                     r.id_rol,
                     r.nombre AS rol_nombre,
@@ -634,6 +636,7 @@ public class UsuarioDao {
                     u.email,
                     u.estado,
                     u.intentos_fallidos,
+                    u.ultimo_acceso,
 
                     r.id_rol,
                     r.nombre AS rol_nombre,
@@ -752,6 +755,8 @@ public class UsuarioDao {
         );
 
         usuario.setRol(rol);
+        Timestamp acceso = rs.getTimestamp("ultimo_acceso");
+        if (acceso != null) usuario.setUltimoAcceso(acceso.toLocalDateTime());
 
         return usuario;
     }

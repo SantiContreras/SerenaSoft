@@ -4,6 +4,8 @@
  */
 package Paneles;
 
+import sesion.SesionUsuario;
+
 import Dialogos.DialogoAjusteStock;
 import Dialogos.DialogoDarDeBajaProducto;
 import Dialogos.DialogoEntradaManual;
@@ -201,6 +203,7 @@ public class PanelStock extends javax.swing.JPanel {
         construirPanel();
 
         configurarEventos();
+        aplicarPermisosStock();
 
         actualizarStock();
     }
@@ -1672,6 +1675,21 @@ public class PanelStock extends javax.swing.JPanel {
     //==========================================================
     // EVENTOS
     //==========================================================
+    private boolean autorizadoStock(String codigo) {
+        if (SesionUsuario.tienePermiso(codigo)) return true;
+        JOptionPane.showMessageDialog(this, "Operación no autorizada: " + codigo,
+                "Permisos de usuario", JOptionPane.WARNING_MESSAGE);
+        return false;
+    }
+
+    private void aplicarPermisosStock() {
+        btnEntrada.setVisible(SesionUsuario.tienePermiso("STOCK_INGRESAR"));
+        btnSalida.setVisible(SesionUsuario.tienePermiso("STOCK_EGRESAR"));
+        btnAjuste.setVisible(SesionUsuario.tienePermiso("STOCK_AJUSTAR"));
+        btnModificar.setVisible(SesionUsuario.tienePermiso("PRODUCTO_EDITAR"));
+        btnDarBaja.setVisible(SesionUsuario.tienePermiso("PRODUCTO_CAMBIAR_ESTADO"));
+    }
+
     private void configurarEventos() {
 
         //======================================================
@@ -1752,6 +1770,7 @@ public class PanelStock extends javax.swing.JPanel {
         // ENTRADA
         //======================================================
         btnEntrada.addActionListener(e -> {
+            if (!autorizadoStock("STOCK_INGRESAR")) return;
 
             abrirEntrada();
         });
@@ -1760,6 +1779,7 @@ public class PanelStock extends javax.swing.JPanel {
         // SALIDA
         //======================================================
         btnSalida.addActionListener(e -> {
+            if (!autorizadoStock("STOCK_EGRESAR")) return;
 
             abrirSalida();
 
@@ -1769,6 +1789,7 @@ public class PanelStock extends javax.swing.JPanel {
         // AJUSTE
         //======================================================
         btnAjuste.addActionListener(e -> {
+            if (!autorizadoStock("STOCK_AJUSTAR")) return;
 
             Frame ventana = obtenerFrame();
             if (ventana == null) {
@@ -1786,6 +1807,7 @@ public class PanelStock extends javax.swing.JPanel {
         // MODIFICAR
         //======================================================
         btnModificar.addActionListener(e -> {
+            if (!autorizadoStock("PRODUCTO_EDITAR")) return;
 
             abrirModificar();
         });
@@ -1794,6 +1816,7 @@ public class PanelStock extends javax.swing.JPanel {
         // DAR DE BAJA
         //======================================================
         btnDarBaja.addActionListener(e -> {
+            if (!autorizadoStock("PRODUCTO_CAMBIAR_ESTADO")) return;
 
             abrirDarDeBaja();
         });
@@ -1806,6 +1829,7 @@ public class PanelStock extends javax.swing.JPanel {
 
     /** Abre la ficha del producto y su historial en una ventana independiente. */
     private void abrirDetalleMovimiento() {
+        if (!autorizadoStock("STOCK_VER_MOVIMIENTOS")) return;
         int fila = tablaStock.getSelectedRow();
         if (fila < 0) {
             JOptionPane.showMessageDialog(this, "Seleccioná un producto de la tabla.");
@@ -1832,6 +1856,7 @@ public class PanelStock extends javax.swing.JPanel {
     // ENTRADA
     //==========================================================
     private void abrirEntrada() {
+        if (!autorizadoStock("STOCK_INGRESAR")) return;
 
         Window ventana
                 = SwingUtilities.getWindowAncestor(
@@ -1858,6 +1883,7 @@ public class PanelStock extends javax.swing.JPanel {
 // SALIDA DE STOCK
 //==========================================================
     private void abrirSalida() {
+        if (!autorizadoStock("STOCK_EGRESAR")) return;
 
         Frame ventana = obtenerFrame();
         if (ventana == null) {
@@ -1882,6 +1908,7 @@ public class PanelStock extends javax.swing.JPanel {
     // MODIFICAR
     //==========================================================
     private void abrirModificar() {
+        if (!autorizadoStock("PRODUCTO_EDITAR")) return;
 
         Frame frame
                 = obtenerFrame();
@@ -1918,6 +1945,7 @@ public class PanelStock extends javax.swing.JPanel {
     // DAR DE BAJA
     //==========================================================
     private void abrirDarDeBaja() {
+        if (!autorizadoStock("PRODUCTO_CAMBIAR_ESTADO")) return;
 
         Frame frame
                 = obtenerFrame();
