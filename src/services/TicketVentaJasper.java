@@ -23,7 +23,7 @@ public final class TicketVentaJasper {
     private static JasperPrint preparar(long idVenta) throws Exception {
         if (idVenta <= 0) throw new IllegalArgumentException("ID de venta inválido");
         try (InputStream in = TicketVentaJasper.class.getResourceAsStream("/Reportes/ticket_venta.jrxml")) {
-            if (in == null) throw new IllegalStateException("Falta /reportes/ticket_venta.jrxml");
+            if (in == null) throw new IllegalStateException("Falta /Reportes/ticket_venta.jrxml");
             JasperReport reporte = JasperCompileManager.compileReport(in);
             Properties cfg = new Properties();
             try (InputStream archivo = TicketVentaJasper.class.getResourceAsStream("/Reportes/comercio_ticket.properties")) {
@@ -44,7 +44,7 @@ public final class TicketVentaJasper {
                         p.put("COMERCIO_NOMBRE",r.getString(1));p.put("COMERCIO_RAZON",r.getString(2));p.put("COMERCIO_CUIT",r.getString(3));p.put("COMERCIO_DIRECCION",r.getString(4));p.put("COMERCIO_TELEFONO",r.getString(5));
                     }
                 }
-                Dao.ConfiguracionComprobanteDao.Datos opciones=Dao.ConfiguracionComprobanteDao.cargar();
+                Dao.ConfiguracionComprobanteDao.Opciones opciones = new Dao.ConfiguracionComprobanteDao().cargar();
                 p.put("MENSAJE_FINAL",opciones.pie);
                 if(!opciones.nombre)p.put("COMERCIO_NOMBRE", "");
                 if(!opciones.cuit)p.put("COMERCIO_CUIT", "");

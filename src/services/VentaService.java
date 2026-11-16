@@ -119,6 +119,7 @@ public final class VentaService {
                 validar(!s.pagos.isEmpty(),"Debe indicar pagos");
                 for(Pago p:s.pagos){
                     validar(p.monto!=null && p.monto.signum()>0,"Monto de pago inválido");
+                    Dao.MedioPagoDao.validarCobro(c,p.medioPagoId,p.monto,p.recibido,p.referencia);
                     totalPagos=totalPagos.add(money(p.monto));
                     BigDecimal recibido=p.recibido==null?p.monto:p.recibido;
                     validar(recibido.compareTo(p.monto)>=0,"Importe recibido insuficiente");

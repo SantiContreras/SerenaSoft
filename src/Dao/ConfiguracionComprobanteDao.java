@@ -1,34 +1,39 @@
 package Dao;
+
 import Configuracion.conexion;
 import java.sql.*;
 
-/** Configuración única de tickets internos. Nunca modifica el numerador de ventas. */
+/** Preferencias de ticket interno independientes del esquema fiscal preexistente. */
 public final class ConfiguracionComprobanteDao {
-    private ConfiguracionComprobanteDao() {}
-    public static final class Datos {
-        public String tipo="TICKET_INTERNO", pie="Gracias por su compra.";
-        public int puntoVenta=1;
-        public boolean nombre=true,cuit=true,direccion=true,telefono=true,vendedor=true,fecha=true;
-        public boolean auto=false,previa=true,reimpresion=true;
+    public static final class Opciones {
+        public boolean nombre=true, cuit=true, direccion=true, telefono=true, vendedor=true, fecha=true;
+        public boolean automatico=false, vistaPrevia=false, reimpresion=true;
+        public String pie="Gracias por su compra.";
     }
-    public static Datos cargar() throws SQLException {
-        Datos d=new Datos();
-        try(Connection c=conexion.getConexion(); PreparedStatement p=c.prepareStatement("SELECT * FROM configuracion_comprobante WHERE id_config=1");ResultSet r=p.executeQuery()) {
-            if(r.next()) { d.tipo=r.getString("tipo");d.puntoVenta=r.getInt("punto_venta");
-                d.nombre=r.getBoolean("mostrar_nombre");d.cuit=r.getBoolean("mostrar_cuit");d.direccion=r.getBoolean("mostrar_direccion");d.telefono=r.getBoolean("mostrar_telefono");d.vendedor=r.getBoolean("mostrar_vendedor");d.fecha=r.getBoolean("mostrar_fecha");
-                d.pie=r.getString("pie");d.auto=r.getBoolean("impresion_automatica");d.previa=r.getBoolean("vista_previa");d.reimpresion=r.getBoolean("permitir_reimpresion"); }
-        }
-        return d;
-    }
-    public static void guardar(Datos d) throws SQLException {
-        if(d.puntoVenta<1 || d.puntoVenta>9999) throw new IllegalArgumentException("El punto de venta debe estar entre 1 y 9999.");
-        if(d.pie==null || d.pie.length()>250) throw new IllegalArgumentException("El pie admite hasta 250 caracteres.");
-        String q="INSERT INTO configuracion_comprobante (id_config,tipo,punto_venta,mostrar_nombre,mostrar_cuit,mostrar_direccion,mostrar_telefono,mostrar_vendedor,mostrar_fecha,pie,impresion_automatica,vista_previa,permitir_reimpresion) VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE tipo=VALUES(tipo),punto_venta=VALUES(punto_venta),mostrar_nombre=VALUES(mostrar_nombre),mostrar_cuit=VALUES(mostrar_cuit),mostrar_direccion=VALUES(mostrar_direccion),mostrar_telefono=VALUES(mostrar_telefono),mostrar_vendedor=VALUES(mostrar_vendedor),mostrar_fecha=VALUES(mostrar_fecha),pie=VALUES(pie),impresion_automatica=VALUES(impresion_automatica),vista_previa=VALUES(vista_previa),permitir_reimpresion=VALUES(permitir_reimpresion)";
-        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement(q)) {
-            p.setString(1,d.tipo);p.setInt(2,d.puntoVenta);p.setBoolean(3,d.nombre);p.setBoolean(4,d.cuit);p.setBoolean(5,d.direccion);p.setBoolean(6,d.telefono);p.setBoolean(7,d.vendedor);p.setBoolean(8,d.fecha);p.setString(9,d.pie);p.setBoolean(10,d.auto);p.setBoolean(11,d.previa);p.setBoolean(12,d.reimpresion);p.executeUpdate();
+    public Opciones cargar() throws SQLException {
+        String sql="SELECT mostrar_nombre,mostrar_cuit,mostrar_direccion,mostrar_telefono,mostrar_vendedor,mostrar_fecha,imprimir_automatico,vista_previa,permitir_reimpresion,pie FROM serenasoft_preferencias_ticket WHERE clave=1";
+        try(Connection c=conexion.getConexion(); PreparedStatement p=c.prepareStatement(sql); ResultSet r=p.executeQuery()) {
+            if(!r.next()) throw new SQLException("Falta la fila de preferencias. Ejecutá el SQL incluido.");
+            Opciones o=new Opciones();
+            o.nombre=r.getBoolean(1); o.cuit=r.getBoolean(2); o.direccion=r.getBoolean(3);
+            o.telefono=r.getBoolean(4); o.vendedor=r.getBoolean(5); o.fecha=r.getBoolean(6);
+            o.automatico=r.getBoolean(7); o.vistaPrevia=r.getBoolean(8); o.reimpresion=r.getBoolean(9);
+            o.pie=r.getString(10); return o;
         }
     }
-    public static long siguienteNumeroVenta() throws SQLException {
-        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement("SELECT siguiente FROM venta_numerador WHERE id=1");ResultSet r=p.executeQuery()) { return r.next()?r.getLong(1):1; }
+    public void guardar(Opciones o) throws SQLException {
+        if(o==null || o.pie==null || o.pie.length()>250) throw new IllegalArgumentException("El mensaje final no puede superar 250 caracteres.");
+        if(o.automatico && o.vistaPrevia) throw new IllegalArgumentException("No se puede activar impresión automática y vista previa a la vez.");
+        String sql="UPDATE serenasoft_preferencias_ticket SET mostrar_nombre=?,mostrar_cuit=?,mostrar_direccion=?,mostrar_telefono=?,mostrar_vendedor=?,mostrar_fecha=?,imprimir_automatico=?,vista_previa=?,permitir_reimpresion=?,pie=? WHERE clave=1";
+        try(Connection c=conexion.getConexion(); PreparedStatement p=c.prepareStatement(sql)) {
+            p.setBoolean(1,o.nombre);p.setBoolean(2,o.cuit);p.setBoolean(3,o.direccion);
+            p.setBoolean(4,o.telefono);p.setBoolean(5,o.vendedor);p.setBoolean(6,o.fecha);
+            p.setBoolean(7,o.automatico);p.setBoolean(8,o.vistaPrevia);p.setBoolean(9,o.reimpresion);p.setString(10,o.pie);
+            if(p.executeUpdate()==0) {
+                try(PreparedStatement check=c.prepareStatement("SELECT clave FROM serenasoft_preferencias_ticket WHERE clave=1");ResultSet rs=check.executeQuery()) {
+                    if(!rs.next()) throw new SQLException("Falta el registro de preferencias. Ejecutá el SQL incluido.");
+                }
+            }
+        }
     }
 }

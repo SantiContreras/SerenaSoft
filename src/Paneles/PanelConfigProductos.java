@@ -1,830 +1,177 @@
 package Paneles;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
+import Configuracion.conexion;
+import java.awt.*;
+import java.sql.*;
+import javax.swing.*;
+import javax.swing.table.*;
+import javax.swing.plaf.basic.BasicTabbedPaneUI;
 
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
-import javax.swing.border.EmptyBorder;
-
+/** Catálogos seguros: no altera precios, stock, IVA ni conversiones. */
 public class PanelConfigProductos extends JPanel {
+    private static final Color AZUL = new Color(27,76,155), VERDE = new Color(22,137,87), GRIS = new Color(93,106,125);
+    private final JTabbedPane tabs = new JTabbedPane();
+    private static final Color FONDO = new Color(245,248,252), BORDE = new Color(215,226,240);
+    private final JTable[] tablas = new JTable[3];
+    private final DefaultTableModel[] modelos = new DefaultTableModel[3];
+    private final String[] tablasSql = {"categoria", "marca", "unidad_medida"};
+    private final String[] claves = {"id_categoria", "id_marca", "id_unidad"};
+    private final JLabel estado = new JLabel("Listo para consultar los catálogos.");
 
-    //==========================================================
-    // MODELOS Y LISTAS
-    //==========================================================
-    private DefaultListModel<String> modeloCategorias;
-    private DefaultListModel<String> modeloMarcas;
-    private DefaultListModel<String> modeloUnidades;
-
-    private JList<String> listaCategorias;
-    private JList<String> listaMarcas;
-    private JList<String> listaUnidades;
-
-    //==========================================================
-    // BOTONES
-    //==========================================================
-    private JButton btnNuevaCategoria;
-    private JButton btnEditarCategoria;
-    private JButton btnEliminarCategoria;
-
-    private JButton btnNuevaMarca;
-    private JButton btnEditarMarca;
-    private JButton btnEliminarMarca;
-
-    private JButton btnNuevaUnidad;
-    private JButton btnEditarUnidad;
-    private JButton btnEliminarUnidad;
-
-    private JButton btnGuardar;
-
-    //==========================================================
-    // CONFIGURACION GENERAL
-    //==========================================================
-    private JComboBox<String> cboIvaPredeterminado;
-    private JTextField txtStockMinimo;
-
-    private JCheckBox chkAvisarStockMinimo;
-    private JCheckBox chkPermitirVentaSinStock;
-
-    //==========================================================
-    // COLORES
-    //==========================================================
-    private final Color FONDO = new Color(245, 247, 250);
-    private final Color BLANCO = Color.WHITE;
-
-    private final Color AZUL = new Color(25, 70, 145);
-    private final Color AZUL_OSCURO = new Color(15, 50, 110);
-
-    private final Color VERDE = new Color(25, 135, 84);
-    private final Color ROJO = new Color(200, 55, 55);
-    private final Color GRIS = new Color(110, 120, 135);
-
-    private final Color BORDE = new Color(215, 222, 232);
-    private final Color TEXTO_SECUNDARIO = new Color(100, 110, 125);
-
-    //==========================================================
-    // CONSTRUCTOR
-    //==========================================================
     public PanelConfigProductos() {
-
-        inicializarComponentes();
-
-        construirPanel();
-
-        cargarDatosPrueba();
-
-        configurarEventos();
-
+        setLayout(new BorderLayout(12,12)); setBackground(new Color(245,247,251));
+        setBorder(BorderFactory.createEmptyBorder(22,24,18,24));
+        JPanel arriba = new JPanel(new GridLayout(2,1,0,4)); arriba.setOpaque(false);
+        JLabel titulo = new JLabel("PRODUCTOS · CONFIGURACIÓN SEGURA");
+        titulo.setFont(new Font("Segoe UI",Font.BOLD,23)); titulo.setForeground(AZUL);
+        JLabel ayuda = new JLabel("Administración de catálogos. No modifica precios, IVA, stock ni ventas existentes.");
+        ayuda.setFont(new Font("Segoe UI",Font.PLAIN,13)); ayuda.setForeground(GRIS);
+        arriba.add(titulo); arriba.add(ayuda); add(arriba,BorderLayout.NORTH);
+        tabs.setFont(new Font("Segoe UI",Font.BOLD,14));
+        tabs.setBackground(Color.WHITE); tabs.setForeground(AZUL);
+        String[] nombres = {"Categorías", "Marcas", "Unidades (solo consulta)"};
+        for(int i=0;i<3;i++) { final int idx=i;
+            modelos[i] = new DefaultTableModel(new String[]{"ID","Nombre / código","Descripción","Estado"},0) {
+                @Override public boolean isCellEditable(int r,int c){return false;}
+            };
+            JTable t = new JTable(modelos[i]); tablas[i]=t;
+            t.setFont(new Font("Segoe UI",Font.PLAIN,14)); t.setRowHeight(35);
+            t.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); t.setSelectionBackground(new Color(216,232,252));
+            t.getTableHeader().setOpaque(false);
+            t.getTableHeader().setDefaultRenderer(new DefaultTableCellRenderer(){
+                @Override public Component getTableCellRendererComponent(JTable table,Object value,boolean selected,boolean focus,int row,int col){
+                    JLabel l=(JLabel)super.getTableCellRendererComponent(table,value,selected,focus,row,col);
+                    l.setOpaque(true); l.setBackground(AZUL);l.setForeground(Color.WHITE);
+                    l.setFont(new Font("Segoe UI",Font.BOLD,14));
+                    l.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0,0,0,1,new Color(85,128,191)),BorderFactory.createEmptyBorder(0,12,0,8)));
+                    return l;
+                }
+            });
+            t.getTableHeader().setFont(new Font("Segoe UI",Font.BOLD,14));t.getTableHeader().setPreferredSize(new Dimension(0,38));
+            t.setDefaultRenderer(Object.class,new DefaultTableCellRenderer(){
+                @Override public Component getTableCellRendererComponent(JTable table,Object value,boolean selected,boolean focus,int row,int col){
+                    super.getTableCellRendererComponent(table,value,selected,focus,row,col);
+                    if(!selected) setBackground(row%2==0?Color.WHITE:new Color(242,246,251));
+                    setForeground(col==3?("Activo".equals(value)?VERDE:new Color(190,55,55)):new Color(38,48,65));
+                    setBorder(BorderFactory.createEmptyBorder(0,9,0,6));return this;
+                }
+            });
+            JPanel cont = new JPanel(new BorderLayout(0,12)); cont.setBackground(Color.WHITE);
+            cont.setBorder(BorderFactory.createEmptyBorder(15,12,12,12));
+            JScrollPane sc=new JScrollPane(t);
+            sc.setBorder(BorderFactory.createLineBorder(BORDE));
+            sc.getViewport().setBackground(Color.WHITE);
+            t.setGridColor(new Color(228,235,244));
+            t.setShowVerticalLines(false);
+            cont.add(sc,BorderLayout.CENTER);
+            JPanel acciones=new JPanel(new FlowLayout(FlowLayout.LEFT,9,3));acciones.setOpaque(false);
+            if(i<2){acciones.add(boton("Nuevo",VERDE,()->editar(idx,false)));
+                acciones.add(boton("Editar",AZUL,()->editar(idx,true)));
+                acciones.add(boton("Activar / Desactivar",GRIS,()->cambiarEstado(idx)));}
+            acciones.add(boton("Actualizar",AZUL,()->cargar(idx)));
+            if(i==2){JLabel aviso=new JLabel("Protegido: los cambios de unidades y conversiones se realizan desde un proceso controlado.");
+                aviso.setForeground(GRIS); acciones.add(aviso);}
+            cont.add(acciones,BorderLayout.SOUTH);tabs.addTab(nombres[i],cont);
+        }
+        add(tabs,BorderLayout.CENTER);estado.setFont(new Font("Segoe UI",Font.PLAIN,13));estado.setForeground(GRIS);
+        add(estado,BorderLayout.SOUTH);
+        for(int i=0;i<3;i++)cargar(i);
     }
-
-    //==========================================================
-    // INICIALIZAR
-    //==========================================================
-    private void inicializarComponentes() {
-
-        modeloCategorias = new DefaultListModel<>();
-        modeloMarcas = new DefaultListModel<>();
-        modeloUnidades = new DefaultListModel<>();
-
-        listaCategorias = new JList<>(modeloCategorias);
-        listaMarcas = new JList<>(modeloMarcas);
-        listaUnidades = new JList<>(modeloUnidades);
-
-        configurarLista(listaCategorias);
-        configurarLista(listaMarcas);
-        configurarLista(listaUnidades);
-
-        btnNuevaCategoria = crearBoton("Nueva", AZUL);
-        btnEditarCategoria = crearBoton("Editar", GRIS);
-        btnEliminarCategoria = crearBoton("Eliminar", ROJO);
-
-        btnNuevaMarca = crearBoton("Nueva", AZUL);
-        btnEditarMarca = crearBoton("Editar", GRIS);
-        btnEliminarMarca = crearBoton("Eliminar", ROJO);
-
-        btnNuevaUnidad = crearBoton("Nueva", AZUL);
-        btnEditarUnidad = crearBoton("Editar", GRIS);
-        btnEliminarUnidad = crearBoton("Eliminar", ROJO);
-
-        btnGuardar = crearBoton("Guardar Cambios", VERDE);
-        btnGuardar.setPreferredSize(
-                new Dimension(150, 36)
-        );
-
-        btnGuardar.setMinimumSize(
-                new Dimension(150, 36)
-        );
-
-        cboIvaPredeterminado = new JComboBox<>();
-
-        cboIvaPredeterminado.addItem("21%");
-        cboIvaPredeterminado.addItem("10.5%");
-        cboIvaPredeterminado.addItem("Exento");
-        cboIvaPredeterminado.addItem("No Gravado");
-
-        txtStockMinimo = new JTextField();
-
-        chkAvisarStockMinimo
-                = new JCheckBox("Avisar cuando un producto llegue al stock mínimo");
-
-        chkPermitirVentaSinStock
-                = new JCheckBox("Permitir venta de productos sin stock");
-
-        chkAvisarStockMinimo.setOpaque(false);
-        chkPermitirVentaSinStock.setOpaque(false);
-
+    private JButton boton(String texto,Color color,Runnable accion){
+        JButton b=new JButton(texto){@Override protected void paintComponent(Graphics g){
+            Graphics2D g2=(Graphics2D)g.create();g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(isEnabled()?color:GRIS);g2.fillRoundRect(0,0,getWidth()-1,getHeight()-1,10,10);
+            g2.setFont(getFont());FontMetrics fm=g2.getFontMetrics();g2.setColor(Color.WHITE);
+            g2.drawString(getText(),(getWidth()-fm.stringWidth(getText()))/2,(getHeight()+fm.getAscent()-fm.getDescent())/2);g2.dispose();
+        }};
+        b.setFont(new Font("Segoe UI",Font.BOLD,13));b.setPreferredSize(new Dimension(Math.max(120,texto.length()*10+25),39));
+        b.setContentAreaFilled(false);b.setBorderPainted(false);b.setFocusPainted(false);b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.addActionListener(e->accion.run());return b;
     }
-
-    //==========================================================
-    // CONSTRUIR PANEL
-    //==========================================================
-    private void construirPanel() {
-
-        setLayout(new BorderLayout());
-
-        setBackground(FONDO);
-
-        JPanel contenedor = new JPanel(new BorderLayout());
-
-        contenedor.setBackground(BLANCO);
-
-        contenedor.setBorder(
-                BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(BORDE),
-                        new EmptyBorder(25, 30, 25, 30)
-                )
-        );
-
-        //------------------------------------------------------
-        // HEADER
-        //------------------------------------------------------
-        JPanel header = new JPanel();
-
-        header.setOpaque(false);
-
-        header.setLayout(
-                new BoxLayout(
-                        header,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-        JLabel lblTitulo
-                = new JLabel("PRODUCTOS");
-
-        lblTitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        22
-                )
-        );
-
-        lblTitulo.setForeground(AZUL_OSCURO);
-
-        JLabel lblSubtitulo
-                = new JLabel(
-                        "Configuración utilizada por el catálogo de artículos"
-                );
-
-        lblSubtitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        14
-                )
-        );
-
-        lblSubtitulo.setForeground(TEXTO_SECUNDARIO);
-
-        header.add(lblTitulo);
-        header.add(Box.createVerticalStrut(5));
-        header.add(lblSubtitulo);
-
-        contenedor.add(
-                header,
-                BorderLayout.NORTH
-        );
-
-        //------------------------------------------------------
-        // CENTRO
-        //------------------------------------------------------
-        JPanel centro = new JPanel();
-
-        centro.setOpaque(false);
-
-        centro.setLayout(
-                new BoxLayout(
-                        centro,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-        centro.setBorder(
-                new EmptyBorder(
-                        20,
-                        0,
-                        20,
-                        0
-                )
-        );
-
-        JPanel filaCatalogos
-                = new JPanel(
-                        new java.awt.GridLayout(
-                                1,
-                                3,
-                                15,
-                                0
-                        )
-                );
-
-        filaCatalogos.setOpaque(false);
-
-        filaCatalogos.add(
-                crearPanelCatalogo(
-                        "Categorías",
-                        listaCategorias,
-                        btnNuevaCategoria,
-                        btnEditarCategoria,
-                        btnEliminarCategoria
-                )
-        );
-
-        filaCatalogos.add(
-                crearPanelCatalogo(
-                        "Marcas",
-                        listaMarcas,
-                        btnNuevaMarca,
-                        btnEditarMarca,
-                        btnEliminarMarca
-                )
-        );
-
-        filaCatalogos.add(
-                crearPanelCatalogo(
-                        "Unidades",
-                        listaUnidades,
-                        btnNuevaUnidad,
-                        btnEditarUnidad,
-                        btnEliminarUnidad
-                )
-        );
-
-        filaCatalogos.setPreferredSize(
-                new Dimension(0, 230)
-        );
-
-        filaCatalogos.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        230
-                )
-        );
-
-        centro.add(filaCatalogos);
-
-        centro.add(
-                Box.createVerticalStrut(20)
-        );
-
-        centro.add(
-                crearPanelConfiguracionGeneral()
-        );
-
-        JScrollPane scrollCentro = new JScrollPane(centro);
-
-        scrollCentro.setBorder(null);
-
-        scrollCentro.setOpaque(false);
-        scrollCentro.getViewport().setOpaque(false);
-
-        scrollCentro.setHorizontalScrollBarPolicy(
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        );
-
-        scrollCentro.setVerticalScrollBarPolicy(
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-        );
-
-        scrollCentro.getVerticalScrollBar().setUnitIncrement(16);
-
-        contenedor.add(
-                scrollCentro,
-                BorderLayout.CENTER
-        );
-
-        //------------------------------------------------------
-        // BOTONES
-        //------------------------------------------------------
-        JPanel panelBotones
-                = new JPanel(
-                        new FlowLayout(
-                                FlowLayout.RIGHT,
-                                10,
-                                0
-                        )
-                );
-
-        panelBotones.setOpaque(false);
-
-        panelBotones.add(btnGuardar);
-
-        contenedor.add(
-                panelBotones,
-                BorderLayout.SOUTH
-        );
-
-        add(
-                contenedor,
-                BorderLayout.CENTER
-        );
-
+    private void cargar(int i){
+        String sql=i==0?"SELECT id_categoria,nombre,COALESCE(descripcion,''),activo FROM categoria ORDER BY nombre":
+                i==1?"SELECT id_marca,nombre,COALESCE(descripcion,''),activo FROM marca ORDER BY nombre":
+                "SELECT id_unidad,CONCAT(codigo,' - ',nombre),IF(permite_decimales=1,'Permite decimales','Solo enteros'),activo FROM unidad_medida ORDER BY nombre";
+        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement(sql);ResultSet r=p.executeQuery()){
+            DefaultTableModel m=modelos[i];m.setRowCount(0);
+            while(r.next())m.addRow(new Object[]{r.getInt(1),r.getString(2),r.getString(3),r.getBoolean(4)?"Activo":"Inactivo"});
+            estado.setText("Catálogo actualizado desde MariaDB.");
+        }catch(SQLException ex){estado.setText("Error al consultar: "+ex.getMessage());
+            JOptionPane.showMessageDialog(this,"No se pudo cargar el catálogo.\n"+ex.getMessage(),"Error",JOptionPane.ERROR_MESSAGE);}
     }
-
-    //==========================================================
-    // PANEL CATALOGO
-    //==========================================================
-    private JPanel crearPanelCatalogo(
-            String titulo,
-            JList<String> lista,
-            JButton btnNuevo,
-            JButton btnEditar,
-            JButton btnEliminar) {
-
-        lista.setVisibleRowCount(5);
-
-        lista.setPreferredSize(
-                new Dimension(200, 140)
-        );
-
-        JPanel panel
-                = new JPanel(
-                        new BorderLayout(
-                                0,
-                                10
-                        )
-                );
-
-        panel.setBackground(
-                new Color(
-                        250,
-                        251,
-                        253
-                )
-        );
-
-        panel.setBorder(
-                BorderFactory.createTitledBorder(
-                        BorderFactory.createLineBorder(BORDE),
-                        titulo,
-                        0,
-                        0,
-                        new Font(
-                                "Segoe UI",
-                                Font.BOLD,
-                                15
-                        ),
-                        AZUL_OSCURO
-                )
-        );
-
-        panel.setPreferredSize(
-                new Dimension(250, 210)
-        );
-
-        panel.setMinimumSize(
-                new Dimension(220, 210)
-        );
-
-        JScrollPane scroll = new JScrollPane(lista);
-
-        scroll.setPreferredSize(
-                new Dimension(220, 150)
-        );
-
-        scroll.setMinimumSize(
-                new Dimension(180, 150)
-        );
-
-        scroll.setMaximumSize(
-                new Dimension(Integer.MAX_VALUE, 150)
-        );
-
-        panel.add(
-                scroll,
-                BorderLayout.CENTER
-        );
-
-        JPanel botones
-                = new JPanel(
-                        new FlowLayout(
-                                FlowLayout.CENTER,
-                                5,
-                                5
-                        )
-                );
-
-        botones.setOpaque(false);
-
-        botones.add(btnNuevo);
-        botones.add(btnEditar);
-        botones.add(btnEliminar);
-
-        panel.add(
-                botones,
-                BorderLayout.SOUTH
-        );
-
-        return panel;
-
+    private int seleccionado(int i){int fila=tablas[i].getSelectedRow();
+        return fila<0?-1:((Number)modelos[i].getValueAt(tablas[i].convertRowIndexToModel(fila),0)).intValue();}
+    private void editar(int i,boolean existente){
+        int id=existente?seleccionado(i):-1;if(existente&&id<0){aviso("Seleccioná primero un registro.");return;}
+        String nombre="",descripcion="";int fila=tablas[i].getSelectedRow();
+        if(existente){int r=tablas[i].convertRowIndexToModel(fila);nombre=String.valueOf(modelos[i].getValueAt(r,1));descripcion=String.valueOf(modelos[i].getValueAt(r,2));}
+        JTextField n=campo(nombre),d=campo(descripcion);
+        if(!mostrarDialogoRegistro(existente,n,d))return;
+        nombre=n.getText().trim();descripcion=d.getText().trim();
+        if(nombre.isEmpty()||nombre.length()>100||descripcion.length()>250){aviso("Nombre obligatorio (máx. 100) y descripción de hasta 250 caracteres.");return;}
+        String tabla=tablasSql[i],clave=claves[i];
+        String sql=existente?"UPDATE "+tabla+" SET nombre=?,descripcion=? WHERE "+clave+"=?":
+            "INSERT INTO "+tabla+" (nombre,descripcion,activo) VALUES (?,?,1)";
+        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement(sql)){
+            p.setString(1,nombre);p.setString(2,descripcion);if(existente)p.setInt(3,id);
+            if(p.executeUpdate()!=1)throw new SQLException("No se modificó exactamente un registro.");
+            cargar(i);JOptionPane.showMessageDialog(this,"Guardado correctamente.");
+        }catch(SQLException ex){JOptionPane.showMessageDialog(this,"No se guardó. Revisá nombres duplicados o la conexión.\n"+ex.getMessage(),"Error",JOptionPane.ERROR_MESSAGE);}
     }
-
-    //==========================================================
-    // CONFIGURACION GENERAL
-    //==========================================================
-    private JPanel crearPanelConfiguracionGeneral() {
-
-        JPanel panel
-                = new JPanel(
-                        new GridBagLayout()
-                );
-
-        panel.setOpaque(false);
-
-        panel.setBorder(
-                BorderFactory.createTitledBorder(
-                        BorderFactory.createLineBorder(BORDE),
-                        "Configuración General",
-                        0,
-                        0,
-                        new Font(
-                                "Segoe UI",
-                                Font.BOLD,
-                                15
-                        ),
-                        AZUL_OSCURO
-                )
-        );
-
-        GridBagConstraints c
-                = new GridBagConstraints();
-
-        c.insets
-                = new Insets(
-                        10,
-                        10,
-                        10,
-                        10
-                );
-
-        c.anchor
-                = GridBagConstraints.WEST;
-
-        //------------------------------------------------------
-        // IVA
-        //------------------------------------------------------
-        c.gridx = 0;
-        c.gridy = 0;
-
-        panel.add(
-                crearLabel(
-                        "IVA Predeterminado"
-                ),
-                c
-        );
-
-        c.gridx = 1;
-
-        cboIvaPredeterminado.setPreferredSize(
-                new Dimension(
-                        180,
-                        32
-                )
-        );
-
-        panel.add(
-                cboIvaPredeterminado,
-                c
-        );
-
-        //------------------------------------------------------
-        // STOCK MINIMO
-        //------------------------------------------------------
-        c.gridx = 2;
-
-        panel.add(
-                crearLabel(
-                        "Stock mínimo predeterminado"
-                ),
-                c
-        );
-
-        c.gridx = 3;
-
-        txtStockMinimo.setPreferredSize(
-                new Dimension(
-                        120,
-                        32
-                )
-        );
-
-        panel.add(
-                txtStockMinimo,
-                c
-        );
-
-        //------------------------------------------------------
-        // CHECK 1
-        //------------------------------------------------------
-        c.gridx = 0;
-        c.gridy = 1;
-        c.gridwidth = 4;
-
-        panel.add(
-                chkAvisarStockMinimo,
-                c
-        );
-
-        //------------------------------------------------------
-        // CHECK 2
-        //------------------------------------------------------
-        c.gridy = 2;
-
-        panel.add(
-                chkPermitirVentaSinStock,
-                c
-        );
-
-        return panel;
-
+    private JTextField campo(String valor){
+        JTextField t=new JTextField(valor);
+        t.setFont(new Font("Segoe UI",Font.PLAIN,15));
+        t.setPreferredSize(new Dimension(400,42));
+        t.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDE,1,true),BorderFactory.createEmptyBorder(7,12,7,12)));
+        t.setBackground(Color.WHITE);t.setForeground(new Color(35,49,68));
+        return t;
     }
-
-    //==========================================================
-    // CONFIGURAR LISTA
-    //==========================================================
-    private void configurarLista(JList<String> lista) {
-
-        lista.setSelectionMode(
-                ListSelectionModel.SINGLE_SELECTION
-        );
-
-        lista.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        14
-                )
-        );
-
-        lista.setFixedCellHeight(28);
-
-        lista.setVisibleRowCount(5);
-
-        lista.setBackground(Color.WHITE);
-
-        lista.setBorder(
-                new EmptyBorder(3, 5, 3, 5)
-        );
+    private boolean mostrarDialogoRegistro(boolean existente,JTextField nombre,JTextField descripcion){
+        Window owner=SwingUtilities.getWindowAncestor(this);
+        final JDialog dlg=new JDialog(owner,existente?"Editar registro":"Nuevo registro",Dialog.ModalityType.APPLICATION_MODAL);
+        dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        JPanel raiz=new JPanel(new BorderLayout());raiz.setBackground(Color.WHITE);
+        JPanel encabezado=new JPanel(new BorderLayout(0,5));encabezado.setBackground(AZUL);
+        encabezado.setBorder(BorderFactory.createEmptyBorder(18,23,18,23));
+        JLabel titulo=new JLabel(existente?"EDITAR REGISTRO":"NUEVO REGISTRO");
+        titulo.setForeground(Color.WHITE);titulo.setFont(new Font("Segoe UI",Font.BOLD,20));
+        JLabel subtitulo=new JLabel("Catálogo de productos · Serena Soft");
+        subtitulo.setForeground(new Color(219,232,255));subtitulo.setFont(new Font("Segoe UI",Font.PLAIN,12));
+        encabezado.add(titulo,BorderLayout.NORTH);encabezado.add(subtitulo,BorderLayout.SOUTH);
+        raiz.add(encabezado,BorderLayout.NORTH);
+        JPanel campos=new JPanel(new GridBagLayout());campos.setBackground(Color.WHITE);
+        campos.setBorder(BorderFactory.createEmptyBorder(23,24,16,24));
+        GridBagConstraints gc=new GridBagConstraints();gc.gridx=0;gc.weightx=1;gc.fill=GridBagConstraints.HORIZONTAL;
+        gc.gridy=0;gc.insets=new Insets(0,0,7,0);campos.add(etiqueta("Nombre *"),gc);
+        gc.gridy=1;gc.insets=new Insets(0,0,18,0);campos.add(nombre,gc);
+        gc.gridy=2;gc.insets=new Insets(0,0,7,0);campos.add(etiqueta("Descripción"),gc);
+        gc.gridy=3;gc.insets=new Insets(0,0,8,0);campos.add(descripcion,gc);
+        gc.gridy=4;campos.add(new JLabel("* Campo obligatorio. No modifica ventas ni stock."),gc);
+        raiz.add(campos,BorderLayout.CENTER);
+        JPanel pie=new JPanel(new FlowLayout(FlowLayout.RIGHT,12,14));pie.setBackground(FONDO);
+        pie.setBorder(BorderFactory.createMatteBorder(1,0,0,0,BORDE));
+        final boolean[] confirmado={false};
+        JButton cancelar=boton("CANCELAR",GRIS,()->dlg.dispose());
+        JButton guardar=boton(existente?"GUARDAR CAMBIOS":"GUARDAR",VERDE,()->{confirmado[0]=true;dlg.dispose();});
+        cancelar.setPreferredSize(new Dimension(132,43));guardar.setPreferredSize(new Dimension(174,43));
+        pie.add(cancelar);pie.add(guardar);raiz.add(pie,BorderLayout.SOUTH);
+        dlg.setContentPane(raiz);dlg.setSize(500,385);dlg.setMinimumSize(new Dimension(450,370));
+        dlg.setLocationRelativeTo(this);dlg.getRootPane().setDefaultButton(guardar);
+        dlg.setVisible(true);return confirmado[0];
     }
-
-    //==========================================================
-    // CREAR LABEL
-    //==========================================================
-    private JLabel crearLabel(
-            String texto) {
-
-        JLabel label
-                = new JLabel(texto);
-
-        label.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        13
-                )
-        );
-
-        label.setForeground(
-                new Color(
-                        60,
-                        70,
-                        85
-                )
-        );
-
-        return label;
-
+    private JLabel etiqueta(String texto){
+        JLabel l=new JLabel(texto);l.setForeground(AZUL);
+        l.setFont(new Font("Segoe UI",Font.BOLD,14));return l;
     }
-
-    //==========================================================
-    // CREAR BOTON
-    //==========================================================
-    private JButton crearBoton(
-            String texto,
-            Color color) {
-
-        JButton boton
-                = new JButton(texto);
-        boton.setPreferredSize(
-                new Dimension(72, 32)
-        );
-
-        boton.setFocusPainted(false);
-
-        boton.setBackground(color);
-
-        boton.setForeground(Color.WHITE);
-
-        boton.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        11
-                )
-        );
-        return boton;
-
+    private void cambiarEstado(int i){int id=seleccionado(i);if(id<0){aviso("Seleccioná primero un registro.");return;}
+        int fila=tablas[i].convertRowIndexToModel(tablas[i].getSelectedRow());boolean activo="Activo".equals(modelos[i].getValueAt(fila,3));
+        if(JOptionPane.showConfirmDialog(this,(activo?"Desactivar":"Activar")+" este registro?\nNo se borrarán referencias históricas.","Confirmar",JOptionPane.YES_NO_OPTION)!=JOptionPane.YES_OPTION)return;
+        String sql="UPDATE "+tablasSql[i]+" SET activo=? WHERE "+claves[i]+"=? AND activo=?";
+        try(Connection c=conexion.getConexion();PreparedStatement p=c.prepareStatement(sql)){
+            p.setBoolean(1,!activo);p.setInt(2,id);p.setBoolean(3,activo);
+            if(p.executeUpdate()!=1)throw new SQLException("El estado cambió en otra sesión. Actualizá la tabla.");
+            cargar(i);
+        }catch(SQLException ex){JOptionPane.showMessageDialog(this,ex.getMessage(),"No se pudo cambiar el estado",JOptionPane.ERROR_MESSAGE);}
     }
-
-    //==========================================================
-    // DATOS DE PRUEBA
-    //==========================================================
-    private void cargarDatosPrueba() {
-
-        modeloCategorias.clear();
-
-        modeloCategorias.addElement("Bebidas");
-        modeloCategorias.addElement("Almacén");
-        modeloCategorias.addElement("Limpieza");
-        modeloCategorias.addElement("Perfumería");
-
-        modeloMarcas.clear();
-
-        modeloMarcas.addElement("Coca Cola");
-        modeloMarcas.addElement("Natura");
-        modeloMarcas.addElement("Playadito");
-        modeloMarcas.addElement("Ledesma");
-
-        modeloUnidades.clear();
-
-        modeloUnidades.addElement("Unidad");
-        modeloUnidades.addElement("Kg");
-        modeloUnidades.addElement("Litro");
-        modeloUnidades.addElement("Caja");
-        modeloUnidades.addElement("Pack");
-
-        cboIvaPredeterminado.setSelectedItem("21%");
-
-        txtStockMinimo.setText("10");
-
-        chkAvisarStockMinimo.setSelected(true);
-
-        chkPermitirVentaSinStock.setSelected(false);
-
-    }
-
-    //==========================================================
-    // EVENTOS
-    //==========================================================
-    private void configurarEventos() {
-
-        btnNuevaCategoria.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Nueva categoría.",
-                    "Categorías",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        btnEditarCategoria.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Editar categoría.",
-                    "Categorías",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        btnEliminarCategoria.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Eliminar categoría.",
-                    "Categorías",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        //------------------------------------------------------
-        // MARCAS
-        //------------------------------------------------------
-        btnNuevaMarca.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Nueva marca.",
-                    "Marcas",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        btnEditarMarca.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Editar marca.",
-                    "Marcas",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        btnEliminarMarca.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Eliminar marca.",
-                    "Marcas",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        //------------------------------------------------------
-        // UNIDADES
-        //------------------------------------------------------
-        btnNuevaUnidad.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Nueva unidad de medida.",
-                    "Unidades",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        btnEditarUnidad.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Editar unidad.",
-                    "Unidades",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        btnEliminarUnidad.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Eliminar unidad.",
-                    "Unidades",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-        //------------------------------------------------------
-        // GUARDAR
-        //------------------------------------------------------
-        btnGuardar.addActionListener(e -> {
-
-            javax.swing.JOptionPane.showMessageDialog(
-                    this,
-                    "Configuración de productos guardada.",
-                    "Productos",
-                    javax.swing.JOptionPane.INFORMATION_MESSAGE
-            );
-
-        });
-
-    }
-
+    private void aviso(String mensaje){JOptionPane.showMessageDialog(this,mensaje,"Serena Soft",JOptionPane.INFORMATION_MESSAGE);}
 }
