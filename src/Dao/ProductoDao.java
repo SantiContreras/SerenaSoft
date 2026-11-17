@@ -321,6 +321,30 @@ public class ProductoDao {
     }
 
 
+    /**
+     * Búsqueda estricta para la caja: no confunde un error SQL con un código inexistente.
+     * Detecta también códigos ambiguos entre codigo y codigo_barra de productos distintos.
+     * No cambia los métodos históricos utilizados por otras pantallas.
+     */
+    public Producto buscarParaEscaner(String codigoLeido) throws SQLException {
+        if (codigoLeido == null || codigoLeido.trim().isEmpty()) return null;
+        String codigo = codigoLeido.trim();
+        String sql = SELECT_COMPLETO +
+                "WHERE p.codigo_barra = ? OR p.codigo = ? ORDER BY p.id_producto";
+        try (Connection cn = conexion.getConexion();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setString(1, codigo);
+            ps.setString(2, codigo);
+            try (ResultSet rs = ps.executeQuery()) {
+                Producto encontrado = null;
+                if (rs.next()) encontrado = mapearProducto(rs);
+                if (rs.next()) throw new SQLException(
+                        "Código ambiguo: coincide con más de un producto. Revisar el catálogo: " + codigo);
+                return encontrado;
+            }
+        }
+    }
+
     // =========================================================
     // VERIFICAR CÓDIGO
     // =========================================================

@@ -63,6 +63,7 @@ public class PanelVentas extends javax.swing.JPanel {
     private java.math.BigDecimal descuentoPendiente = java.math.BigDecimal.ZERO;
     private String observacionesPendientes = "";
     private boolean procesandoCobro = false;
+    private boolean procesandoEscaneo = false;
     private java.math.BigDecimal descuentoPromociones = java.math.BigDecimal.ZERO;
     private boolean promocionesCargadas = false;
     private final java.util.Set<Integer> productosPromocionados = new java.util.HashSet<>();
@@ -383,20 +384,58 @@ public class PanelVentas extends javax.swing.JPanel {
         for (LineaCarrito l:carrito.values()) t=t.add(l.producto.getPrecioVenta().multiply(l.cantidad));
         return dinero(t);
     }
+    /** Lectura por teclado USB (HID), con sufijo Enter configurado en el lector. */
     private void buscarCodigoEscaneado() {
-        String codigo=txtCodigo.getText().trim();
-        if(codigo.isEmpty())return;
-        Dao.ProductoDao dao=new Dao.ProductoDao();
-        model.Producto p=dao.buscarPorCodigoBarra(codigo);
-        if(p==null)p=dao.buscarPorCodigo(codigo);
-        if(p==null){javax.swing.JOptionPane.showMessageDialog(this,"No se encontró el código: "+codigo);txtCodigo.selectAll();txtCodigo.requestFocusInWindow();return;}
-        lblProducto.setText("Último: " + p.getNombre());
-        if (p.isPesable()) {
-            abrirDialogoPesable(p);
-        } else {
-            agregarAlCarrito(p,java.math.BigDecimal.ONE);
+        if (procesandoEscaneo || procesandoCobro) return;
+        String codigo = txtCodigo.getText().trim();
+        if (codigo.isEmpty()) return;
+        if (codigo.length() > 80 || codigo.chars().anyMatch(Character::isISOControl)) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "El código leído no es válido.", "Escáner", javax.swing.JOptionPane.WARNING_MESSAGE);
+            txtCodigo.selectAll();
+            txtCodigo.requestFocusInWindow();
+            return;
         }
-        txtCodigo.setText("");txtCodigo.requestFocusInWindow();
+        procesandoEscaneo = true;
+        try {
+            model.Producto p = new Dao.ProductoDao().buscarParaEscaner(codigo);
+            if (p == null) {
+                java.awt.Toolkit.getDefaultToolkit().beep();
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "No se encontró el código: " + codigo + "\nVerificá el catálogo o buscá el artículo con F1.",
+                        "Código no registrado", javax.swing.JOptionPane.WARNING_MESSAGE);
+                txtCodigo.selectAll();
+                return;
+            }
+            if (!p.isActivo()) {
+                java.awt.Toolkit.getDefaultToolkit().beep();
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "El producto está inactivo: " + p.getNombre(),
+                        "Producto no disponible", javax.swing.JOptionPane.WARNING_MESSAGE);
+                txtCodigo.selectAll();
+                return;
+            }
+            if (p.getPrecioVenta() == null || p.getPrecioVenta().signum() <= 0) {
+                javax.swing.JOptionPane.showMessageDialog(this,
+                        "El producto no tiene un precio de venta válido: " + p.getNombre(),
+                        "Revisar precio", javax.swing.JOptionPane.WARNING_MESSAGE);
+                txtCodigo.selectAll();
+                return;
+            }
+            lblProducto.setText("Último: " + p.getNombre());
+            if (p.isPesable()) abrirDialogoPesable(p);
+            else agregarAlCarrito(p, java.math.BigDecimal.ONE);
+            txtCodigo.setText("");
+        } catch (java.sql.SQLException ex) {
+            java.awt.Toolkit.getDefaultToolkit().beep();
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "No se pudo consultar el producto. No se agregó al carrito.\n" + ex.getMessage(),
+                    "Error de consulta", javax.swing.JOptionPane.ERROR_MESSAGE);
+            txtCodigo.selectAll();
+        } finally {
+            procesandoEscaneo = false;
+            javax.swing.SwingUtilities.invokeLater(() -> txtCodigo.requestFocusInWindow());
+        }
     }
     private void abrirDialogoPesable(model.Producto producto) {
         java.awt.Window ventana = javax.swing.SwingUtilities.getWindowAncestor(this);

@@ -68,6 +68,8 @@ public class DialogoEntradaManual extends JDialog {
             java.util.prefs.Preferences.userNodeForPackage(DialogoEntradaManual.class);
     private final ProveedorDao proveedorDao = new ProveedorDao();
     private final DepositoDao depositoDao = new DepositoDao();
+    private JComboBox<Deposito> cmbDeposito;
+    private boolean confirmacionEnCurso = false;
     private final StockProductoDao stockProductoDao = new StockProductoDao();
     private final ProductoPresentacionService presentacionService = new ProductoPresentacionService();
     private final List<ProductoPresentacion> presentacionesDisponibles = new ArrayList<>();
@@ -308,6 +310,7 @@ public class DialogoEntradaManual extends JDialog {
         construirDialogo();
 
         cargarDatosPrueba();
+        cargarDepositosActivos();
 
         configurarEventos();
 
@@ -883,7 +886,7 @@ public class DialogoEntradaManual extends JDialog {
         // BoxLayout necesita una altura máxima suficiente para mostrar
         // todos los campos y sus bordes sin recortarlos.
         panelCompra.setMaximumSize(
-                new Dimension(Integer.MAX_VALUE, 190)
+                new Dimension(Integer.MAX_VALUE, 290)
         );
 
         panelProducto.setMaximumSize(
@@ -927,7 +930,7 @@ public class DialogoEntradaManual extends JDialog {
         scrollContenido.setBorder(null);
 
         scrollContenido.setHorizontalScrollBarPolicy(
-                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         );
 
         scrollContenido.setVerticalScrollBarPolicy(
@@ -1054,10 +1057,55 @@ public class DialogoEntradaManual extends JDialog {
             if (!requiereTotal) txtTotalFactura.setText("");
         });
 
+        // Fila 4: destino real del stock, seleccionado por ID (no texto libre).
+        c.gridy = 3; c.gridx = 0; c.gridwidth = 1;
+        c.weightx = 0; c.fill = GridBagConstraints.NONE;
+        filas.add(crearLabel("Depósito destino"), c);
+        c.gridx = 1; c.gridwidth = 3; c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        cmbDeposito = new JComboBox<>();
+        cmbDeposito.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cmbDeposito.setBackground(Color.WHITE);
+        cmbDeposito.setForeground(AZUL_OSCURO);
+        cmbDeposito.setPreferredSize(new Dimension(350, 38));
+        cmbDeposito.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(
+                    javax.swing.JList<?> list, Object value, int index,
+                    boolean selected, boolean focus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, selected, focus);
+                if (value instanceof Deposito) {
+                    Deposito d = (Deposito) value;
+                    label.setText(d.getNombre() + (d.isEsPrincipal() ? "  (predeterminado)" : ""));
+                }
+                label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+                label.setBorder(new EmptyBorder(7, 10, 7, 7));
+                return label;
+            }
+        });
+        filas.add(cmbDeposito, c);
+        c.gridwidth = 1;
+
         panel.add(filas, BorderLayout.CENTER);
-        panel.setPreferredSize(new Dimension(1010, 218));
-        panel.setMinimumSize(new Dimension(820, 218));
+        panel.setPreferredSize(new Dimension(1010, 270));
+        panel.setMinimumSize(new Dimension(780, 270));
         return panel;
+    }
+
+    private void cargarDepositosActivos() {
+        cmbDeposito.removeAllItems();
+        Deposito principal = null;
+        for (Deposito d : depositoDao.listarActivos()) {
+            if (d == null || !d.isActivo()) continue;
+            cmbDeposito.addItem(d);
+            if (d.isEsPrincipal() && principal == null) principal = d;
+        }
+        if (principal != null) cmbDeposito.setSelectedItem(principal);
+        if (cmbDeposito.getItemCount() == 0) {
+            btnConfirmar.setEnabled(false);
+            JOptionPane.showMessageDialog(this,
+                    "No hay depósitos activos. Configurá un depósito antes de ingresar mercadería.",
+                    "Depósito no disponible", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
     private void estilizarComboFiscal(JComboBox<String> combo) {
@@ -3341,6 +3389,27 @@ public class DialogoEntradaManual extends JDialog {
 // CONFIRMAR ENTRADA REAL DE MERCADERIA
 //==========================================================
     private void confirmarEntrada() {
+        if (confirmacionEnCurso) return;
+        Deposito depositoElegido = (Deposito) cmbDeposito.getSelectedItem();
+        if (depositoElegido == null) {
+            mostrarError("Seleccioná un depósito activo para esta entrada.");
+            return;
+        }
+        // Releer para no confiar en un depósito desactivado durante la edición.
+        Deposito depositoVigente = depositoDao.buscarPorId(depositoElegido.getIdDeposito());
+        if (depositoVigente == null || !depositoVigente.isActivo()) {
+            mostrarError("El depósito seleccionado ya no está activo. Actualizá la pantalla.");
+            return;
+        }
+        for (DetalleEntradaTemporal item : detalles) {
+            if (item.getProducto() == null || item.getProducto().getIdProducto() <= 0
+                    || item.getCantidadCompra() == null || item.getCantidadCompra().signum() <= 0
+                    || item.getFactorConversion() == null || item.getFactorConversion().signum() <= 0
+                    || item.getCostoUnitario() == null || item.getCostoUnitario().signum() < 0) {
+                mostrarError("Hay un producto con cantidad, conversión o costo inválido. Revisá el detalle.");
+                return;
+            }
+        }
 
         //======================================================
         // 1. VALIDAR PROVEEDOR
@@ -3377,7 +3446,16 @@ public class DialogoEntradaManual extends JDialog {
         if ("Factura A".equals(cmbTipoFactura.getSelectedItem())
                 && !validarFacturaAParaPersistir()) return;
 
+        int respuesta = JOptionPane.showConfirmDialog(this,
+                "Proveedor: " + txtProveedor.getText().trim()
+                + "\nDepósito destino: " + depositoVigente.getNombre()
+                + "\nProductos: " + detalles.size()
+                + "\nTotal: " + lblTotalCompra.getText()
+                + "\n\n¿Confirmar entrada de mercadería?",
+                "Revisar entrada", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (respuesta != JOptionPane.YES_OPTION) return;
         // Evitar nuevas confirmaciones mientras se procesa.
+        confirmacionEnCurso = true;
         btnConfirmar.setEnabled(false);
 
         try {
@@ -3401,12 +3479,12 @@ public class DialogoEntradaManual extends JDialog {
             //==================================================
             // 4. BUSCAR DEPOSITO PRINCIPAL
             //==================================================
-            Deposito deposito = depositoDao.buscarPrincipal();
+            Deposito deposito = depositoDao.buscarPorId(depositoVigente.getIdDeposito());
 
-            if (deposito == null) {
+            if (deposito == null || !deposito.isActivo()) {
 
                 mostrarError(
-                        "No existe un depósito principal activo."
+                        "El depósito seleccionado ya no está disponible."
                 );
 
                 return;
@@ -3576,7 +3654,8 @@ public class DialogoEntradaManual extends JDialog {
         } finally {
 
             // Solo se utiliza si el diálogo permanece abierto.
-            btnConfirmar.setEnabled(true);
+            confirmacionEnCurso = false;
+            btnConfirmar.setEnabled(cmbDeposito.getItemCount() > 0);
         }
     }
 

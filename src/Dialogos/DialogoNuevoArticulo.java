@@ -15,6 +15,8 @@ import javax.swing.border.*;
 public class DialogoNuevoArticulo extends JDialog {
     private static final Color NAVY=new Color(17,49,105), BLUE=new Color(16,102,204), BG=new Color(224,234,247), GREEN=new Color(0,151,92);
     private final JTextField nombre=field(), descripcion=field(), barra=field(), interno=field(), ubicacion=field(), codigo=field(), proveedor=field();
+    private final JComboBox<String> modoBarra=new JComboBox<>(new String[]{"Código del fabricante (escáner)","Etiqueta interna Code 128", "Sin código por ahora"});
+    private final JLabel ayudaBarra=new JLabel("Escaneá o escribí el código real del envase.");
     private final JTextField costo=field(), precio=field(), margen=field(), minimo=field(), factor=field();
     private final JTextField costoVenta=field();
     private final JLabel unidadCosto=new JLabel("Costo por unidad de compra"), unidadPrecio=new JLabel("Precio por unidad de venta");
@@ -47,8 +49,19 @@ public class DialogoNuevoArticulo extends JDialog {
         JPanel identificacion=grid(2);
         codigo.setEditable(false);codigo.setBackground(new Color(210,231,255));codigo.setFont(new Font("Segoe UI",Font.BOLD,18));
         identificacion.add(cell("Código automático",codigo));
-        identificacion.add(cell("Código de barras / escáner",barra));
-        identificacion.add(cell("Código interno (opcional)",interno));
+        JPanel barraPanel=new JPanel(new BorderLayout(0,5));barraPanel.setOpaque(false);
+        modoBarra.setFont(new Font("Segoe UI",Font.PLAIN,13));
+        modoBarra.setPreferredSize(new Dimension(280,34));
+        barraPanel.add(modoBarra,BorderLayout.NORTH);
+        barraPanel.add(barra,BorderLayout.CENTER);
+        ayudaBarra.setFont(new Font("Segoe UI",Font.PLAIN,11));ayudaBarra.setForeground(BLUE);
+        barraPanel.add(ayudaBarra,BorderLayout.SOUTH);
+        identificacion.add(cell("Identificación para escáner",barraPanel));
+        // codigo_interno sigue existiendo en BD, pero no se expone como tercer código confuso.
+        // En las altas nuevas se mantiene NULL; el identificador estable es producto.codigo.
+        interno.setText("");
+        modoBarra.addActionListener(e->actualizarModoBarra());
+        barra.addActionListener(e->{ if(modoBarra.getSelectedIndex()==0)nombre.requestFocusInWindow(); });
         identificacion.add(cell("Nombre del producto *",nombre));
         identificacion.add(cell("Ubicación / estantería",ubicacion));
         identificacion.add(cell("Descripción adicional",descripcion));
@@ -134,7 +147,7 @@ public class DialogoNuevoArticulo extends JDialog {
         JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,10,10));footer.setBackground(Color.WHITE);JButton limpiar=button("LIMPIAR",new Color(75,104,148)), cancelar=button("CANCELAR",new Color(75,82,95)), guardar=button("GUARDAR ARTÍCULO",GREEN);
         limpiar.setIcon(new SymbolIcon("clear",Color.WHITE,15));cancelar.setIcon(new SymbolIcon("close",Color.WHITE,15));guardar.setIcon(new SymbolIcon("check",Color.WHITE,17));
         limpiar.addActionListener(e->limpiar());cancelar.addActionListener(e->dispose());guardar.addActionListener(e->guardar());footer.add(limpiar);footer.add(cancelar);footer.add(guardar);add(footer,BorderLayout.SOUTH);getRootPane().setDefaultButton(guardar);
-        cargarCatalogos();rubro.addActionListener(e->{if(!cargando)cargarCategorias();});categoria.addActionListener(e->{if(!cargando)sincronizarRubroDeCategoria();});
+        actualizarModoBarra();cargarCatalogos();rubro.addActionListener(e->{if(!cargando)cargarCategorias();});categoria.addActionListener(e->{if(!cargando)sincronizarRubroDeCategoria();});
         compra.addActionListener(e->actualizarCostos());venta.addActionListener(e->actualizarCostos());
         pesable.addActionListener(e->{if(!pesable.isSelected())pesoVariable.setSelected(false);actualizarCostos();});
         pesoVariable.addActionListener(e->actualizarCostos());
@@ -295,7 +308,33 @@ public class DialogoNuevoArticulo extends JDialog {
     private void buscarProveedor(){DialogoBuscarProveedor d=new DialogoBuscarProveedor(this);d.setVisible(true);if(d.isSeleccionado()){idProveedor=d.getIdSeleccionado();proveedor.setText(d.getRazonSocialSeleccionada());}}
     private static String prefijo(String nombre){String s=Normalizer.normalize(nombre,Normalizer.Form.NFD).replaceAll("\\p{M}","").toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]","");return s.substring(0,Math.min(3,s.length()));}
     private static int siguiente(Connection cn,String pref)throws SQLException{int max=0;try(PreparedStatement ps=cn.prepareStatement("SELECT codigo FROM producto WHERE codigo LIKE ?")){ps.setString(1,pref+"-%");try(ResultSet rs=ps.executeQuery()){while(rs.next()){String c=rs.getString(1);if(c!=null&&c.matches(java.util.regex.Pattern.quote(pref)+"-[0-9]+")){try{max=Math.max(max,Integer.parseInt(c.substring(pref.length()+1)));}catch(NumberFormatException ignored){}}}}}return max+1;}
-    private void previsualizar(){Integer cat=id(categoria);if(cat==null){codigo.setText("Seleccioná categoría");aviso.setText("El código se calcula por categoría");return;}String pref=prefijo((String)categoria.getSelectedItem());try(Connection cn=conexion.getConexion()){codigo.setText(pref+"-"+String.format("%03d",siguiente(cn,pref)));aviso.setText("Vista previa · el código definitivo se valida al guardar");}catch(SQLException e){codigo.setText(pref+"-???");aviso.setText("No se pudo consultar el correlativo");}}
+    private void actualizarModoBarra(){
+        int modo=modoBarra.getSelectedIndex();
+        barra.setEditable(modo==0);barra.setFocusable(modo==0);
+        if(modo==1){barra.setText(codigo.getText().startsWith("Seleccion")?"":codigo.getText());
+            ayudaBarra.setText("Se guardará el código definitivo; imprimí una etiqueta Code 128.");}
+        else if(modo==2){barra.setText("");ayudaBarra.setText("Podrás completar el código de barras más adelante.");}
+        else{if(barra.getText().equals(codigo.getText()))barra.setText("");
+            ayudaBarra.setText("Escaneá o escribí el código real del envase.");}
+        barra.setBackground(modo==0?Color.WHITE:new Color(235,241,248));
+    }
+    private static void validarCodigoEscaneable(Connection cn,String valor,String codigoNuevo)throws SQLException{
+        if(valor==null||valor.isBlank())return;
+        if(valor.length()>100)throw new SQLException("El código de barras supera el máximo de 100 caracteres.");
+        // Impide colisiones entre los identificadores que reconoce el lector de Ventas.
+        String sql="SELECT id_producto,nombre FROM producto WHERE codigo_barra=? OR codigo=? LIMIT 1";
+        try(PreparedStatement ps=cn.prepareStatement(sql)){
+            ps.setString(1,valor);ps.setString(2,valor);
+            try(ResultSet rs=ps.executeQuery()){if(rs.next())throw new SQLException("El código escaneable ya pertenece a: "+rs.getString(2));}
+        }
+        if(!valor.equals(codigoNuevo)){
+            try(PreparedStatement ps=cn.prepareStatement("SELECT id_producto,nombre FROM producto WHERE codigo=? OR codigo_barra=? LIMIT 1")){
+                ps.setString(1,valor);ps.setString(2,valor);
+                try(ResultSet rs=ps.executeQuery()){if(rs.next())throw new SQLException("Código duplicado: "+rs.getString(2));}
+            }
+        }
+    }
+    private void previsualizar(){Integer cat=id(categoria);if(cat==null){codigo.setText("Seleccioná categoría");aviso.setText("El código se calcula por categoría");return;}String pref=prefijo((String)categoria.getSelectedItem());try(Connection cn=conexion.getConexion()){codigo.setText(pref+"-"+String.format("%03d",siguiente(cn,pref)));aviso.setText("Vista previa · el código definitivo se valida al guardar");if(modoBarra.getSelectedIndex()==1)barra.setText(codigo.getText());}catch(SQLException e){codigo.setText(pref+"-???");aviso.setText("No se pudo consultar el correlativo");}}
     private void actualizarCostos(){
         String uCompra=compra.getSelectedItem()==null?"unidad de compra":compra.getSelectedItem().toString();
         String uVenta=venta.getSelectedItem()==null?"unidad de venta":venta.getSelectedItem().toString();
@@ -344,7 +383,16 @@ public class DialogoNuevoArticulo extends JDialog {
             if(respuesta!=JOptionPane.YES_OPTION)return;
         }
         if(!String.valueOf(venta.getSelectedItem()).toUpperCase(java.util.Locale.ROOT).contains("KG") && fc.stripTrailingZeros().scale()>0)throw new Exception("El stock por unidades no admite fracciones en el contenido de la presentación.");
-        if(pesoVariable.isSelected() && !pesable.isSelected())throw new Exception("Para compras de peso variable, marcá Pesable en Configuración.");if(pc.signum()>0 && pv.compareTo(pc.divide(fc,2,RoundingMode.HALF_UP))<0 && JOptionPane.showConfirmDialog(this,"El precio de venta es inferior al costo por unidad de venta. ¿Deseás continuar?","Advertencia de precio",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.YES_OPTION)return;try(Connection cn=conexion.getConexion()){cn.setAutoCommit(false);try{String catNombre;try(PreparedStatement ps=cn.prepareStatement("SELECT nombre FROM categoria WHERE id_categoria=? FOR UPDATE")){ps.setInt(1,cat);try(ResultSet rs=ps.executeQuery()){if(!rs.next())throw new SQLException("Categoría inexistente");catNombre=rs.getString(1);}}String code=prefijo(catNombre)+"-"+String.format("%03d",siguiente(cn,prefijo(catNombre)));String sql="INSERT INTO producto(codigo,codigo_interno,codigo_barra,nombre,descripcion,ubicacion,id_rubro,id_categoria,id_marca,id_unidad_compra,id_unidad_venta,factor_conversion,precio_compra,precio_venta,margen_porcentaje,id_iva,stock_minimo,controla_stock,permite_venta_sin_stock,es_pesable,permite_descuento,activo,observaciones) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";int productoId;try(PreparedStatement ps=cn.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){ps.setString(1,code);text(ps,2,interno.getText());text(ps,3,barra.getText());ps.setString(4,nombre.getText().trim());text(ps,5,descripcion.getText());text(ps,6,ubicacion.getText());integer(ps,7,id(rubro));ps.setInt(8,cat);integer(ps,9,id(marca));ps.setInt(10,uc);ps.setInt(11,uv);ps.setBigDecimal(12,fc);ps.setBigDecimal(13,costoPorUnidad);ps.setBigDecimal(14,pv);ps.setBigDecimal(15,pc.signum()==0?BigDecimal.ZERO:mg);integer(ps,16,id(iva));ps.setBigDecimal(17,pm);ps.setBoolean(18,controla.isSelected());ps.setBoolean(19,sinStock.isSelected());ps.setBoolean(20,pesable.isSelected());ps.setBoolean(21,descuento.isSelected());ps.setBoolean(22,activo.isSelected());text(ps,23,observaciones.getText());ps.executeUpdate();try(ResultSet rs=ps.getGeneratedKeys()){if(!rs.next())throw new SQLException("No se obtuvo ID del producto");productoId=rs.getInt(1);}}if(idProveedor>0){try(PreparedStatement ps=cn.prepareStatement("INSERT INTO producto_proveedor(id_producto,id_proveedor,costo_ultimo,proveedor_principal) VALUES(?,?,?,1)")){ps.setInt(1,productoId);ps.setInt(2,idProveedor);ps.setBigDecimal(3,pc);ps.executeUpdate();}}
+        if(pesoVariable.isSelected() && !pesable.isSelected())throw new Exception("Para compras de peso variable, marcá Pesable en Configuración.");if(pc.signum()>0 && pv.compareTo(pc.divide(fc,2,RoundingMode.HALF_UP))<0 && JOptionPane.showConfirmDialog(this,"El precio de venta es inferior al costo por unidad de venta. ¿Deseás continuar?","Advertencia de precio",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.YES_OPTION)return;try(Connection cn=conexion.getConexion()){cn.setAutoCommit(false);try{String catNombre;try(PreparedStatement ps=cn.prepareStatement("SELECT nombre FROM categoria WHERE id_categoria=? FOR UPDATE")){ps.setInt(1,cat);try(ResultSet rs=ps.executeQuery()){if(!rs.next())throw new SQLException("Categoría inexistente");catNombre=rs.getString(1);}}String code=prefijo(catNombre)+"-"+String.format("%03d",siguiente(cn,prefijo(catNombre)));
+                    String valorBarra=modoBarra.getSelectedIndex()==1?code:(modoBarra.getSelectedIndex()==2?null:barra.getText().trim());
+                    if(modoBarra.getSelectedIndex()==0 && valorBarra.isBlank())throw new SQLException("Escaneá el código del fabricante o elegí 'Sin código por ahora'.");
+                    // El nuevo código interno tampoco puede coincidir con un barcode previo.
+                    try(PreparedStatement chk=cn.prepareStatement("SELECT nombre FROM producto WHERE codigo_barra=? LIMIT 1")){
+                        chk.setString(1,code);
+                        try(ResultSet r=chk.executeQuery()){if(r.next())throw new SQLException("El código automático coincide con una etiqueta existente: "+r.getString(1));}
+                    }
+                    validarCodigoEscaneable(cn,valorBarra,code);
+                    String sql="INSERT INTO producto(codigo,codigo_interno,codigo_barra,nombre,descripcion,ubicacion,id_rubro,id_categoria,id_marca,id_unidad_compra,id_unidad_venta,factor_conversion,precio_compra,precio_venta,margen_porcentaje,id_iva,stock_minimo,controla_stock,permite_venta_sin_stock,es_pesable,permite_descuento,activo,observaciones) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";int productoId;try(PreparedStatement ps=cn.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){ps.setString(1,code);text(ps,2,interno.getText());text(ps,3,valorBarra);ps.setString(4,nombre.getText().trim());text(ps,5,descripcion.getText());text(ps,6,ubicacion.getText());integer(ps,7,id(rubro));ps.setInt(8,cat);integer(ps,9,id(marca));ps.setInt(10,uc);ps.setInt(11,uv);ps.setBigDecimal(12,fc);ps.setBigDecimal(13,costoPorUnidad);ps.setBigDecimal(14,pv);ps.setBigDecimal(15,pc.signum()==0?BigDecimal.ZERO:mg);integer(ps,16,id(iva));ps.setBigDecimal(17,pm);ps.setBoolean(18,controla.isSelected());ps.setBoolean(19,sinStock.isSelected());ps.setBoolean(20,pesable.isSelected());ps.setBoolean(21,descuento.isSelected());ps.setBoolean(22,activo.isSelected());text(ps,23,observaciones.getText());ps.executeUpdate();try(ResultSet rs=ps.getGeneratedKeys()){if(!rs.next())throw new SQLException("No se obtuvo ID del producto");productoId=rs.getInt(1);}}if(idProveedor>0){try(PreparedStatement ps=cn.prepareStatement("INSERT INTO producto_proveedor(id_producto,id_proveedor,costo_ultimo,proveedor_principal) VALUES(?,?,?,1)")){ps.setInt(1,productoId);ps.setInt(2,idProveedor);ps.setBigDecimal(3,pc);ps.executeUpdate();}}
             // La presentación inicial debe guardarse en la MISMA transacción que el producto.
             String nombreUnidadCompra;
             try (PreparedStatement ps = cn.prepareStatement(
