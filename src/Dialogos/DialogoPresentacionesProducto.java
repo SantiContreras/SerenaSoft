@@ -34,7 +34,7 @@ public class DialogoPresentacionesProducto extends JDialog {
         JLabel sub=new JLabel(nombreProducto+"  ·  Stock base: "+codigoBase);sub.setForeground(new Color(207,226,251));cab.add(sub);add(cab,BorderLayout.NORTH);
         JPanel centro=new JPanel(new BorderLayout(10,10));centro.setOpaque(false);centro.setBorder(BorderFactory.createEmptyBorder(10,18,10,18));
         JPanel form=new JPanel(new GridLayout(2,4,12,8));form.setOpaque(false);
-        form.add(new JLabel("Presentación de compra"));form.add(new JLabel("Unidades de stock ("+codigoBase+")"));form.add(new JLabel("Código barras (opcional)"));form.add(new JLabel("Precio venta (opcional)"));
+        form.add(new JLabel("1. ¿CÓMO LLEGÓ?"));form.add(new JLabel("2. ¿CUÁNTAS "+codigoBase+" CONTIENE?"));form.add(new JLabel("3. Código del embalaje (opcional)"));form.add(new JLabel("4. Precio de venta (opcional)"));
         for (JComponent campo : new JComponent[]{tipo,contenido,codigo,precio}) {
             campo.setFont(new Font("Segoe UI",Font.PLAIN,15));
             campo.setPreferredSize(new Dimension(160,38));
@@ -46,9 +46,31 @@ public class DialogoPresentacionesProducto extends JDialog {
         tipo.addActionListener(e->{ if("UNIDAD".equals(tipo.getSelectedItem())) contenido.setText("1"); });
         tipo.setToolTipText("Elegí el embalaje; el contenido lo definís vos para cada producto.");
         form.add(tipo);form.add(contenido);form.add(codigo);form.add(precio);
+        for (Component componente : form.getComponents()) {
+            if (componente instanceof JLabel) {
+                JLabel etiqueta=(JLabel)componente;
+                etiqueta.setFont(new Font("Segoe UI",Font.BOLD,13));
+                etiqueta.setForeground(new Color(37,58,76));
+            }
+        }
+        contenido.setBackground(new Color(255,249,219));
+        contenido.setFont(new Font("Segoe UI",Font.BOLD,20));
+        contenido.setToolTipText("Ejemplo: una CAJA de 6 unidades = 6. No es la cantidad de cajas recibidas.");
+        codigo.setToolTipText("Solo si el embalaje tiene un código de barras propio.");
+        precio.setToolTipText("Opcional. No cambia el precio general del artículo.");
         JPanel superior=new JPanel(new BorderLayout(5,8));superior.setOpaque(false);superior.add(form,BorderLayout.CENTER);
-        conversion.setForeground(new Color(12,83,160));conversion.setFont(new Font("Segoe UI",Font.BOLD,13));superior.add(conversion,BorderLayout.SOUTH);
-        centro.add(superior,BorderLayout.NORTH);
+        conversion.setForeground(new Color(26,106,66));conversion.setFont(new Font("Segoe UI",Font.BOLD,13));superior.add(conversion,BorderLayout.SOUTH);
+        JLabel ayuda=new JLabel("Ejemplo: CAJA con 6 unidades → elegí CAJA y escribí 6. Luego AGREGAR PRESENTACIÓN.");
+        ayuda.setOpaque(true);
+        ayuda.setBackground(new Color(226,243,233));
+        ayuda.setForeground(new Color(27,91,57));
+        ayuda.setFont(new Font("Segoe UI",Font.BOLD,13));
+        ayuda.setBorder(BorderFactory.createEmptyBorder(10,12,10,12));
+        JPanel cabeceraFormulario=new JPanel(new BorderLayout(0,10));
+        cabeceraFormulario.setOpaque(false);
+        cabeceraFormulario.add(ayuda,BorderLayout.NORTH);
+        cabeceraFormulario.add(superior,BorderLayout.CENTER);
+        centro.add(cabeceraFormulario,BorderLayout.NORTH);
         tabla.setRowHeight(36);tabla.setFont(new Font("Segoe UI",Font.PLAIN,14));tabla.setShowVerticalLines(false);tabla.setShowHorizontalLines(true);tabla.setGridColor(new Color(226,233,243));tabla.setSelectionBackground(new Color(30,116,220));tabla.setSelectionForeground(Color.WHITE);tabla.setFillsViewportHeight(true);tabla.getTableHeader().setFont(new Font("Segoe UI",Font.BOLD,13));tabla.getTableHeader().setBackground(new Color(17,49,105));tabla.getTableHeader().setForeground(Color.WHITE);tabla.getTableHeader().setPreferredSize(new Dimension(0,38));tabla.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);tabla.setAutoCreateRowSorter(true);
         tabla.setIntercellSpacing(new Dimension(0, 1));
         tabla.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
