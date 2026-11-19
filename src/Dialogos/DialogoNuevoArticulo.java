@@ -6,6 +6,9 @@ import java.awt.event.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.*;
+import java.awt.print.PrinterJob;
+import java.awt.print.Printable;
+import java.awt.print.PageFormat;
 import java.text.Normalizer;
 import java.util.*;
 import javax.swing.*;
@@ -16,6 +19,7 @@ public class DialogoNuevoArticulo extends JDialog {
     private static final Color NAVY=new Color(17,49,105), BLUE=new Color(16,102,204), BG=new Color(224,234,247), GREEN=new Color(0,151,92);
     private final JTextField nombre=field(), descripcion=field(), barra=field(), interno=field(), ubicacion=field(), codigo=field(), proveedor=field();
     private final JComboBox<String> modoBarra=new JComboBox<>(new String[]{"Código del fabricante (escáner)","Etiqueta interna Code 128", "Sin código por ahora"});
+    private final JCheckBox imprimirEtiqueta=new JCheckBox("Imprimir etiqueta al guardar");
     private final JLabel ayudaBarra=new JLabel("Escaneá o escribí el código real del envase.");
     private final JTextField costo=field(), precio=field(), margen=field(), minimo=field(), factor=field();
     private final JTextField costoVenta=field();
@@ -30,18 +34,24 @@ public class DialogoNuevoArticulo extends JDialog {
     private final JLabel aviso=new JLabel("Seleccioná una categoría para generar el código");
     private int idProveedor=-1;
     private boolean guardado=false, cargando=false;
+    private boolean guardarOtro=false;
+    private JTabbedPane asistente;
+    private final JButton[] pasosVisuales=new JButton[3];
+    private JButton anteriorPaso, siguientePaso, guardarFinal, guardarYOtro;
+    private final JLabel indicadorPaso=new JLabel();
 
     public DialogoNuevoArticulo(Window parent){
         super(parent,"Nuevo artículo · Serena Soft",ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());getContentPane().setBackground(BG);
         Rectangle area=GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
-        setSize(Math.min(1050,area.width-60),Math.min(720,area.height-60));
+        setSize(Math.min(1080,area.width-50),Math.min(740,area.height-50));
         setMinimumSize(new Dimension(820,520));
         JPanel head=new JPanel(new BorderLayout());head.setBackground(NAVY);head.setBorder(new EmptyBorder(18,22,18,22));
         JLabel titulo=new JLabel("  NUEVO ARTÍCULO  ·  SERENA SOFT", new SymbolIcon("box", Color.WHITE, 27), SwingConstants.LEFT);titulo.setIconTextGap(14);titulo.setForeground(Color.WHITE);titulo.setFont(new Font("Segoe UI",Font.BOLD,22));head.add(titulo);add(head,BorderLayout.NORTH);
         // Tres pestañas compactas: sin desplazamiento horizontal ni formulario interminable.
         JTabbedPane tabs=new JTabbedPane();
+        asistente=tabs;
         tabs.setFont(new Font("Segoe UI",Font.BOLD,14));
         tabs.setForeground(NAVY);tabs.setBackground(Color.WHITE);
 
@@ -55,7 +65,11 @@ public class DialogoNuevoArticulo extends JDialog {
         barraPanel.add(modoBarra,BorderLayout.NORTH);
         barraPanel.add(barra,BorderLayout.CENTER);
         ayudaBarra.setFont(new Font("Segoe UI",Font.PLAIN,11));ayudaBarra.setForeground(BLUE);
-        barraPanel.add(ayudaBarra,BorderLayout.SOUTH);
+        JPanel pieCodigo=new JPanel(new GridLayout(2,1,0,3));pieCodigo.setOpaque(false);
+        imprimirEtiqueta.setOpaque(false);imprimirEtiqueta.setForeground(NAVY);
+        imprimirEtiqueta.setFont(new Font("Segoe UI",Font.PLAIN,12));
+        pieCodigo.add(ayudaBarra);pieCodigo.add(imprimirEtiqueta);
+        barraPanel.add(pieCodigo,BorderLayout.SOUTH);
         identificacion.add(cell("Identificación para escáner",barraPanel));
         // codigo_interno sigue existiendo en BD, pero no se expone como tercer código confuso.
         // En las altas nuevas se mantiene NULL; el identificador estable es producto.codigo.
@@ -92,6 +106,11 @@ public class DialogoNuevoArticulo extends JDialog {
         clasif.add(cell("Proveedor (opcional)",provBox));
         clasif.add(cell("Unidad de compra *",compra));clasif.add(cell("Unidad de venta *",venta));
         section(datos,"02  CLASIFICACIÓN Y PROVEEDOR",clasif);
+        // En el alta inicial, la categoría es imprescindible: se muestra primero.
+        Component identificacionCard=datos.getComponent(0);
+        Component separadorIdentificacion=datos.getComponent(1);
+        datos.remove(1);datos.remove(0);
+        datos.add(identificacionCard);datos.add(separadorIdentificacion);
         tabs.addTab("  DATOS DEL ARTÍCULO  ",new SymbolIcon("box",NAVY,17),envolver(datos));
 
         JPanel precios=pagina();
@@ -109,13 +128,10 @@ public class DialogoNuevoArticulo extends JDialog {
         factor.setToolTipText("Ejemplo: CAJA x8 = 8; BULTO x12 = 12; PALLET x480 = 480. No hay contenido estándar.");
         ayudaConversion.setForeground(NAVY);ayudaConversion.setFont(new Font("Segoe UI",Font.PLAIN,12));
         conversion.add(ayudaConversion);
-        pesoVariable.setOpaque(false);pesoVariable.setForeground(NAVY);
-        pesoVariable.setFont(new Font("Segoe UI",Font.PLAIN,14));
-        pesoVariable.setIconTextGap(12);pesoVariable.setPreferredSize(new Dimension(400,34));
-        conversion.add(pesoVariable);
-        JLabel aclaracion=new JLabel("Si el proveedor vende una pieza de peso variable, cargá su peso exacto desde Nueva entrada.");
-        aclaracion.setFont(new Font("Segoe UI",Font.PLAIN,12));aclaracion.setForeground(BLUE);
-        conversion.add(aclaracion);
+        // La compra por pieza de peso variable queda reservada para una versión futura.
+        // No se presenta en el Paso 2: por ahora se trabaja con peso total en KG.
+        // Se conserva el campo y su lógica interna para no alterar otras operaciones.
+        pesoVariable.setSelected(false);
         JLabel notaCosto=new JLabel("Costo opcional: si aún no compraste el artículo, dejalo vacío y se guardará en $0.");
         notaCosto.setFont(new Font("Segoe UI",Font.PLAIN,12));notaCosto.setForeground(BLUE);
         JPanel bloquePrecios=new JPanel(new BorderLayout(0,8));bloquePrecios.setOpaque(false);
@@ -132,21 +148,98 @@ public class DialogoNuevoArticulo extends JDialog {
         tabs.addTab("  PRECIOS Y UNIDADES  ",new SymbolIcon("box",NAVY,17),envolver(precios));
 
         JPanel config=pagina();
-        JPanel opciones=new JPanel(new GridLayout(0,2,15,16));opciones.setOpaque(false);
-        for(JCheckBox c:new JCheckBox[]{activo,controla,pesable,descuento,sinStock}){
-            c.setOpaque(false);c.setForeground(NAVY);c.setFont(new Font("Segoe UI",Font.BOLD,13));opciones.add(c);
+        // Paso 3: opciones explicadas en lenguaje cotidiano, sin modificar la lógica de guardado.
+        JLabel introConfig=new JLabel("Para la mayoría de los artículos, dejá las opciones como están.");
+        introConfig.setFont(new Font("Segoe UI",Font.PLAIN,14));introConfig.setForeground(NAVY);
+        section(config,"03  ÚLTIMOS DETALLES",introConfig);
+
+        JPanel tipoProducto=new JPanel(new BorderLayout(0,9));tipoProducto.setOpaque(false);
+        JLabel tituloPeso=new JLabel("¿El producto se vende por peso?");
+        tituloPeso.setFont(new Font("Segoe UI",Font.BOLD,16));tituloPeso.setForeground(NAVY);
+        tipoProducto.add(tituloPeso,BorderLayout.NORTH);
+        pesable.setText("SÍ, SE VENDE POR KILOGRAMOS (KG)");
+        pesable.setFont(new Font("Segoe UI",Font.BOLD,14));
+        pesable.setForeground(NAVY);pesable.setOpaque(false);
+        pesable.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        JPanel selectorPeso=new JPanel(new BorderLayout(0,8));selectorPeso.setOpaque(false);
+        selectorPeso.add(pesable,BorderLayout.NORTH);
+        JLabel explicacionPeso=new JLabel();
+        explicacionPeso.setFont(new Font("Segoe UI",Font.PLAIN,13));
+        explicacionPeso.setForeground(new Color(57,78,109));
+        selectorPeso.add(explicacionPeso,BorderLayout.CENTER);
+        JLabel ejemploPeso=new JLabel("Ejemplo: recibís 4,750 kg de queso y registrás 4,750 kg en Entrada de mercadería.");
+        ejemploPeso.setFont(new Font("Segoe UI",Font.PLAIN,12));
+        ejemploPeso.setForeground(BLUE);
+        selectorPeso.add(ejemploPeso,BorderLayout.SOUTH);
+        tipoProducto.add(selectorPeso,BorderLayout.CENTER);
+        Runnable actualizarAyudaPeso=()->{
+            explicacionPeso.setText(pesable.isSelected()
+                    ? "Producto pesable activado. El peso total se carga al recibir la mercadería."
+                    : "Para productos comunes (fideos, aceite, arroz, etc.), dejá esta casilla sin marcar.");
+            ejemploPeso.setVisible(pesable.isSelected());
+        };
+        pesable.addItemListener(e->actualizarAyudaPeso.run());
+        actualizarAyudaPeso.run();
+        section(config,"TIPO DE PRODUCTO",tipoProducto);
+
+        JPanel opciones=new JPanel(new GridLayout(0,2,18,13));opciones.setOpaque(false);
+        for(JCheckBox c:new JCheckBox[]{activo,controla,descuento,sinStock}){
+            c.setOpaque(false);c.setForeground(NAVY);c.setFont(new Font("Segoe UI",Font.BOLD,13));
+            c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            opciones.add(c);
         }
-        section(config,"04  CONFIGURACIÓN",opciones);
+        JLabel notaOpciones=new JLabel("Recomendado: artículo activo, control de stock habilitado y venta sin stock desactivada.");
+        notaOpciones.setFont(new Font("Segoe UI",Font.PLAIN,12));notaOpciones.setForeground(new Color(57,78,109));
+        JPanel panelOpciones=new JPanel(new BorderLayout(0,12));panelOpciones.setOpaque(false);
+        panelOpciones.add(opciones,BorderLayout.CENTER);panelOpciones.add(notaOpciones,BorderLayout.SOUTH);
+        section(config,"OTRAS OPCIONES (PODÉS DEJARLAS COMO ESTÁN)",panelOpciones);
+
         observaciones.setFont(new Font("Segoe UI",Font.PLAIN,13));
         observaciones.setLineWrap(true);observaciones.setWrapStyleWord(true);
         JScrollPane notas=new JScrollPane(observaciones);
-        notas.setPreferredSize(new Dimension(300,105));
-        section(config,"05  OBSERVACIONES",notas);
+        notas.setPreferredSize(new Dimension(300,76));
+        section(config,"OBSERVACIONES (OPCIONAL)",notas);
         tabs.addTab("  CONFIGURACIÓN  ",new SymbolIcon("box",NAVY,17),envolver(config));
-        add(tabs,BorderLayout.CENTER);
-        JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,10,10));footer.setBackground(Color.WHITE);JButton limpiar=button("LIMPIAR",new Color(75,104,148)), cancelar=button("CANCELAR",new Color(75,82,95)), guardar=button("GUARDAR ARTÍCULO",GREEN);
-        limpiar.setIcon(new SymbolIcon("clear",Color.WHITE,15));cancelar.setIcon(new SymbolIcon("close",Color.WHITE,15));guardar.setIcon(new SymbolIcon("check",Color.WHITE,17));
-        limpiar.addActionListener(e->limpiar());cancelar.addActionListener(e->dispose());guardar.addActionListener(e->guardar());footer.add(limpiar);footer.add(cancelar);footer.add(guardar);add(footer,BorderLayout.SOUTH);getRootPane().setDefaultButton(guardar);
+        // Barra de progreso independiente del Look and Feel de Swing.
+        tabs.setUI(new javax.swing.plaf.basic.BasicTabbedPaneUI(){
+            @Override protected int calculateTabAreaHeight(int placement,int runs,int maxTabHeight){return 0;}
+            @Override protected void paintTabArea(Graphics g,int placement,int selectedIndex){}
+        });
+        JPanel centro=new JPanel(new BorderLayout());centro.setBackground(BG);
+        JPanel pasos=new JPanel(new GridLayout(1,3,10,0));pasos.setBackground(new Color(246,249,253));
+        pasos.setBorder(new EmptyBorder(12,18,12,18));
+        String[] textos={"1  IDENTIFICÁ EL ARTÍCULO","2  PRECIOS Y UNIDADES","3  OPCIONES Y GUARDADO"};
+        for(int i=0;i<3;i++){
+            final int destino=i;
+            JButton boton=button(textos[i],new Color(101,117,140));
+            boton.setFont(new Font("Segoe UI",Font.BOLD,13));
+            boton.setPreferredSize(new Dimension(170,50));
+            boton.addActionListener(e->irAlPaso(destino));
+            pasosVisuales[i]=boton;pasos.add(boton);
+        }
+        centro.add(pasos,BorderLayout.NORTH);centro.add(tabs,BorderLayout.CENTER);
+        add(centro,BorderLayout.CENTER);
+        tabs.addChangeListener(e->actualizarNavegacion());
+        JPanel footer=new JPanel(new BorderLayout(12,0));footer.setBackground(Color.WHITE);
+        footer.setBorder(new CompoundBorder(new MatteBorder(1,0,0,0,new Color(206,219,235)),new EmptyBorder(12,18,12,18)));
+        JPanel izq=new JPanel(new FlowLayout(FlowLayout.LEFT,8,0));izq.setOpaque(false);
+        JButton cancelar=button("CANCELAR",new Color(91,105,125));
+        JButton limpiar=button("LIMPIAR CAMPOS",new Color(75,104,148));
+        cancelar.addActionListener(e->dispose());
+        limpiar.addActionListener(e->{if(JOptionPane.showConfirmDialog(this,"¿Limpiar los datos de este artículo?","Confirmar limpieza",JOptionPane.YES_NO_OPTION)==JOptionPane.YES_OPTION){limpiar();irAlPaso(0);}});
+        izq.add(cancelar);izq.add(limpiar);footer.add(izq,BorderLayout.WEST);
+        JPanel der=new JPanel(new FlowLayout(FlowLayout.RIGHT,8,0));der.setOpaque(false);
+        anteriorPaso=button("← ANTERIOR",new Color(75,104,148));
+        siguientePaso=button("SIGUIENTE  →",BLUE);
+        guardarFinal=button("GUARDAR Y CERRAR",GREEN);
+        guardarYOtro=button("GUARDAR Y CARGAR OTRO",new Color(0,124,106));
+        anteriorPaso.addActionListener(e->irAlPaso(asistente.getSelectedIndex()-1));
+        siguientePaso.addActionListener(e->irAlPaso(asistente.getSelectedIndex()+1));
+        guardarFinal.addActionListener(e->{guardarOtro=false;guardar();});
+        guardarYOtro.addActionListener(e->{guardarOtro=true;guardar();});
+        der.add(anteriorPaso);der.add(siguientePaso);der.add(guardarYOtro);der.add(guardarFinal);
+        footer.add(der,BorderLayout.EAST);add(footer,BorderLayout.SOUTH);
+        actualizarNavegacion();
         actualizarModoBarra();cargarCatalogos();rubro.addActionListener(e->{if(!cargando)cargarCategorias();});categoria.addActionListener(e->{if(!cargando)sincronizarRubroDeCategoria();});
         compra.addActionListener(e->actualizarCostos());venta.addActionListener(e->actualizarCostos());
         pesable.addActionListener(e->{if(!pesable.isSelected())pesoVariable.setSelected(false);actualizarCostos();});
@@ -162,14 +255,50 @@ public class DialogoNuevoArticulo extends JDialog {
         actualizarCostos();
         setLocationRelativeTo(parent);SwingUtilities.invokeLater(()->nombre.requestFocusInWindow());
     }
-    private static JTextField field(){JTextField f=new JTextField();f.setPreferredSize(new Dimension(150,40));f.setFont(new Font("Segoe UI",Font.PLAIN,13));f.setForeground(NAVY);f.setBackground(new Color(246,250,255));f.setBorder(new CompoundBorder(new LineBorder(new Color(156,181,214)),new EmptyBorder(4,10,4,10)));return f;}
+    private void irAlPaso(int destino){
+        if(destino<0||destino>=asistente.getTabCount())return;
+        // Solo se valida el nombre y la categoría antes de pasar al segundo paso.
+        if(asistente.getSelectedIndex()==0 && destino>0){
+            if(nombre.getText().trim().isEmpty()){
+                JOptionPane.showMessageDialog(this,"Ingresá el nombre del artículo para continuar.","Falta un dato",JOptionPane.INFORMATION_MESSAGE);
+                nombre.requestFocusInWindow();return;
+            }
+            if(id(categoria)==null){
+                JOptionPane.showMessageDialog(this,"Seleccioná la categoría del artículo.","Falta un dato",JOptionPane.INFORMATION_MESSAGE);
+                categoria.requestFocusInWindow();return;
+            }
+        }
+        asistente.setSelectedIndex(destino);
+        SwingUtilities.invokeLater(()->{
+            if(destino==0)nombre.requestFocusInWindow();
+            else if(destino==1)compra.requestFocusInWindow();
+        });
+    }
+    private void actualizarNavegacion(){
+        if(asistente==null||anteriorPaso==null)return;
+        int actual=asistente.getSelectedIndex();
+        anteriorPaso.setVisible(actual>0);
+        siguientePaso.setVisible(actual<2);
+        guardarFinal.setVisible(actual==2);
+        guardarYOtro.setVisible(actual==2);
+        for(int i=0;i<3;i++){
+            pasosVisuales[i].putClientProperty("paso",i);
+            pasosVisuales[i].setText((i<actual?"✓  ":(i+1)+"  ")+
+                new String[]{"DATOS DEL ARTÍCULO","PRECIOS Y UNIDADES","CONFIGURACIÓN"}[i]);
+            pasosVisuales[i].setForeground(Color.WHITE);
+            pasosVisuales[i].setToolTipText(i==actual?"Paso actual":"Ir al paso "+(i+1));
+            pasosVisuales[i].setBackground(i==actual?GREEN:(i<actual?BLUE:new Color(101,117,140)));
+        }
+        getRootPane().setDefaultButton(actual==2?guardarFinal:siguientePaso);
+    }
+    private static JTextField field(){JTextField f=new JTextField();f.setPreferredSize(new Dimension(150,38));f.setFont(new Font("Segoe UI",Font.PLAIN,13));f.setForeground(NAVY);f.setBackground(new Color(246,250,255));f.setBorder(new CompoundBorder(new LineBorder(new Color(156,181,214)),new EmptyBorder(4,10,4,10)));return f;}
     private static JComboBox<String> combo(){JComboBox<String> c=new JComboBox<>();c.setPreferredSize(new Dimension(200,44));c.setFont(new Font("Segoe UI",Font.PLAIN,15));
         c.setMaximumRowCount(14);c.setBackground(new Color(247,250,254));return c;}
     private static JButton button(String label,Color color){
         JButton b=new JButton(label){
             @Override protected void paintComponent(Graphics g){
                 Graphics2D d=(Graphics2D)g.create();d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
-                Color c=isEnabled()?color:new Color(142,153,169);
+                Color c=isEnabled()?(getClientProperty("paso")!=null?getBackground():color):new Color(142,153,169);
                 if(getModel().isPressed())c=c.darker();else if(getModel().isRollover())c=c.brighter();
                 d.setColor(c);d.fillRoundRect(0,0,getWidth()-1,getHeight()-1,9,9);d.dispose();super.paintComponent(g);
             }
@@ -190,7 +319,22 @@ public class DialogoNuevoArticulo extends JDialog {
         sc.setBorder(null);sc.getVerticalScrollBar().setUnitIncrement(18);
         return sc;
     }
-    private static JPanel grid(int n){JPanel p=new JPanel(new GridLayout(0,n,14,12));p.setOpaque(false);return p;}
+    private static JPanel grid(int n){
+        // GridBagLayout conserva la altura natural de los campos: GridLayout
+        // estiraba nombre, ubicación y descripción hasta ~100 px.
+        JPanel p=new JPanel(new GridBagLayout()){
+            private int indice=0;
+            @Override public Component add(Component c){
+                GridBagConstraints g=new GridBagConstraints();
+                g.gridx=indice%n;g.gridy=indice/n;
+                g.weightx=1.0;g.fill=GridBagConstraints.HORIZONTAL;
+                g.anchor=GridBagConstraints.NORTHWEST;
+                g.insets=new Insets(indice>=n?12:0,0,0,(indice%n==n-1)?0:14);
+                super.add(c,g);indice++;return c;
+            }
+        };
+        p.setOpaque(false);return p;
+    }
     private static JPanel cell(String label,JComponent component){return cell(new JLabel(label),component);}
     private static JPanel cell(JLabel l,JComponent component){JPanel p=new JPanel(new BorderLayout(0,5));p.setOpaque(false);l.setFont(new Font("Segoe UI",Font.BOLD,12));l.setForeground(NAVY);p.add(l,BorderLayout.NORTH);p.add(component,BorderLayout.CENTER);return p;}
     private static void section(JPanel root,String title,JComponent content){JPanel p=new JPanel(new BorderLayout(0,12));p.setBackground(new Color(247,250,255));p.setBorder(new CompoundBorder(new LineBorder(new Color(163,185,217)),new EmptyBorder(13,15,15,15)));JLabel h=new JLabel(title);h.setFont(new Font("Segoe UI",Font.BOLD,16));h.setForeground(NAVY);p.add(h,BorderLayout.NORTH);p.add(content);p.setAlignmentX(Component.LEFT_ALIGNMENT);p.setMaximumSize(new Dimension(Integer.MAX_VALUE,p.getPreferredSize().height));root.add(p);root.add(Box.createVerticalStrut(10));}
@@ -310,6 +454,8 @@ public class DialogoNuevoArticulo extends JDialog {
     private static int siguiente(Connection cn,String pref)throws SQLException{int max=0;try(PreparedStatement ps=cn.prepareStatement("SELECT codigo FROM producto WHERE codigo LIKE ?")){ps.setString(1,pref+"-%");try(ResultSet rs=ps.executeQuery()){while(rs.next()){String c=rs.getString(1);if(c!=null&&c.matches(java.util.regex.Pattern.quote(pref)+"-[0-9]+")){try{max=Math.max(max,Integer.parseInt(c.substring(pref.length()+1)));}catch(NumberFormatException ignored){}}}}}return max+1;}
     private void actualizarModoBarra(){
         int modo=modoBarra.getSelectedIndex();
+        imprimirEtiqueta.setVisible(modo==1);
+        if(modo!=1)imprimirEtiqueta.setSelected(false);
         barra.setEditable(modo==0);barra.setFocusable(modo==0);
         if(modo==1){barra.setText(codigo.getText().startsWith("Seleccion")?"":codigo.getText());
             ayudaBarra.setText("Se guardará el código definitivo; imprimí una etiqueta Code 128.");}
@@ -362,7 +508,14 @@ public class DialogoNuevoArticulo extends JDialog {
         BigDecimal mg = pc.signum()>0 && costoPorUnidad.signum()>0
                 ? pv.subtract(costoPorUnidad).multiply(new BigDecimal("100"))
                     .divide(costoPorUnidad,2,RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;if(pc.signum()<0||pv.signum()<0||pm.signum()<0)throw new Exception("Los precios y el stock mínimo no pueden ser negativos.");if(fc.signum()<=0)throw new Exception("El factor de conversión debe ser mayor que cero.");if(pv.signum()<=0)throw new Exception("Ingresá un precio de venta mayor que cero. El costo de compra puede quedar vacío si todavía no se conoce.");if(fc.stripTrailingZeros().scale()>4)throw new Exception("El factor admite como máximo 4 decimales.");if(pc.scale()>2||pv.scale()>2)throw new Exception("Los precios admiten como máximo 2 decimales.");if(pm.stripTrailingZeros().scale()>3)throw new Exception("El stock mínimo admite como máximo 3 decimales.");
+                : BigDecimal.ZERO;if(pc.signum()<0||pv.signum()<0||pm.signum()<0)throw new Exception("Los precios y el stock mínimo no pueden ser negativos.");if(fc.signum()<=0)throw new Exception("El factor de conversión debe ser mayor que cero.");// Alta de catálogo permitida sin precio; no significa que pueda venderse a $0.
+        if(pv.signum()==0){
+            int r=JOptionPane.showConfirmDialog(this,
+                "Este artículo se guardará SIN PRECIO DE VENTA ($0,00).\n"
+                + "Deberás asignarle un precio antes de venderlo.\n\n¿Continuar?",
+                "Artículo pendiente de precio",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+            if(r!=JOptionPane.YES_OPTION)return;
+        }if(fc.stripTrailingZeros().scale()>4)throw new Exception("El factor admite como máximo 4 decimales.");if(pc.scale()>2||pv.scale()>2)throw new Exception("Los precios admiten como máximo 2 decimales.");if(pm.stripTrailingZeros().scale()>3)throw new Exception("El stock mínimo admite como máximo 3 decimales.");
         // Una presentación de embalaje no debe crearse con factor 1 por descuido.
         String unidadCompraTexto = String.valueOf(compra.getSelectedItem()).toUpperCase(java.util.Locale.ROOT);
         boolean embalaje = unidadCompraTexto.contains("CAJA") || unidadCompraTexto.contains("PACK")
@@ -383,7 +536,7 @@ public class DialogoNuevoArticulo extends JDialog {
             if(respuesta!=JOptionPane.YES_OPTION)return;
         }
         if(!String.valueOf(venta.getSelectedItem()).toUpperCase(java.util.Locale.ROOT).contains("KG") && fc.stripTrailingZeros().scale()>0)throw new Exception("El stock por unidades no admite fracciones en el contenido de la presentación.");
-        if(pesoVariable.isSelected() && !pesable.isSelected())throw new Exception("Para compras de peso variable, marcá Pesable en Configuración.");if(pc.signum()>0 && pv.compareTo(pc.divide(fc,2,RoundingMode.HALF_UP))<0 && JOptionPane.showConfirmDialog(this,"El precio de venta es inferior al costo por unidad de venta. ¿Deseás continuar?","Advertencia de precio",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.YES_OPTION)return;try(Connection cn=conexion.getConexion()){cn.setAutoCommit(false);try{String catNombre;try(PreparedStatement ps=cn.prepareStatement("SELECT nombre FROM categoria WHERE id_categoria=? FOR UPDATE")){ps.setInt(1,cat);try(ResultSet rs=ps.executeQuery()){if(!rs.next())throw new SQLException("Categoría inexistente");catNombre=rs.getString(1);}}String code=prefijo(catNombre)+"-"+String.format("%03d",siguiente(cn,prefijo(catNombre)));
+        if(pesoVariable.isSelected() && !pesable.isSelected())throw new Exception("Para compras de peso variable, marcá Pesable en Configuración.");if(pc.signum()>0 && pv.signum()>0 && pv.compareTo(pc.divide(fc,2,RoundingMode.HALF_UP))<0 && JOptionPane.showConfirmDialog(this,"El precio de venta es inferior al costo por unidad de venta. ¿Deseás continuar?","Advertencia de precio",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.YES_OPTION)return;try(Connection cn=conexion.getConexion()){cn.setAutoCommit(false);try{String catNombre;try(PreparedStatement ps=cn.prepareStatement("SELECT nombre FROM categoria WHERE id_categoria=? FOR UPDATE")){ps.setInt(1,cat);try(ResultSet rs=ps.executeQuery()){if(!rs.next())throw new SQLException("Categoría inexistente");catNombre=rs.getString(1);}}String code=prefijo(catNombre)+"-"+String.format("%03d",siguiente(cn,prefijo(catNombre)));
                     String valorBarra=modoBarra.getSelectedIndex()==1?code:(modoBarra.getSelectedIndex()==2?null:barra.getText().trim());
                     if(modoBarra.getSelectedIndex()==0 && valorBarra.isBlank())throw new SQLException("Escaneá el código del fabricante o elegí 'Sin código por ahora'.");
                     // El nuevo código interno tampoco puede coincidir con un barcode previo.
@@ -415,12 +568,192 @@ public class DialogoNuevoArticulo extends JDialog {
                     throw new SQLException("No se pudo crear la presentación inicial del producto.");
                 }
             }
-            cn.commit();guardado=true;codigo.setText(code);mostrarExito(code);if(JOptionPane.showConfirmDialog(this,"¿Querés configurar ahora packs, cajas o bultos para este artículo?\nTambién podés agregarlos más adelante desde Entrada de mercadería.","Presentaciones",JOptionPane.YES_NO_OPTION,JOptionPane.QUESTION_MESSAGE)==JOptionPane.YES_OPTION){DialogoPresentacionesProducto dlg=new DialogoPresentacionesProducto(this,productoId,nombre.getText().trim(),uv,obtenerCodigoUnidad(uv));dlg.setVisible(true);}dispose();}catch(Exception e){cn.rollback();throw e;}finally{cn.setAutoCommit(true);}}}catch(Exception e){error("No se pudo guardar el producto",e);}}
+            cn.commit();guardado=true;codigo.setText(code);
+            boolean imprimirAhora=modoBarra.getSelectedIndex()==1 && imprimirEtiqueta.isSelected();
+            mostrarExito(code);
+            if(imprimirAhora)imprimirEtiquetaCode128(code,nombre.getText().trim());if(JOptionPane.showConfirmDialog(this,"¿Querés configurar ahora packs, cajas o bultos para este artículo?\nTambién podés agregarlos más adelante desde Entrada de mercadería.","Presentaciones",JOptionPane.YES_NO_OPTION,JOptionPane.QUESTION_MESSAGE)==JOptionPane.YES_OPTION){DialogoPresentacionesProducto dlg=new DialogoPresentacionesProducto(this,productoId,nombre.getText().trim(),uv,obtenerCodigoUnidad(uv));dlg.setVisible(true);}if(guardarOtro){
+                limpiar();
+            }else{dispose();}
+            }catch(Exception e){cn.rollback();throw e;}finally{cn.setAutoCommit(true);}}}catch(Exception e){error("No se pudo guardar el producto",e);}}
 
     private String obtenerCodigoUnidad(int idUnidad) throws SQLException {
         try(Connection cn=conexion.getConexion();PreparedStatement ps=cn.prepareStatement("SELECT codigo FROM unidad_medida WHERE id_unidad=?")){
             ps.setInt(1,idUnidad);
             try(ResultSet rs=ps.executeQuery()){return rs.next()?rs.getString(1):"UN";}
+        }
+    }
+
+
+    // Code 128-B: ASCII imprimible (32-126), checksum módulo 103 y patrón STOP.
+    // Se genera después de guardar para imprimir el identificador definitivo.
+    private static final String[] CODE128_PATRONES={
+            "212222",
+            "222122",
+            "222221",
+            "121223",
+            "121322",
+            "131222",
+            "122213",
+            "122312",
+            "132212",
+            "221213",
+            "221312",
+            "231212",
+            "112232",
+            "122132",
+            "122231",
+            "113222",
+            "123122",
+            "123221",
+            "223211",
+            "221132",
+            "221231",
+            "213212",
+            "223112",
+            "312131",
+            "311222",
+            "321122",
+            "321221",
+            "312212",
+            "322112",
+            "322211",
+            "212123",
+            "212321",
+            "232121",
+            "111323",
+            "131123",
+            "131321",
+            "112313",
+            "132113",
+            "132311",
+            "211313",
+            "231113",
+            "231311",
+            "112133",
+            "112331",
+            "132131",
+            "113123",
+            "113321",
+            "133121",
+            "313121",
+            "211331",
+            "231131",
+            "213113",
+            "213311",
+            "213131",
+            "311123",
+            "311321",
+            "331121",
+            "312113",
+            "312311",
+            "332111",
+            "314111",
+            "221411",
+            "431111",
+            "111224",
+            "111422",
+            "121124",
+            "121421",
+            "141122",
+            "141221",
+            "112214",
+            "112412",
+            "122114",
+            "122411",
+            "142112",
+            "142211",
+            "241211",
+            "221114",
+            "413111",
+            "241112",
+            "134111",
+            "111242",
+            "121142",
+            "121241",
+            "114212",
+            "124112",
+            "124211",
+            "411212",
+            "421112",
+            "421211",
+            "212141",
+            "214121",
+            "412121",
+            "111143",
+            "111341",
+            "131141",
+            "114113",
+            "114311",
+            "411113",
+            "411311",
+            "113141",
+            "114131",
+            "311141",
+            "411131",
+            "211412",
+            "211214",
+            "211232",
+            "2331112"
+    };
+
+    private static String codificarCode128B(String valor){
+        if(valor==null||valor.isEmpty())throw new IllegalArgumentException("Código vacío.");
+        int suma=104;
+        StringBuilder barras=new StringBuilder(CODE128_PATRONES[104]);
+        for(int i=0;i<valor.length();i++){
+            char c=valor.charAt(i);
+            if(c<32||c>126)throw new IllegalArgumentException("Code 128-B admite caracteres ASCII imprimibles.");
+            int indice=c-32;
+            barras.append(CODE128_PATRONES[indice]);
+            suma+=(i+1)*indice;
+        }
+        barras.append(CODE128_PATRONES[suma%103]);
+        barras.append(CODE128_PATRONES[106]);
+        return barras.toString();
+    }
+
+    private void imprimirEtiquetaCode128(String valor,String articulo){
+        final String patron;
+        try{patron=codificarCode128B(valor);}
+        catch(IllegalArgumentException ex){
+            JOptionPane.showMessageDialog(this,ex.getMessage(),"Etiqueta Code 128",JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        PrinterJob trabajo=PrinterJob.getPrinterJob();
+        trabajo.setJobName("Serena Soft - Etiqueta " + valor);
+        trabajo.setPrintable((Graphics graphics,PageFormat pagina,int numero)->{
+            if(numero>0)return Printable.NO_SUCH_PAGE;
+            Graphics2D g=(Graphics2D)graphics.create();
+            try{
+                g.translate(pagina.getImageableX(),pagina.getImageableY());
+                g.setColor(Color.WHITE);
+                double ancho=Math.min(210,pagina.getImageableWidth()-8);
+                if(ancho<80)return Printable.NO_SUCH_PAGE;
+                g.fillRect(0,0,(int)ancho,115);
+                g.setColor(Color.BLACK);
+                g.setFont(new Font("SansSerif",Font.BOLD,10));
+                String titulo=articulo.length()>32?articulo.substring(0,29)+"...":articulo;
+                g.drawString(titulo,6,15);
+                int modulos=20; // zona silenciosa: 10 módulos por lado
+                for(int i=0;i<patron.length();i++)modulos+=patron.charAt(i)-'0';
+                double unidad=(ancho-12)/modulos;
+                double x=6+10*unidad;
+                for(int i=0;i<patron.length();i++){
+                    double w=(patron.charAt(i)-'0')*unidad;
+                    if(i%2==0)g.fill(new java.awt.geom.Rectangle2D.Double(x,23,w,54));
+                    x+=w;
+                }
+                g.setFont(new Font("Monospaced",Font.BOLD,12));
+                FontMetrics fm=g.getFontMetrics();
+                g.drawString(valor,(int)((ancho-fm.stringWidth(valor))/2),94);
+                return Printable.PAGE_EXISTS;
+            }finally{g.dispose();}
+        });
+        if(!trabajo.printDialog())return;
+        try{trabajo.print();}
+        catch(java.awt.print.PrinterException ex){
+            JOptionPane.showMessageDialog(this,"No se pudo imprimir la etiqueta: "+ex.getMessage(),
+                    "Serena Soft",JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -440,6 +773,11 @@ public class DialogoNuevoArticulo extends JDialog {
         detail.add(datoExito("EXISTENCIA INICIAL","0 · Las cantidades se registran desde Nueva entrada de mercadería"));
         root.add(detail,BorderLayout.CENTER);
         JPanel foot=new JPanel(new FlowLayout(FlowLayout.RIGHT,14,13));foot.setBackground(Color.WHITE);
+        if(modoBarra.getSelectedIndex()==1){
+            JButton imprimir=button("IMPRIMIR CODE 128",BLUE);
+            imprimir.addActionListener(e->imprimirEtiquetaCode128(code,nombre.getText().trim()));
+            foot.add(imprimir);
+        }
         JButton aceptar=button("ACEPTAR",GREEN);aceptar.setIcon(new SymbolIcon("check",Color.WHITE,16));
         aceptar.addActionListener(e->dialog.dispose());foot.add(aceptar);root.add(foot,BorderLayout.SOUTH);
         dialog.setContentPane(root);dialog.setSize(590,430);dialog.setResizable(false);dialog.setLocationRelativeTo(this);
@@ -469,7 +807,43 @@ public class DialogoNuevoArticulo extends JDialog {
             d.dispose();
         }
     }
-    private void limpiar(){for(JTextField f:new JTextField[]{nombre,descripcion,barra,interno,ubicacion,proveedor,costo,precio,margen,minimo,factor})f.setText("");observaciones.setText("");factor.setText("1");pesoVariable.setSelected(false);idProveedor=-1;for(JComboBox<String> c:new JComboBox[]{marca,rubro,compra,venta,iva})if(c.getItemCount()>0)c.setSelectedIndex(0);cargarCategorias();}
+    /** Deja el asistente listo para un alta nueva sin tocar los artículos guardados. */
+    private void limpiar(){
+        cargando=true;
+        try {
+            for(JTextField f:new JTextField[]{nombre,descripcion,barra,interno,ubicacion,proveedor,
+                    costo,precio,margen,minimo,factor,costoVenta,codigo})f.setText("");
+            observaciones.setText("");
+            factor.setText("1");
+            idProveedor=-1;
+            activo.setSelected(true);
+            controla.setSelected(true);
+            pesable.setSelected(false);
+            descuento.setSelected(false);
+            sinStock.setSelected(false);
+            pesoVariable.setSelected(false);
+            imprimirEtiqueta.setSelected(false);
+            modoBarra.setSelectedIndex(0);
+            for(JComboBox<String> c:new JComboBox[]{marca,rubro,categoria,compra,venta,iva}){
+                if(c.getItemCount()>0)c.setSelectedIndex(0);
+            }
+        } finally {
+            cargando=false;
+        }
+        cargarCategorias();
+        actualizarModoBarra();
+        actualizarCostos();
+        previsualizar();
+        asistente.setSelectedIndex(0);
+        // El desplazamiento anterior no debe quedar a mitad de la primera pantalla.
+        SwingUtilities.invokeLater(()->{
+            Component vista=asistente.getComponentAt(0);
+            if(vista instanceof JScrollPane){
+                ((JScrollPane)vista).getVerticalScrollBar().setValue(0);
+            }
+            nombre.requestFocusInWindow();
+        });
+    }
     private void error(String titulo,Exception e){JOptionPane.showMessageDialog(this,titulo+":\n"+e.getMessage(),"Serena Soft",JOptionPane.ERROR_MESSAGE);}
     public boolean isGuardado(){return guardado;}
     public String getCodigo(){return codigo.getText().trim();}

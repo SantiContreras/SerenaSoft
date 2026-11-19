@@ -855,13 +855,13 @@ public class DialogoEntradaManual extends JDialog {
         JPanel panelCompra = crearPanelDatosCompra();
         JPanel panelProducto = crearPanelProducto();
         JPanel panelTabla = crearPanelTabla();
-        pasos.addTab("Factura", envolverPaso(panelCompra));
         pasos.addTab("Productos", envolverPaso(panelProducto));
+        pasos.addTab("Datos de compra", envolverPaso(panelCompra));
         pasos.addTab("Revisión", envolverPaso(panelTabla));
         // Navegación visual: tres tarjetas de igual ancho y colores diferenciados.
-        String[] nombres = {"DATOS DE FACTURA", "RECIBIR PRODUCTOS", "REVISAR COMPRA"};
-        String[] simbolos = {"\u270E", "\u25A3", "\u2713"};
-        Color[] colores = {new Color(37, 99, 183), new Color(12, 137, 101), new Color(194, 116, 20)};
+        String[] nombres = {"RECIBIR PRODUCTOS", "DATOS DE COMPRA", "REVISAR COMPRA"};
+        String[] simbolos = {"\u25A3", "\u270E", "\u2713"};
+        Color[] colores = {new Color(12, 137, 101), new Color(37, 99, 183), new Color(194, 116, 20)};
         JPanel[] tarjetas = new JPanel[3];
         for (int i = 0; i < 3; i++) {
             final int paso = i;
@@ -1011,35 +1011,11 @@ public class DialogoEntradaManual extends JDialog {
         btnDetalleFiscal.addActionListener(e -> abrirDetalleFiscal());
         filas.add(btnDetalleFiscal, c);
 
-        // Fila 3: total de factura requerido para conciliar antes de guardar.
-        c.gridy = 2; c.gridx = 0; c.gridwidth = 1;
-        c.weightx = 0; c.fill = GridBagConstraints.NONE;
-        filas.add(crearLabel("Total factura ($)"), c);
-        c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
-        txtTotalFactura = new JTextField();
-        txtTotalFactura.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        txtTotalFactura.setForeground(AZUL_OSCURO);
-        txtTotalFactura.setBackground(Color.WHITE);
-        txtTotalFactura.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(BORDE), new EmptyBorder(6, 12, 6, 12)));
-        txtTotalFactura.setPreferredSize(new Dimension(280, 38));
-        txtTotalFactura.setToolTipText("Ingresá el total final del comprobante. Ejemplo: 106000,00");
-        filas.add(txtTotalFactura, c);
-        c.gridx = 2; c.gridwidth = 3; c.weightx = 0;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        lblResumenFiscal = new JLabel("El sistema verifica el total antes de confirmar");
-        lblResumenFiscal.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        lblResumenFiscal.setForeground(AZUL_OSCURO);
-        filas.add(lblResumenFiscal, c);
-        cmbTipoFactura.addActionListener(e -> {
-            boolean requiereTotal = !"Sin comprobante".equals(cmbTipoFactura.getSelectedItem())
-                    && !"Remito".equals(cmbTipoFactura.getSelectedItem());
-            txtTotalFactura.setEnabled(requiereTotal);
-            if (!requiereTotal) txtTotalFactura.setText("");
-        });
+        // El total declarado se solicita en el último paso (Revisión),
+        // una vez que el operador terminó de recibir los productos.
 
-        // Fila 4: destino real del stock, seleccionado por ID (no texto libre).
-        c.gridy = 3; c.gridx = 0; c.gridwidth = 1;
+        // Fila 3: destino real del stock, seleccionado por ID (no texto libre).
+        c.gridy = 2; c.gridx = 0; c.gridwidth = 1;
         c.weightx = 0; c.fill = GridBagConstraints.NONE;
         filas.add(crearLabel("Depósito destino"), c);
         c.gridx = 1; c.gridwidth = 3; c.weightx = 1;
@@ -1193,67 +1169,105 @@ public class DialogoEntradaManual extends JDialog {
     private void abrirDetalleFiscal() {
         String tipo = (String) cmbTipoFactura.getSelectedItem();
         boolean discrimina = "Factura A".equals(tipo);
+        Color azul = new Color(19, 51, 105);
+        Color verde = new Color(0, 137, 94);
+        Color fondo = new Color(245, 248, 252);
         JDialog dialogo = new JDialog(this, "Serena Soft | IVA y conciliación", true);
-        dialogo.setSize(690, 580);
-        dialogo.setMinimumSize(new Dimension(610, 520));
-        dialogo.setLocationRelativeTo(this);
-        JPanel contenido = new JPanel(new GridBagLayout());
-        contenido.setBackground(Color.WHITE);
-        contenido.setBorder(new EmptyBorder(18, 22, 18, 22));
+        dialogo.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialogo.setMinimumSize(new Dimension(620, 490));
+
+        JPanel raiz = new JPanel(new BorderLayout());
+        raiz.setBackground(fondo);
+        JPanel cabecera = new JPanel(new BorderLayout(0, 5));
+        cabecera.setBackground(azul);
+        cabecera.setBorder(new EmptyBorder(18, 24, 18, 24));
+        JLabel titulo = new JLabel("IVA Y CONCILIACIÓN");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 21));
+        titulo.setForeground(Color.WHITE);
+        cabecera.add(titulo, BorderLayout.NORTH);
+        JLabel subtitulo = new JLabel(tipo + "  |  Revisá los datos fiscales antes de confirmar la compra");
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitulo.setForeground(new Color(222, 233, 249));
+        cabecera.add(subtitulo, BorderLayout.SOUTH);
+        raiz.add(cabecera, BorderLayout.NORTH);
+
+        JPanel tarjeta = new JPanel(new GridBagLayout());
+        tarjeta.setBackground(Color.WHITE);
+        tarjeta.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(223, 231, 240)),
+                new EmptyBorder(18, 20, 18, 20)));
         GridBagConstraints g = new GridBagConstraints();
-        g.gridx = 0; g.gridy = 0; g.gridwidth = 2;
-        g.weightx = 1; g.fill = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(7, 5, 7, 5);
-        JLabel titulo = new JLabel("DATOS FISCALES DE LA COMPRA");
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 19));
-        titulo.setForeground(new Color(19, 51, 105));
-        contenido.add(titulo, g);
-        g.gridy++;
-        JLabel info = new JLabel("" + tipo + "  |  El IVA recuperable depende de la condición fiscal.");
-        info.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        contenido.add(info, g);
-        g.gridwidth = 1;
-        g.gridy++; g.gridx = 0;
-        contenido.add(crearLabel("Condición fiscal del comercio"), g);
-        g.gridx = 1;
+        g.insets = new Insets(7, 6, 7, 6);
+        g.anchor = GridBagConstraints.WEST;
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.gridx = 0; g.gridy = 0; g.weightx = 0.42;
+        tarjeta.add(crearLabel("Condición fiscal del comercio"), g);
         JComboBox<String> condicion = new JComboBox<>(new String[]{"MONOTRIBUTISTA", "RESPONSABLE_INSCRIPTO"});
         condicion.setSelectedItem(condicionFiscal);
         condicion.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        contenido.add(condicion, g);
-        g.gridy++; g.gridx = 0;
-        contenido.add(crearLabel("Importe cargado en productos"), g);
-        g.gridx = 1;
+        condicion.setPreferredSize(new Dimension(280, 36));
+        g.gridx = 1; g.weightx = 0.58;
+        tarjeta.add(condicion, g);
+
+        g.gridy++; g.gridx = 0; g.weightx = 0.42;
+        tarjeta.add(crearLabel("Importe cargado en productos"), g);
         JLabel totalProductos = new JLabel(formatoFiscal(totalDetalleCompra()));
-        contenido.add(totalProductos, g);
-        g.gridy++; g.gridx = 0;
-        contenido.add(crearLabel("IVA estimado en Factura A"), g);
-        g.gridx = 1;
+        totalProductos.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        totalProductos.setForeground(verde);
+        g.gridx = 1; g.weightx = 0.58;
+        tarjeta.add(totalProductos, g);
+
+        g.gridy++; g.gridx = 0; g.weightx = 0.42;
+        tarjeta.add(crearLabel("IVA estimado en Factura A"), g);
         JLabel ivaEstimado = new JLabel(formatoFiscal(calcularIvaEstimado()));
-        contenido.add(ivaEstimado, g);
-        g.gridy++; g.gridx = 0;
-        contenido.add(crearLabel("IVA según factura ($)"), g);
-        g.gridx = 1;
-        JTextField campoIva = new JTextField(ajusteIvaManual == null ? calcularIvaEstimado().toPlainString() : ajusteIvaManual.toPlainString());
+        ivaEstimado.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        ivaEstimado.setForeground(azul);
+        g.gridx = 1; g.weightx = 0.58;
+        tarjeta.add(ivaEstimado, g);
+
+        g.gridy++; g.gridx = 0; g.weightx = 0.42;
+        tarjeta.add(crearLabel("IVA según factura ($)"), g);
+        JTextField campoIva = new JTextField(ajusteIvaManual == null
+                ? calcularIvaEstimado().toPlainString() : ajusteIvaManual.toPlainString());
         campoIva.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        campoIva.setPreferredSize(new Dimension(280, 36));
         campoIva.setEnabled(discrimina);
-        contenido.add(campoIva, g);
-        g.gridy++; g.gridx = 0;
-        contenido.add(crearLabel("Motivo del ajuste"), g);
-        g.gridx = 1;
+        g.gridx = 1; g.weightx = 0.58;
+        tarjeta.add(campoIva, g);
+
+        g.gridy++; g.gridx = 0; g.weightx = 0.42;
+        tarjeta.add(crearLabel("Motivo del ajuste"), g);
         JTextField motivo = new JTextField(motivoAjusteIva);
         motivo.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        motivo.setPreferredSize(new Dimension(280, 36));
         motivo.setEnabled(discrimina);
-        contenido.add(motivo, g);
-        g.gridy++; g.gridx = 0; g.gridwidth = 2;
-        JLabel aviso = new JLabel("<html>Etapa inicial: Factura A con precios finales (IVA incluido), sin percepciones.<br>El crédito fiscal se guarda en cero hasta su validación contable.<br>Si la factura contiene descuentos no reflejados en los precios, percepciones u otros tributos, no la confirmes todavía.</html>");
-        aviso.setForeground(new Color(135, 83, 15));
+        g.gridx = 1; g.weightx = 0.58;
+        tarjeta.add(motivo, g);
+
+        g.gridy++; g.gridx = 0; g.gridwidth = 2; g.weightx = 1;
+        JLabel aviso = new JLabel("<html><div style='width:510px'>Factura A: los precios ingresados incluyen IVA. "
+                + "El crédito fiscal permanece en cero hasta su validación contable. "
+                + "Si hay descuentos, percepciones u otros tributos no reflejados en los productos, "
+                + "no confirmes la compra todavía.</div></html>");
+        aviso.setOpaque(true);
+        aviso.setBackground(new Color(255, 248, 232));
+        aviso.setForeground(new Color(123, 79, 17));
         aviso.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        contenido.add(aviso, g);
-        g.gridy++;
-        JButton aplicar = new JButton("Aplicar revisión");
-        aplicar.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        aplicar.setForeground(Color.WHITE);
-        aplicar.setBackground(new Color(0, 145, 97));
+        aviso.setBorder(new EmptyBorder(12, 13, 12, 13));
+        tarjeta.add(aviso, g);
+
+        JPanel centro = new JPanel(new BorderLayout());
+        centro.setBackground(fondo);
+        centro.setBorder(new EmptyBorder(18, 22, 14, 22));
+        centro.add(tarjeta, BorderLayout.CENTER);
+        raiz.add(centro, BorderLayout.CENTER);
+
+        JPanel pie = new JPanel(new FlowLayout(FlowLayout.RIGHT, 12, 0));
+        pie.setBackground(fondo);
+        pie.setBorder(new EmptyBorder(0, 22, 18, 22));
+        JButton cancelar = crearBoton("CANCELAR", new Color(99, 112, 132), 135);
+        JButton aplicar = crearBoton("APLICAR REVISIÓN", verde, 195);
+        cancelar.addActionListener(e -> dialogo.dispose());
         aplicar.addActionListener(e -> {
             try {
                 BigDecimal nuevo = new BigDecimal(campoIva.getText().trim().replace(",", "."));
@@ -1261,6 +1275,7 @@ public class DialogoEntradaManual extends JDialog {
                 BigDecimal calculado = calcularIvaEstimado();
                 if (discrimina && nuevo.compareTo(calculado) != 0 && motivo.getText().trim().isEmpty()) {
                     JOptionPane.showMessageDialog(dialogo, "Indicá el motivo de la corrección.");
+                    motivo.requestFocusInWindow();
                     return;
                 }
                 condicionFiscal = (String) condicion.getSelectedItem();
@@ -1270,13 +1285,17 @@ public class DialogoEntradaManual extends JDialog {
                 dialogo.dispose();
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(dialogo, "El IVA debe ser un importe válido y no negativo.");
+                campoIva.requestFocusInWindow();
             }
         });
-        contenido.add(aplicar, g);
-        JScrollPane scrollFiscal = new JScrollPane(contenido);
-        scrollFiscal.setBorder(BorderFactory.createEmptyBorder());
-        scrollFiscal.getVerticalScrollBar().setUnitIncrement(16);
-        dialogo.setContentPane(scrollFiscal);
+        pie.add(cancelar);
+        pie.add(aplicar);
+        raiz.add(pie, BorderLayout.SOUTH);
+        dialogo.setContentPane(raiz);
+        dialogo.pack();
+        dialogo.setSize(Math.max(690, dialogo.getWidth()), Math.max(530, dialogo.getHeight()));
+        dialogo.setLocationRelativeTo(this);
+        dialogo.getRootPane().setDefaultButton(aplicar);
         dialogo.setVisible(true);
     }
 
@@ -2254,6 +2273,10 @@ public class DialogoEntradaManual extends JDialog {
                 BorderLayout.CENTER
         );
 
+        // Conciliación visible sólo al revisar: evita exigir el total
+        // cuando todavía faltan artículos por recibir.
+        panel.add(crearPanelConciliacionFinal(), BorderLayout.NORTH);
+
         JPanel acciones
                 = new JPanel(
                         new FlowLayout(
@@ -2278,6 +2301,52 @@ public class DialogoEntradaManual extends JDialog {
                 BorderLayout.SOUTH
         );
 
+        return panel;
+    }
+
+    /** Total declarado por el proveedor, ingresado al finalizar la recepción. */
+    private JPanel crearPanelConciliacionFinal() {
+        JPanel panel = new JPanel(new java.awt.GridBagLayout());
+        panel.setBackground(new Color(244, 248, 253));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDE), new EmptyBorder(12, 14, 12, 14)));
+        java.awt.GridBagConstraints c = new java.awt.GridBagConstraints();
+        c.insets = new Insets(4, 6, 4, 6);
+        c.anchor = GridBagConstraints.WEST;
+        c.gridy = 0;
+        c.gridx = 0;
+        JLabel titulo = crearLabel("TOTAL FINAL DE LA FACTURA ($)");
+        panel.add(titulo, c);
+        txtTotalFactura = new JTextField();
+        txtTotalFactura.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        txtTotalFactura.setForeground(AZUL_OSCURO);
+        txtTotalFactura.setBackground(Color.WHITE);
+        txtTotalFactura.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDE), new EmptyBorder(6, 12, 6, 12)));
+        txtTotalFactura.setPreferredSize(new Dimension(240, 42));
+        txtTotalFactura.setToolTipText("Ingresá el total que figura en la factura al terminar de cargar productos.");
+        c.gridx = 1;
+        c.weightx = 0.5;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        panel.add(txtTotalFactura, c);
+        lblResumenFiscal = new JLabel("Completá el total de la factura para comparar importes.");
+        lblResumenFiscal.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblResumenFiscal.setForeground(AZUL_OSCURO);
+        c.gridx = 2;
+        c.weightx = 1;
+        panel.add(lblResumenFiscal, c);
+        txtTotalFactura.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { actualizarResumenFiscal(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { actualizarResumenFiscal(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { actualizarResumenFiscal(); }
+        });
+        cmbTipoFactura.addActionListener(e -> {
+            boolean requiereTotal = !"Sin comprobante".equals(cmbTipoFactura.getSelectedItem())
+                    && !"Remito".equals(cmbTipoFactura.getSelectedItem());
+            txtTotalFactura.setEnabled(requiereTotal);
+            if (!requiereTotal) txtTotalFactura.setText("");
+            actualizarResumenFiscal();
+        });
         return panel;
     }
 
