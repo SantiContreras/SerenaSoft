@@ -14,9 +14,8 @@ import Dialogos.DialogoModificarStock;
 import Dialogos.DialogoSalidaStock;
 import Dialogos.DialogoTipoEntrada;
 import Dialogos.DialogoDetalleMovimiento;
-import Diseños.BotonAccion;
-import Diseños.PanelRedondeado;
-import Diseños.TextFieldRedondeado;
+import Dialogos.DialogoTransferenciasStock;
+import Dao.DepositoDao;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -32,7 +31,6 @@ import javax.swing.JTable;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import rojeru_san.rsbutton.RSButtonRound;
-import Diseños.TablaEstilo;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.FlowLayout;
@@ -149,6 +147,8 @@ public class PanelStock extends javax.swing.JPanel {
     private RSButtonRound btnModificar;
     private RSButtonRound btnDarBaja;
     private RSButtonRound btnActualizar;
+    private RSButtonRound btnTransferir;
+    private javax.swing.JComboBox<String> comboDeposito;
 
     //==========================================================
     // TABLA STOCK
@@ -312,6 +312,13 @@ public class PanelStock extends javax.swing.JPanel {
                         165
                 );
 
+        btnTransferir = crearBotonPrimario("TRANSFERIR", 155);
+        btnTransferir.setIcon(icono("refresh", Color.WHITE));
+        comboDeposito = new javax.swing.JComboBox<>();
+        comboDeposito.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        comboDeposito.setPreferredSize(new Dimension(220,39));
+        comboDeposito.addItem("Todos los depósitos");
+        for (Deposito d : new DepositoDao().listarActivos()) comboDeposito.addItem(d.getNombre());
         btnEntrada.setIcon(icono("plus", Color.WHITE));
         btnSalida.setIcon(icono("minus", Color.WHITE));
         btnAjuste.setIcon(icono("tools", Color.WHITE));
@@ -646,324 +653,51 @@ public class PanelStock extends javax.swing.JPanel {
     // CONSTRUIR PANEL
     //==========================================================
     private void construirPanel() {
+        setLayout(new BorderLayout(0, 8));
+        setBorder(new EmptyBorder(10, 14, 10, 14));
+        setBackground(FONDO);
 
-        JPanel contenido
-                = new JPanel();
+        JPanel superior = new JPanel();
+        superior.setOpaque(false);
+        superior.setLayout(new BoxLayout(superior, BoxLayout.Y_AXIS));
+        JPanel header = crearPanelHeader();
+        JPanel acciones = crearPanelAcciones();
+        header.setAlignmentX(Component.LEFT_ALIGNMENT);
+        acciones.setAlignmentX(Component.LEFT_ALIGNMENT);
+        header.setPreferredSize(new Dimension(100, 62));
+        header.setMaximumSize(new Dimension(Integer.MAX_VALUE, 62));
+        acciones.setPreferredSize(new Dimension(100, 59));
+        acciones.setMaximumSize(new Dimension(Integer.MAX_VALUE, 59));
+        superior.add(header);
+        superior.add(Box.createVerticalStrut(6));
+        superior.add(acciones);
+        add(superior, BorderLayout.NORTH);
 
-        contenido.setLayout(
-                new BoxLayout(
-                        contenido,
-                        BoxLayout.Y_AXIS
-                )
-        );
+        // El listado ocupa todo el espacio libre; solo la tabla tiene scroll.
+        add(crearPanelListado(), BorderLayout.CENTER);
 
-        contenido.setBackground(
-                FONDO
-        );
-
-        contenido.setBorder(
-                new EmptyBorder(
-                        14,
-                        16,
-                        16,
-                        16
-                )
-        );
-
-        JPanel header
-                = crearPanelHeader();
-
-        JPanel resumen
-                = crearPanelResumen();
-
-        JPanel acciones
-                = crearPanelAcciones();
-
-        JPanel listado
-                = crearPanelListado();
-
-        // El detalle y el historial se muestran en un diálogo independiente.
-
-        //======================================================
-        // ALINEACION
-        //======================================================
-        header.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
-
-        resumen.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
-
-        acciones.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
-
-        listado.setAlignmentX(
-                Component.LEFT_ALIGNMENT
-        );
-
-
-
-        //======================================================
-        // TAMAÑOS
-        //======================================================
-        header.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        105
-                )
-        );
-
-        resumen.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        125
-                )
-        );
-
-        acciones.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        105
-                )
-        );
-
-        listado.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        620
-                )
-        );
-
-
-
-        //======================================================
-        // AGREGAR
-        //======================================================
-        contenido.add(
-                header
-        );
-
-        contenido.add(
-                Box.createVerticalStrut(
-                        12
-                )
-        );
-
-        contenido.add(
-                resumen
-        );
-
-        contenido.add(
-                Box.createVerticalStrut(
-                        12
-                )
-        );
-
-        contenido.add(
-                acciones
-        );
-
-        contenido.add(
-                Box.createVerticalStrut(
-                        12
-                )
-        );
-
-        contenido.add(
-                listado
-        );
-
-        contenido.add(
-                Box.createVerticalStrut(
-                        12
-                )
-        );
-
-
-
-        contenido.add(
-                Box.createVerticalStrut(
-                        10
-                )
-        );
-
-        //======================================================
-        // SCROLL GENERAL
-        //======================================================
-        JScrollPane scrollGeneral
-                = new JScrollPane(
-                        contenido
-                );
-
-        scrollGeneral.setBorder(
-                null
-        );
-
-        scrollGeneral.setHorizontalScrollBarPolicy(
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        );
-
-        scrollGeneral.setVerticalScrollBarPolicy(
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-        );
-
-        scrollGeneral
-                .getVerticalScrollBar()
-                .setUnitIncrement(
-                        18
-                );
-
-        scrollGeneral
-                .getViewport()
-                .setBackground(
-                        FONDO
-                );
-
-        add(
-                scrollGeneral,
-                BorderLayout.CENTER
-        );
+        JPanel resumen = crearPanelResumen();
+        resumen.setPreferredSize(new Dimension(100, 76));
+        add(resumen, BorderLayout.SOUTH);
     }
 
     //==========================================================
     // HEADER
     //==========================================================
     private JPanel crearPanelHeader() {
-
-        JPanel panel
-                = crearTarjeta();
-
-        panel.setLayout(
-                new BorderLayout(
-                        20,
-                        0
-                )
-        );
-
-        panel.setBorder(new EmptyBorder(14, 20, 14, 20));
-
-        //======================================================
-        // TITULOS
-        //======================================================
-        JPanel titulos
-                = new JPanel();
-
-        titulos.setOpaque(
-                false
-        );
-
-        titulos.setLayout(
-                new BoxLayout(
-                        titulos,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-        JLabel titulo
-                = new JLabel(
-                        "CONTROL DE STOCK"
-                );
-
-        titulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        23
-                )
-        );
-
-        titulo.setForeground(AZUL_OSCURO);
-        titulo.setIcon(icono("inventory", AZUL_PRINCIPAL));
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(AZUL_OSCURO);
+        panel.setBorder(new EmptyBorder(8, 18, 8, 18));
+        JLabel titulo = new JLabel("CONTROL DE STOCK");
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 21));
+        titulo.setForeground(Color.WHITE);
+        titulo.setIcon(icono("inventory", Color.WHITE));
         titulo.setIconTextGap(12);
-
-        JLabel subtitulo
-                = new JLabel(
-                        "Consulta y gestión del inventario del negocio"
-                );
-
-        subtitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        13
-                )
-        );
-
-        subtitulo.setForeground(
-                TEXTO_SECUNDARIO
-        );
-
-        titulos.add(
-                titulo
-        );
-
-        titulos.add(
-                Box.createVerticalStrut(
-                        3
-                )
-        );
-
-        titulos.add(
-                subtitulo
-        );
-
-        //======================================================
-        // BUSCADOR
-        //======================================================
-        JPanel buscador
-                = new JPanel(
-                        new FlowLayout(
-                                FlowLayout.RIGHT,
-                                10,
-                                13
-                        )
-                );
-
-        buscador.setOpaque(
-                false
-        );
-
-        JLabel lblBuscar
-                = new JLabel(
-                        "Buscar artículo"
-                );
-
-        lblBuscar.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        12
-                )
-        );
-
-        lblBuscar.setForeground(
-                TEXTO_OSCURO
-        );
-
-        buscador.add(
-                lblBuscar
-        );
-
-        buscador.add(
-                txtBuscar
-        );
-
-        buscador.add(
-                btnBuscar
-        );
-
-        panel.add(
-                titulos,
-                BorderLayout.WEST
-        );
-
-        panel.add(
-                buscador,
-                BorderLayout.EAST
-        );
-
+        JLabel subtitulo = new JLabel("Inventario  ·  Existencias y movimientos");
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        subtitulo.setForeground(new Color(219, 233, 253));
+        panel.add(titulo, BorderLayout.WEST);
+        panel.add(subtitulo, BorderLayout.EAST);
         return panel;
     }
 
@@ -1016,96 +750,20 @@ public class PanelStock extends javax.swing.JPanel {
     //==========================================================
     // KPI
     //==========================================================
-    private JPanel crearKPI(
-            String titulo,
-            JLabel valor,
-            String descripcion) {
-
-        JPanel panel
-                = new JPanel();
-
-        panel.setOpaque(
-                false
-        );
-
-        panel.setLayout(
-                new BoxLayout(
-                        panel,
-                        BoxLayout.Y_AXIS
-                )
-        );
-
-        panel.setBorder(
-                new EmptyBorder(
-                        15,
-                        20,
-                        13,
-                        12
-                )
-        );
-
-        JLabel lblTitulo
-                = new JLabel(
-                        titulo
-                );
-
-        lblTitulo.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.BOLD,
-                        12
-                )
-        );
-
-        lblTitulo.setForeground(
-                AZUL_OSCURO
-        );
-
-        JLabel lblDescripcion
-                = new JLabel(
-                        descripcion
-                );
-
-        lblDescripcion.setFont(
-                new Font(
-                        "Segoe UI",
-                        Font.PLAIN,
-                        11
-                )
-        );
-
-        lblDescripcion.setForeground(
-                TEXTO_SECUNDARIO
-        );
-
+    private JPanel crearKPI(String titulo, JLabel valor, String descripcion) {
+        JPanel panel = new JPanel(new BorderLayout(5, 1));
+        panel.setOpaque(false);
+        panel.setBorder(new EmptyBorder(7, 12, 5, 8));
+        JLabel lblTitulo = new JLabel(titulo);
+        lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        lblTitulo.setForeground(AZUL_OSCURO);
         lblTitulo.setIcon(icono(titulo.contains("ACTIVOS") ? "check" :
                 titulo.contains("VALOR") ? "money" :
                 titulo.contains("TOTAL") ? "layers" : "inventory", AZUL_PRINCIPAL));
-        lblTitulo.setIconTextGap(6);
-        panel.add(
-                lblTitulo
-        );
-
-        panel.add(
-                Box.createVerticalStrut(
-                        5
-                )
-        );
-
-        panel.add(
-                valor
-        );
-
-        panel.add(
-                Box.createVerticalStrut(
-                        3
-                )
-        );
-
-        panel.add(
-                lblDescripcion
-        );
-
+        lblTitulo.setIconTextGap(5);
+        valor.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        panel.add(lblTitulo, BorderLayout.NORTH);
+        panel.add(valor, BorderLayout.CENTER);
         return panel;
     }
 
@@ -1113,84 +771,17 @@ public class PanelStock extends javax.swing.JPanel {
     // ACCIONES
     //==========================================================
     private JPanel crearPanelAcciones() {
-
-        JPanel panel
-                = crearTarjeta();
-
-        panel.setLayout(
-                new BorderLayout()
-        );
-
-        JLabel titulo
-                = crearTituloSeccion(
-                        "ACCIONES"
-                );
-
-        titulo.setBorder(
-                new EmptyBorder(
-                        10,
-                        18,
-                        3,
-                        18
-                )
-        );
-
-        panel.add(
-                titulo,
-                BorderLayout.NORTH
-        );
-
-        JPanel botones
-                = new JPanel(
-                        new FlowLayout(
-                                FlowLayout.LEFT,
-                                12,
-                                8
-                        )
-                );
-
-        botones.setOpaque(
-                false
-        );
-
-        botones.setBorder(
-                new EmptyBorder(
-                        0,
-                        8,
-                        8,
-                        8
-                )
-        );
-
-        botones.add(
-                btnEntrada
-        );
-
-        botones.add(
-                btnSalida
-        );
-
-        botones.add(
-                btnAjuste
-        );
-
-        botones.add(
-                btnModificar
-        );
-
-        botones.add(
-                btnDarBaja
-        );
-
-        botones.add(
-                btnActualizar
-        );
-
-        panel.add(
-                botones,
-                BorderLayout.CENTER
-        );
-
+        JPanel panel = crearTarjeta();
+        panel.setLayout(new BorderLayout());
+        JPanel botones = new JPanel(new GridLayout(1, 7, 9, 0));
+        botones.setOpaque(false);
+        botones.setBorder(new EmptyBorder(8, 10, 8, 10));
+        for (RSButtonRound boton : new RSButtonRound[]{btnEntrada, btnSalida,
+                btnAjuste, btnTransferir, btnModificar, btnDarBaja, btnActualizar}) {
+            boton.setPreferredSize(new Dimension(100, 39));
+            botones.add(boton);
+        }
+        panel.add(botones, BorderLayout.CENTER);
         return panel;
     }
 
@@ -1198,38 +789,31 @@ public class PanelStock extends javax.swing.JPanel {
     // LISTADO
     //==========================================================
     private JPanel crearPanelListado() {
+        JPanel panel = crearTarjeta();
+        panel.setLayout(new BorderLayout(0, 0));
 
-        JPanel panel
-                = crearTarjeta();
+        JPanel barra = new JPanel(new BorderLayout(10, 0));
+        barra.setOpaque(false);
+        barra.setBorder(new EmptyBorder(9, 12, 8, 12));
+        txtBuscar.setPreferredSize(new Dimension(280, 39));
+        btnBuscar.setPreferredSize(new Dimension(108, 39));
+        barra.add(txtBuscar, BorderLayout.CENTER);
+        JPanel opciones = new JPanel(new BorderLayout(6,0));
+        opciones.setOpaque(false);
+        opciones.add(comboDeposito, BorderLayout.CENTER);
+        opciones.add(btnBuscar, BorderLayout.EAST);
+        barra.add(opciones, BorderLayout.EAST);
+        
 
-        panel.setLayout(
-                new BorderLayout()
-        );
-
-        JLabel titulo
-                = crearTituloSeccion(
-                        "LISTADO DE STOCK  ·  DOBLE CLIC PARA VER DETALLE E HISTORIAL"
-                );
-
-        titulo.setBorder(
-                new EmptyBorder(
-                        12,
-                        18,
-                        10,
-                        18
-                )
-        );
-
-        panel.add(
-                titulo,
-                BorderLayout.NORTH
-        );
-
-        panel.add(
-                scrollStock,
-                BorderLayout.CENTER
-        );
-
+        JPanel cabecera = new JPanel(new BorderLayout(0, 0));
+        cabecera.setOpaque(false);
+        JLabel titulo = crearTituloSeccion("LISTADO DE STOCK  ·  DOBLE CLIC PARA VER DETALLE E HISTORIAL");
+        titulo.setBorder(new EmptyBorder(8, 14, 0, 14));
+        cabecera.add(titulo, BorderLayout.NORTH);
+        cabecera.add(barra, BorderLayout.CENTER);
+        panel.add(cabecera, BorderLayout.NORTH);
+        scrollStock.setBorder(new EmptyBorder(0, 10, 8, 10));
+        panel.add(scrollStock, BorderLayout.CENTER);
         return panel;
     }
 
@@ -1685,6 +1269,7 @@ public class PanelStock extends javax.swing.JPanel {
     private void aplicarPermisosStock() {
         btnEntrada.setVisible(SesionUsuario.tienePermiso("STOCK_INGRESAR"));
         btnSalida.setVisible(SesionUsuario.tienePermiso("STOCK_EGRESAR"));
+        btnTransferir.setVisible(SesionUsuario.tienePermiso("STOCK_EGRESAR"));
         btnAjuste.setVisible(SesionUsuario.tienePermiso("STOCK_AJUSTAR"));
         btnModificar.setVisible(SesionUsuario.tienePermiso("PRODUCTO_EDITAR"));
         btnDarBaja.setVisible(SesionUsuario.tienePermiso("PRODUCTO_CAMBIAR_ESTADO"));
@@ -1825,6 +1410,13 @@ public class PanelStock extends javax.swing.JPanel {
         // ACTUALIZAR
         //======================================================
         btnActualizar.addActionListener(e -> actualizarStock());
+        comboDeposito.addActionListener(e -> filtrarTabla());
+        btnTransferir.addActionListener(e -> {
+            if (!autorizadoStock("STOCK_EGRESAR")) return;
+            DialogoTransferenciasStock dialogo = new DialogoTransferenciasStock(SwingUtilities.getWindowAncestor(this));
+            dialogo.setVisible(true);
+            actualizarStock();
+        });
     }
 
     /** Abre la ficha del producto y su historial en una ventana independiente. */
@@ -2136,32 +1728,23 @@ public class PanelStock extends javax.swing.JPanel {
 // FILTRAR TABLA
 //==========================================================
     private void filtrarTabla() {
-        if (tablaStock.getRowSorter() == null) {
-            tablaStock.setAutoCreateRowSorter(true);
-        }
+        if (tablaStock.getRowSorter() == null) tablaStock.setAutoCreateRowSorter(true);
         javax.swing.table.TableRowSorter<DefaultTableModel> sorter =
-                (javax.swing.table.TableRowSorter<DefaultTableModel>) tablaStock.getRowSorter();
-        String texto = txtBuscar.getText().trim();
-        if (texto.isEmpty()) {
-            sorter.setRowFilter(null);
-        } else {
-            String[] palabras = texto.split("\\s+");
-            sorter.setRowFilter(new javax.swing.RowFilter<DefaultTableModel, Integer>() {
-                @Override
-                public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> entry) {
-                    StringBuilder fila = new StringBuilder();
-                    for (int col = 0; col <= 4; col++) {
-                        Object valor = entry.getValue(col);
-                        if (valor != null) fila.append(valor).append(' ');
-                    }
-                    String contenido = fila.toString().toLowerCase(java.util.Locale.ROOT);
-                    for (String palabra : palabras) {
-                        if (!contenido.contains(palabra.toLowerCase(java.util.Locale.ROOT))) return false;
-                    }
-                    return true;
-                }
-            });
-        }
+            (javax.swing.table.TableRowSorter<DefaultTableModel>) tablaStock.getRowSorter();
+        String texto = txtBuscar.getText().trim().toLowerCase(java.util.Locale.ROOT);
+        String deposito = comboDeposito == null || comboDeposito.getSelectedIndex() <= 0
+                ? null : (String) comboDeposito.getSelectedItem();
+        String[] palabras = texto.isEmpty() ? new String[0] : texto.split("\\s+");
+        sorter.setRowFilter(new javax.swing.RowFilter<DefaultTableModel,Integer>() {
+            @Override public boolean include(Entry<? extends DefaultTableModel,? extends Integer> e) {
+                if (deposito != null && !deposito.equals(String.valueOf(e.getValue(4)))) return false;
+                StringBuilder contenido = new StringBuilder();
+                for (int col=0; col<=4; col++) contenido.append(e.getValue(col)).append(' ');
+                String cadena = contenido.toString().toLowerCase(java.util.Locale.ROOT);
+                for (String palabra : palabras) if (!cadena.contains(palabra)) return false;
+                return true;
+            }
+        });
     }
 
     private void actualizarStock() {

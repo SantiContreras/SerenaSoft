@@ -248,6 +248,53 @@ public class DepositoDao {
     }
 
 
+    /**
+     * Modo comercial de depósito único. Nunca modifica ni renombra depósitos existentes.
+     * Solo crea DEP-01 si la tabla está completamente vacía.
+     * Si hay una configuración ambigua, falla en vez de mover stock al depósito equivocado.
+     */
+    public Deposito asegurarCentralOperativo() throws SQLException {
+        try (Connection cn = conexion.getConexion()) {
+            // Bloqueo de aplicación MySQL para evitar dos altas simultáneas.
+            try (PreparedStatement lock = cn.prepareStatement("SELECT GET_LOCK('serenasoft_deposito_central', 10)");
+                 ResultSet lr = lock.executeQuery()) {
+                if (!lr.next() || lr.getInt(1) != 1) {
+                    throw new SQLException("No se pudo bloquear la inicialización del depósito central.");
+                }
+            }
+            try {
+                int total = 0;
+                try (PreparedStatement ps = cn.prepareStatement("SELECT COUNT(*) FROM deposito");
+                     ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) total = rs.getInt(1);
+                }
+                if (total == 0) {
+                    try (PreparedStatement ps = cn.prepareStatement(
+                            "INSERT INTO deposito(codigo,nombre,descripcion,es_principal,activo) "
+                            + "VALUES ('DEP-01','Depósito Central','Depósito predeterminado del negocio',1,1)")) {
+                        ps.executeUpdate();
+                    }
+                }
+                try (PreparedStatement ps = cn.prepareStatement(
+                        "SELECT * FROM deposito WHERE es_principal=1 AND activo=1 ORDER BY id_deposito");
+                     ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new SQLException("No hay depósito principal activo. Revisá la configuración; no se alteraron los datos.");
+                    }
+                    Deposito principal = mapearDeposito(rs);
+                    if (rs.next()) {
+                        throw new SQLException("Hay más de un depósito principal activo. Corregí la configuración antes de operar.");
+                    }
+                    return principal;
+                }
+            } finally {
+                try (PreparedStatement unlock = cn.prepareStatement("SELECT RELEASE_LOCK('serenasoft_deposito_central')")) {
+                    unlock.executeQuery().close();
+                }
+            }
+        }
+    }
+
     // =========================================================
     // BUSCAR DEPÓSITO PRINCIPAL
     // =========================================================

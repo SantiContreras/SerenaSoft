@@ -140,7 +140,17 @@ public class DialogoSalidaStock extends JDialog {
         construirDialogo();
 
         cargarDatosPrueba();
-        depositoPrincipal = depositoDao.buscarPrincipal();
+        // Mismo depósito central validado que utiliza Entrada Manual.
+        // Nunca elegir otro depósito silenciosamente si la configuración es inválida.
+        try {
+            depositoPrincipal = depositoDao.asegurarCentralOperativo();
+        } catch (java.sql.SQLException ex) {
+            depositoPrincipal = null;
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                    this,
+                    "No se puede operar con el depósito principal: " + ex.getMessage(),
+                    "Depósito no disponible", JOptionPane.ERROR_MESSAGE));
+        }
 
         configurarEventos();
 

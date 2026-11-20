@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.sql.SQLException;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -1050,18 +1051,17 @@ public class DialogoEntradaManual extends JDialog {
 
     private void cargarDepositosActivos() {
         cmbDeposito.removeAllItems();
-        Deposito principal = null;
-        for (Deposito d : depositoDao.listarActivos()) {
-            if (d == null || !d.isActivo()) continue;
-            cmbDeposito.addItem(d);
-            if (d.isEsPrincipal() && principal == null) principal = d;
-        }
-        if (principal != null) cmbDeposito.setSelectedItem(principal);
-        if (cmbDeposito.getItemCount() == 0) {
+        try {
+            Deposito principal = depositoDao.asegurarCentralOperativo();
+            cmbDeposito.addItem(principal);
+            cmbDeposito.setSelectedIndex(0);
+            // Versión de depósito único: no permitir cambiarlo por error.
+            cmbDeposito.setEnabled(false);
+        } catch (SQLException ex) {
             btnConfirmar.setEnabled(false);
             JOptionPane.showMessageDialog(this,
-                    "No hay depósitos activos. Configurá un depósito antes de ingresar mercadería.",
-                    "Depósito no disponible", JOptionPane.WARNING_MESSAGE);
+                    "No se puede utilizar el depósito central: " + ex.getMessage(),
+                    "Depósito no disponible", JOptionPane.ERROR_MESSAGE);
         }
     }
 

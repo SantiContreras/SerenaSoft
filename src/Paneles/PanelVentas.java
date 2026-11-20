@@ -641,13 +641,7 @@ public class PanelVentas extends javax.swing.JPanel {
         }
     }
     private int depositoPrincipalActivo() throws java.sql.SQLException {
-        try(java.sql.Connection c=Configuracion.conexion.getConexion();
-            java.sql.PreparedStatement p=c.prepareStatement(
-                "SELECT id_deposito FROM deposito WHERE activo=1 ORDER BY es_principal DESC,id_deposito LIMIT 1");
-            java.sql.ResultSet r=p.executeQuery()) {
-            if(r.next())return r.getInt(1);
-        }
-        throw new java.sql.SQLException("No hay un depósito activo configurado.");
+        return new Dao.DepositoDao().asegurarCentralOperativo().getIdDeposito();
     }
 
     private void armarSubPanelProducto() {

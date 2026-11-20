@@ -60,6 +60,9 @@ public class PanelDashboard extends javax.swing.JPanel {
     //==========================================================
     // TABLAS
     //==========================================================
+    private JTable tablaReposicion;
+    private DefaultTableModel modeloReposicion;
+    private JLabel lblResumenReposicion;
     private JTable tablaUltimasVentas;
     private DefaultTableModel modeloUltimasVentas;
 
@@ -175,25 +178,25 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         btnNuevaVenta
                 = crearBotonRapido(
-                        "NUEVA VENTA",
+                        "VENDER",
                         VERDE
                 );
 
         btnEntradaMercaderia
                 = crearBotonRapido(
-                        "STOCK / ENTRADAS",
+                        "STOCK",
                         AZUL
                 );
 
         btnNuevoCliente
                 = crearBotonRapido(
-                        "NUEVO CLIENTE",
+                        "CLIENTES",
                         AZUL_OSCURO
                 );
 
         btnVerCaja
                 = crearBotonRapido(
-                        "VER CAJA",
+                        "CAJA",
                         NARANJA
                 );
 
@@ -206,8 +209,46 @@ public class PanelDashboard extends javax.swing.JPanel {
         btnNuevoCliente.setIconTextGap(8);
         btnVerCaja.setIconTextGap(8);
 
+        inicializarTablaReposicion();
+        panelAlertas=new JPanel(); // Se conserva el cálculo de alertas para una futura vista.
         inicializarTablaUltimasVentas();
         inicializarTablaMasVendidos();
+    }
+
+    private void inicializarTablaReposicion() {
+        modeloReposicion = new DefaultTableModel(new Object[]{"Código", "Producto", "Depósito", "Stock", "Mínimo", "Estado"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        tablaReposicion = crearTabla(modeloReposicion);
+        tablaReposicion.setRowHeight(33);
+        tablaReposicion.setAutoCreateRowSorter(true);
+        tablaReposicion.getColumnModel().getColumn(0).setPreferredWidth(95);
+        tablaReposicion.getColumnModel().getColumn(1).setPreferredWidth(270);
+        tablaReposicion.getColumnModel().getColumn(2).setPreferredWidth(155);
+        tablaReposicion.getColumnModel().getColumn(3).setPreferredWidth(75);
+        tablaReposicion.getColumnModel().getColumn(4).setPreferredWidth(75);
+        tablaReposicion.getColumnModel().getColumn(5).setPreferredWidth(100);
+        tablaReposicion.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean focus, int row, int col) {
+                super.getTableCellRendererComponent(t, v, sel, focus, row, col);
+                setBorder(new EmptyBorder(0, 9, 0, 9));
+                if (!sel) {
+                    int modelRow=t.convertRowIndexToModel(row);
+                    String estado=String.valueOf(t.getModel().getValueAt(modelRow,5));
+                    setBackground(col==5 ? ("SIN STOCK".equals(estado)?new Color(255,226,226):new Color(255,243,208))
+                            : (row%2==0?Color.WHITE:new Color(244,248,253)));
+                    setForeground(col==5 ? ("SIN STOCK".equals(estado)?ROJO:new Color(151,95,0)):AZUL_OSCURO);
+                }
+                setFont(new Font("Segoe UI", col==5?Font.BOLD:Font.PLAIN,12));
+                setHorizontalAlignment(col==3||col==4?SwingConstants.RIGHT:SwingConstants.LEFT);
+                return this;
+            }
+        });
+        tablaReposicion.addMouseListener(new java.awt.event.MouseAdapter(){
+            @Override public void mouseClicked(java.awt.event.MouseEvent e){
+                if(e.getClickCount()==2) abrirAccesoRapido("STOCK");
+            }
+        });
     }
 
     //==========================================================
@@ -454,189 +495,145 @@ public class PanelDashboard extends javax.swing.JPanel {
     // CONSTRUIR PANEL
     //==========================================================
     private void construirPanel() {
+        setLayout(new BorderLayout());
+        setBackground(FONDO);
+        JPanel contenido = new JPanel();
+        contenido.setLayout(new BoxLayout(contenido,BoxLayout.Y_AXIS));
+        contenido.setBackground(FONDO);
+        contenido.setBorder(new EmptyBorder(10,12,12,12));
 
-        setLayout(
-                new BorderLayout()
-        );
+        JPanel cabecera = new JPanel(new BorderLayout());
+        cabecera.setBackground(AZUL_OSCURO);
+        cabecera.setBorder(new EmptyBorder(12,17,12,17));
+        JLabel titulo=new JLabel("CENTRO DE CONTROL");
+        titulo.setForeground(Color.WHITE);
+        titulo.setFont(new Font("Segoe UI",Font.BOLD,22));
+        cabecera.add(titulo,BorderLayout.WEST);
+        JLabel leyenda=new JLabel("Resumen general del negocio");
+        leyenda.setForeground(new Color(215,232,255));
+        cabecera.add(leyenda,BorderLayout.EAST);
+        agregarBloque(contenido,cabecera,58,7);
 
-        setBackground(
-                FONDO
-        );
+        JPanel saludo=new JPanel(new BorderLayout());
+        saludo.setBackground(new Color(233,242,253));
+        saludo.setBorder(new EmptyBorder(9,14,9,14));
+        String usuario=SesionUsuario.getNombreUsuario();
+        JLabel bienvenida=new JLabel("Buenos días"+(usuario==null||usuario.trim().isEmpty()?"":", "+usuario.trim().split("\\s+")[0]));
+        bienvenida.setFont(new Font("Segoe UI",Font.BOLD,16));
+        bienvenida.setForeground(AZUL_OSCURO);
+        saludo.add(bienvenida,BorderLayout.NORTH);
+        JLabel sub=new JLabel("Gestión de ventas  |  Control de stock  |  Operaciones del día");
+        sub.setForeground(TEXTO_SECUNDARIO);
+        saludo.add(sub,BorderLayout.SOUTH);
+        agregarBloque(contenido,saludo,58,9);
 
-        JPanel contenido
-                = new JPanel();
+        JPanel principal=new JPanel(new BorderLayout(12,0));
+        principal.setOpaque(false);
+        JPanel izquierda=new JPanel(new BorderLayout(0,10));
+        izquierda.setOpaque(false);
+        izquierda.add(crearPanelReposicion(),BorderLayout.CENTER);
+        JPanel tablasInferiores=new JPanel(new GridLayout(1,2,10,0));
+        tablasInferiores.setOpaque(false);
+        tablasInferiores.add(crearPanelUltimasVentas());
+        tablasInferiores.add(crearPanelMasVendidos());
+        tablasInferiores.setPreferredSize(new Dimension(100,210));
+        izquierda.add(tablasInferiores,BorderLayout.SOUTH);
+        principal.add(izquierda,BorderLayout.CENTER);
 
-        contenido.setLayout(
-                new BoxLayout(
-                        contenido,
-                        BoxLayout.Y_AXIS
-                )
-        );
+        JPanel derecha=new JPanel(new BorderLayout(0,10));
+        derecha.setOpaque(false);
+        derecha.setPreferredSize(new Dimension(300,100));
+        JPanel accesos=crearPanelAccesosRapidos();
+        accesos.setPreferredSize(new Dimension(300,164));
+        derecha.add(accesos,BorderLayout.NORTH);
+        derecha.add(crearPanelIndicadoresLaterales(),BorderLayout.CENTER);
+        principal.add(derecha,BorderLayout.EAST);
+        principal.setPreferredSize(new Dimension(900,520));
+        agregarBloque(contenido,principal,520,9);
 
-        contenido.setBackground(
-                FONDO
-        );
-
-        contenido.setBorder(
-                new EmptyBorder(10, 12, 12, 12)
-        );
-
-        //======================================================
-        // HEADER
-        //======================================================
-        JPanel header
-                = crearHeader();
-
-        header.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        contenido.add(header);
-
-        contenido.add(Box.createVerticalStrut(8));
-        JPanel franja = new JPanel(new BorderLayout(12, 0));
-        franja.setBackground(AZUL_OSCURO);
-        franja.setBorder(new EmptyBorder(8, 14, 8, 14));
-        JLabel mensaje = new JLabel("TU NEGOCIO, BAJO CONTROL");
-        mensaje.setForeground(Color.WHITE);
-        mensaje.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        JLabel descripcionFranja = new JLabel("Ventas  •  Stock  •  Caja  •  Clientes  •  Reportes");
-        descripcionFranja.setForeground(new Color(210, 229, 255));
-        descripcionFranja.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        JPanel textosFranja = new JPanel();
-        textosFranja.setOpaque(false);
-        textosFranja.setLayout(new BoxLayout(textosFranja, BoxLayout.Y_AXIS));
-        textosFranja.add(mensaje);
-        textosFranja.add(Box.createVerticalStrut(4));
-        textosFranja.add(descripcionFranja);
-        franja.add(textosFranja, BorderLayout.WEST);
-        JLabel demo = new JLabel("DATOS EN VIVO");
-        demo.setForeground(new Color(255, 218, 120));
-        demo.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        franja.add(demo, BorderLayout.EAST);
-        franja.setAlignmentX(LEFT_ALIGNMENT);
-        franja.setMaximumSize(new Dimension(Integer.MAX_VALUE, 54));
-        contenido.add(franja);
-
-        contenido.add(Box.createVerticalStrut(8));
-
-        //======================================================
-        // TARJETAS
-        //======================================================
-        JPanel tarjetas
-                = crearPanelTarjetas();
-
-        tarjetas.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        tarjetas.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        90
-                )
-        );
-
-        contenido.add(tarjetas);
-
-        contenido.add(
-                Box.createVerticalStrut(15)
-        );
-
-        // Gráfico retirado del inicio compacto. Se conserva la clase para una futura vista de estadísticas.
-        //======================================================
-        // CENTRO
-        //======================================================
-        JPanel zonaCentral
-                = crearZonaCentral();
-
-        zonaCentral.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        zonaCentral.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        225
-                )
-        );
-
-        contenido.add(zonaCentral);
-
-        contenido.add(
-                Box.createVerticalStrut(15)
-        );
-
-        //======================================================
-        // ZONA INFERIOR
-        //======================================================
-        JPanel zonaInferior
-                = crearZonaInferior();
-
-        zonaInferior.setAlignmentX(
-                LEFT_ALIGNMENT
-        );
-
-        zonaInferior.setMaximumSize(
-                new Dimension(
-                        Integer.MAX_VALUE,
-                        190
-                )
-        );
-
-        contenido.add(zonaInferior);
-
-        // Reorganizar columnas al reducir la ventana.
-        addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override public void componentResized(java.awt.event.ComponentEvent e) {
-                int w = getWidth();
-                ((GridLayout) tarjetas.getLayout()).setRows(w < 940 ? 2 : 1);
-                ((GridLayout) tarjetas.getLayout()).setColumns(w < 940 ? 2 : 4);
-                ((GridLayout) zonaCentral.getLayout()).setRows(w < 760 ? 2 : 1);
-                ((GridLayout) zonaCentral.getLayout()).setColumns(w < 760 ? 1 : 2);
-                ((GridLayout) zonaInferior.getLayout()).setRows(w < 760 ? 2 : 1);
-                ((GridLayout) zonaInferior.getLayout()).setColumns(w < 760 ? 1 : 2);
-                tarjetas.setMaximumSize(new Dimension(Integer.MAX_VALUE, w < 940 ? 172 : 90));
-                zonaCentral.setMaximumSize(new Dimension(Integer.MAX_VALUE, w < 760 ? 410 : 225));
-                zonaInferior.setMaximumSize(new Dimension(Integer.MAX_VALUE, w < 760 ? 340 : 190));
-                contenido.revalidate();
-            }
-        });
-
-        contenido.add(
-                Box.createVerticalStrut(10)
-        );
-
-        //======================================================
-        // SCROLL GENERAL
-        //======================================================
-        JScrollPane scroll
-                = new JScrollPane(
-                        contenido
-                );
-
+        // Los indicadores se presentan a la derecha, sin duplicar tarjetas al pie.
+        JScrollPane scroll=new JScrollPane(contenido);
         scroll.setBorder(null);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        add(scroll,BorderLayout.CENTER);
+    }
 
-        scroll.setHorizontalScrollBarPolicy(
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        );
+    private void agregarBloque(JPanel destino, JPanel bloque, int alto, int separacion){
+        bloque.setAlignmentX(LEFT_ALIGNMENT);
+        bloque.setPreferredSize(new Dimension(900,alto));
+        bloque.setMaximumSize(new Dimension(Integer.MAX_VALUE,alto));
+        destino.add(bloque);
+        if(separacion>0) destino.add(Box.createVerticalStrut(separacion));
+    }
 
-        scroll.setVerticalScrollBarPolicy(
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-        );
+    private JPanel crearPanelReposicion(){
+        JPanel panel=crearPanelSeccion("PRODUCTOS CON BAJO STOCK  |  Reposición prioritaria");
+        panel.setLayout(new BorderLayout(0,5));
+        JPanel barra=new JPanel(new BorderLayout());
+        barra.setBackground(Color.WHITE);
+        barra.setBorder(new EmptyBorder(4,8,5,8));
+        lblResumenReposicion=new JLabel("Consultando existencias...");
+        lblResumenReposicion.setForeground(TEXTO_SECUNDARIO);
+        barra.add(lblResumenReposicion,BorderLayout.WEST);
+        javax.swing.JButton verStock = new javax.swing.JButton("VER STOCK COMPLETO") {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2=(Graphics2D)g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getModel().isPressed()?new Color(12,39,85):
+                        getModel().isRollover()?new Color(34,87,164):AZUL);
+                g2.fillRoundRect(0,0,getWidth()-1,getHeight()-1,10,10);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        verStock.setUI(new javax.swing.plaf.basic.BasicButtonUI());
+        verStock.setContentAreaFilled(false);
+        verStock.setOpaque(false);
+        verStock.setBorder(BorderFactory.createEmptyBorder(6,14,6,14));
+        verStock.setForeground(Color.WHITE);
+        verStock.setFont(new Font("Segoe UI",Font.BOLD,11));
+        verStock.setFocusPainted(false);
+        verStock.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        verStock.setPreferredSize(new Dimension(168,29));
+        verStock.addActionListener(e->abrirAccesoRapido("STOCK"));
+        barra.add(verStock,BorderLayout.EAST);
+        panel.add(barra,BorderLayout.NORTH);
+        JScrollPane sc=new JScrollPane(tablaReposicion);
+        sc.setBorder(BorderFactory.createEmptyBorder());
+        panel.add(sc,BorderLayout.CENTER);
+        return panel;
+    }
 
-        scroll.getVerticalScrollBar()
-                .setUnitIncrement(16);
+    /** Tres indicadores reales, compactos, en lugar de alertas duplicadas. */
+    private JPanel crearPanelIndicadoresLaterales() {
+        JPanel exterior=crearPanelSeccion("RESUMEN DEL NEGOCIO");
+        exterior.setLayout(new BorderLayout());
+        JPanel columna=new JPanel(new GridLayout(3,1,0,8));
+        columna.setBackground(Color.WHITE);
+        columna.setBorder(new EmptyBorder(8,10,8,10));
+        columna.add(crearIndicadorLateral("VENTAS DE HOY",lblVentasHoy,lblCantidadVentas,VERDE));
+        columna.add(crearIndicadorLateral("CAJA ACTUAL",lblCajaActual,lblEstadoCaja,AZUL));
+        columna.add(crearIndicadorLateral("VENTAS DEL MES",lblVentasMes,lblCantidadMes,new Color(109,71,174)));
+        exterior.add(columna,BorderLayout.CENTER);
+        return exterior;
+    }
 
-        scroll.getViewport()
-                .setBackground(
-                        FONDO
-                );
-
-        add(
-                scroll,
-                BorderLayout.CENTER
-        );
+    private JPanel crearIndicadorLateral(String titulo,JLabel valor,JLabel detalle,Color acento) {
+        JPanel tarjeta=new JPanel(new BorderLayout(0,2));
+        tarjeta.setBackground(new Color(247,250,255));
+        tarjeta.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0,4,0,0,acento),
+                new EmptyBorder(5,10,5,8)));
+        JLabel nombre=new JLabel(titulo);
+        nombre.setForeground(AZUL_OSCURO);
+        nombre.setFont(new Font("Segoe UI",Font.BOLD,11));
+        valor.setFont(new Font("Segoe UI",Font.BOLD,19));
+        detalle.setFont(new Font("Segoe UI",Font.PLAIN,10));
+        tarjeta.add(nombre,BorderLayout.NORTH);
+        tarjeta.add(valor,BorderLayout.CENTER);
+        tarjeta.add(detalle,BorderLayout.SOUTH);
+        return tarjeta;
     }
 
     //==========================================================
@@ -1015,7 +1012,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         JPanel exterior
                 = crearPanelSeccion(
-                        "ACCESOS RÁPIDOS  |  Operaciones frecuentes"
+                        "ACCESOS RÁPIDOS"
                 );
 
         exterior.setLayout(
@@ -1024,7 +1021,7 @@ public class PanelDashboard extends javax.swing.JPanel {
 
         JPanel botones
                 = new JPanel(
-                        new GridLayout(2, 2, 7, 7)
+                        new GridLayout(2, 2, 9, 9)
                 );
 
         botones.setBackground(
@@ -1032,7 +1029,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         );
 
         botones.setBorder(
-                new EmptyBorder(8, 12, 8, 12)
+                new EmptyBorder(10, 12, 10, 12)
         );
 
         botones.add(
@@ -1291,7 +1288,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         BigDecimal hoy=BigDecimal.ZERO, mes=BigDecimal.ZERO;
         int cantidadHoy, cantidadMes, bajo, sinStock;
         CajaService.Resumen caja;
-        List<Object[]> ventas=new ArrayList<>(), productos=new ArrayList<>();
+        List<Object[]> ventas=new ArrayList<>(), productos=new ArrayList<>(), reposicion=new ArrayList<>();
         List<String> faltantes=new ArrayList<>();
         double[] grafico=new double[7];
         String[] dias=new String[7];
@@ -1311,7 +1308,8 @@ public class PanelDashboard extends javax.swing.JPanel {
                     Throwable t=e.getCause()==null?e:e.getCause();
                     lblVentasHoy.setText("—"); lblVentasMes.setText("—"); lblCajaActual.setText("—"); lblStockBajo.setText("—");
                     lblCantidadVentas.setText("Consulta pendiente"); lblCantidadMes.setText("Consulta pendiente"); lblSinStock.setText("Consulta pendiente");
-                    modeloUltimasVentas.setRowCount(0); modeloMasVendidos.setRowCount(0);
+                    modeloUltimasVentas.setRowCount(0); modeloMasVendidos.setRowCount(0); modeloReposicion.setRowCount(0);
+                    lblResumenReposicion.setText("No se pudo consultar el stock");
                     lblEstadoCaja.setText("Error al consultar datos");
                     panelAlertas.removeAll();
                     panelAlertas.add(crearAlerta("Sin conexión o consulta fallida", t.getMessage()==null?"Revisar conexión":t.getMessage(), ROJO));
@@ -1341,6 +1339,23 @@ public class PanelDashboard extends javax.swing.JPanel {
             String stock=" FROM producto p LEFT JOIN (SELECT id_producto,SUM(cantidad) cantidad FROM stock_producto GROUP BY id_producto) sp ON sp.id_producto=p.id_producto WHERE p.activo=1 AND p.controla_stock=1 ";
             try(PreparedStatement p=c.prepareStatement("SELECT SUM(CASE WHEN COALESCE(sp.cantidad,0)<=0 THEN 1 ELSE 0 END), SUM(CASE WHEN COALESCE(sp.cantidad,0)>0 AND COALESCE(sp.cantidad,0)<p.stock_minimo THEN 1 ELSE 0 END)"+stock);ResultSet r=p.executeQuery()) {
                 if(r.next()){d.sinStock=r.getInt(1);d.bajo=r.getInt(2);}
+            }
+            // Stock agrupado por producto y depósito; los faltantes se priorizan por existencia.
+            // El umbral mínimo corresponde al producto y se compara con la existencia consolidada.
+            String sqlReposicion = "SELECT p.codigo,p.nombre,COALESCE(sp.cantidad,0),COALESCE(p.stock_minimo,0) "
+                    + stock + " AND COALESCE(sp.cantidad,0) < COALESCE(p.stock_minimo,0) "
+                    + "ORDER BY CASE WHEN COALESCE(sp.cantidad,0)<=0 THEN 0 ELSE 1 END, "
+                    + "COALESCE(sp.cantidad,0) ASC,p.nombre ASC LIMIT 100";
+            try(PreparedStatement p=c.prepareStatement(sqlReposicion);ResultSet r=p.executeQuery()) {
+                while(r.next()) {
+                    BigDecimal cantidad=r.getBigDecimal(3);
+                    BigDecimal minimo=r.getBigDecimal(4);
+                    if(cantidad==null)cantidad=BigDecimal.ZERO;
+                    if(minimo==null)minimo=BigDecimal.ZERO;
+                    d.reposicion.add(new Object[]{r.getString(1),r.getString(2),"Todos los depósitos",
+                            cantidad.stripTrailingZeros().toPlainString(),minimo.stripTrailingZeros().toPlainString(),
+                            cantidad.signum()<=0?"SIN STOCK":"STOCK BAJO"});
+                }
             }
             try(PreparedStatement p=c.prepareStatement("SELECT p.nombre,COALESCE(sp.cantidad,0) cantidad"+stock+" AND COALESCE(sp.cantidad,0)<p.stock_minimo ORDER BY cantidad ASC LIMIT 3");ResultSet r=p.executeQuery()) {
                 while(r.next())d.faltantes.add(r.getString(1)+" ("+r.getBigDecimal(2).stripTrailingZeros().toPlainString()+")");
@@ -1372,6 +1387,9 @@ public class PanelDashboard extends javax.swing.JPanel {
         lblCajaActual.setText(abierta?dinero(d.caja.efectivoEsperado):dinero(BigDecimal.ZERO));
         lblEstadoCaja.setText(abierta?"CAJA ABIERTA #"+d.caja.idSesion:"SIN CAJA ABIERTA / NO DISPONIBLE");
         lblEstadoCaja.setForeground(abierta?VERDE:ROJO);
+        modeloReposicion.setRowCount(0);
+        for(Object[] fila:d.reposicion)modeloReposicion.addRow(fila);
+        lblResumenReposicion.setText(d.reposicion.isEmpty()?"No hay artículos por debajo del mínimo":"Productos que necesitan reposición: "+(d.bajo+d.sinStock));
         modeloUltimasVentas.setRowCount(0);
         for(Object[] fila:d.ventas)modeloUltimasVentas.addRow(fila);
         modeloMasVendidos.setRowCount(0);
@@ -1383,7 +1401,7 @@ public class PanelDashboard extends javax.swing.JPanel {
         panelAlertas.add(crearAlerta("Sin stock",d.sinStock+" productos sin existencias",ROJO));
         panelAlertas.add(Box.createVerticalStrut(8));
         panelAlertas.add(crearAlerta(abierta?"Caja abierta":"Caja cerrada",abierta?"Sesión #"+d.caja.idSesion+" · "+d.caja.cajero:"No tenés una caja abierta",abierta?VERDE:GRIS));
-        for(String item:d.faltantes){panelAlertas.add(Box.createVerticalStrut(8));panelAlertas.add(crearAlerta("Reponer",item,NARANJA));}
+
         panelAlertas.revalidate();panelAlertas.repaint();
     }
 
