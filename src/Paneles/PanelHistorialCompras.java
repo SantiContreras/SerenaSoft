@@ -29,7 +29,7 @@ public class PanelHistorialCompras extends JPanel {
     private static final Color AZUL=new Color(8,32,82), AZUL_BOTON=new Color(25,70,150), FONDO=new Color(245,247,250), TEXTO=new Color(35,49,72);
     private static final Color BORDE=new Color(216,226,239), FRANJA=new Color(247,250,254);
     private final HistorialComprasDao dao=new HistorialComprasDao();
-    private final DefaultTableModel modelo=new DefaultTableModel(new Object[]{"ID","Fecha","Proveedor","Comprobante","Letra","Estado","Total"},0){@Override public boolean isCellEditable(int r,int c){return false;}};
+    private final DefaultTableModel modelo=new DefaultTableModel(new Object[]{"ID","Fecha","Proveedor","Comprobante","Letra","Estado","Total","Depósito"},0){@Override public boolean isCellEditable(int r,int c){return false;}};
     private final JTable tabla=new JTable(modelo);
     private final JTextField buscar=new JTextField();
     private final JComboBox<ProveedorOpcion> proveedorFiltro=new JComboBox<>();
@@ -273,7 +273,7 @@ public class PanelHistorialCompras extends JPanel {
             @Override protected List<CompraFila> doInBackground() throws Exception{return dao.listarReporte(filtro,solo,idProveedor,rango[0],rango[1]);}
             @Override protected void done(){try{
                 compras=get();modelo.setRowCount(0);java.math.BigDecimal total=java.math.BigDecimal.ZERO;
-                for(CompraFila c:compras){modelo.addRow(new Object[]{c.id,c.fecha==null?"":fecha.format(c.fecha),c.proveedor,c.comprobante==null?"Sin número":c.comprobante,c.letra,c.estado,dinero.format(c.total)});total=total.add(c.total);}
+                for(CompraFila c:compras){modelo.addRow(new Object[]{c.id,c.fecha==null?"":fecha.format(c.fecha),c.proveedor,c.comprobante==null?"Sin número":c.comprobante,c.letra,c.estado,dinero.format(c.total),c.deposito});total=total.add(c.total);}
                 resumen.setText(compras.size()+" compras encontradas  |  Total listado: "+dinero.format(total));
             }catch(Exception ex){resumen.setText("No se pudo consultar el historial");error(ex);}}
         }.execute();
@@ -381,7 +381,7 @@ public class PanelHistorialCompras extends JPanel {
             super(owner,"Detalle de compra #"+compra.id,ModalityType.APPLICATION_MODAL);this.compra=compra;this.dao=dao;
             setSize(1040,660);setMinimumSize(new Dimension(820,520));setLocationRelativeTo(owner);
             JPanel root=new JPanel(new BorderLayout(0,14));root.setBackground(FONDO);root.setBorder(new EmptyBorder(18,20,18,20));setContentPane(root);
-            JLabel titulo=new JLabel("Compra #"+compra.id+"  ·  "+compra.proveedor);titulo.setFont(new Font("Segoe UI",Font.BOLD,21));titulo.setForeground(AZUL);
+            JLabel titulo=new JLabel("Compra #"+compra.id+"  ·  "+compra.proveedor+"  ·  "+compra.deposito);titulo.setFont(new Font("Segoe UI",Font.BOLD,21));titulo.setForeground(AZUL);
             JLabel datos=new JLabel("Comprobante: "+comprobante(compra.comprobante)+"   |   Estado: "+compra.estado+"   |   Total: "+new DecimalFormat("$ #,##0.00",DecimalFormatSymbols.getInstance(new Locale("es","AR"))).format(compra.total));
             datos.setFont(new Font("Segoe UI",Font.PLAIN,13));datos.setForeground(TEXTO);
             JPanel cab=new JPanel(new GridLayout(2,1,0,5));cab.setOpaque(false);cab.add(titulo);cab.add(datos);root.add(cab,BorderLayout.NORTH);

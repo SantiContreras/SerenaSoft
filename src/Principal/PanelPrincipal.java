@@ -643,9 +643,16 @@ public class PanelPrincipal extends javax.swing.JFrame {
         //==========================================================
         lblFecha
                 = new JLabel(
-                        "24/06/2026 11:30",
+                        java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
                         SwingConstants.CENTER
                 );
+
+        javax.swing.Timer reloj = new javax.swing.Timer(1000, e -> lblFecha.setText(
+                java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))));
+        reloj.start();
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosed(java.awt.event.WindowEvent e) { reloj.stop(); }
+        });
 
         lblFecha.setFont(
                 new Font(

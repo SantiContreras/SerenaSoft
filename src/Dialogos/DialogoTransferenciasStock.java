@@ -14,6 +14,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.JTableHeader;
 
 /** Despacho y recepción de transferencias. No permite acreditación sin recepción. */
 public class DialogoTransferenciasStock extends JDialog {
@@ -44,10 +45,42 @@ public class DialogoTransferenciasStock extends JDialog {
         setSize(1030,740);setMinimumSize(new Dimension(870,640));setLocationRelativeTo(parent);
         tabs=new JTabbedPane();
         tabs.setFont(new Font("Segoe UI",Font.BOLD,13));
-        tabs.setBackground(BLANCO);tabs.setForeground(AZUL);
-        tabs.addTab("  1  DESPACHAR MERCADERÍA  ",armarEnvio());
-        tabs.addTab("  2  CONFIRMAR RECEPCIÓN  ",armarRecepcion());
+        tabs.setBackground(FONDO);tabs.setForeground(AZUL);
+        tabs.addTab("Despachar mercadería",armarEnvio());
+        tabs.addTab("Confirmar recepción",armarRecepcion());
+        // Etiquetas propias: no dependen del Look & Feel de Windows/NetBeans.
+        tabs.setTabComponentAt(0,crearSolapa("1", "DESPACHAR MERCADERÍA",0));
+        tabs.setTabComponentAt(1,crearSolapa("2", "CONFIRMAR RECEPCIÓN",1));
+        tabs.addChangeListener(e->actualizarSolapas());
+        actualizarSolapas();
         add(tabs);cargarDepositos();cargarPendientes();actualizarBotones();
+    }
+    private final java.util.List<JPanel> panelesSolapas=new ArrayList<>();
+    private JPanel crearSolapa(String numero,String titulo,int indice){
+        JPanel panel=new JPanel(new FlowLayout(FlowLayout.CENTER,9,8));
+        panel.setOpaque(true);
+        JLabel etiqueta=new JLabel(numero+"  "+titulo);
+        etiqueta.setFont(new Font("Segoe UI",Font.BOLD,12));
+        panel.add(etiqueta);
+        panel.setBorder(new EmptyBorder(1,10,1,10));
+        panel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        java.awt.event.MouseAdapter click=new java.awt.event.MouseAdapter(){
+            @Override public void mousePressed(java.awt.event.MouseEvent e){tabs.setSelectedIndex(indice);}
+        };
+        panel.addMouseListener(click);etiqueta.addMouseListener(click);
+        panelesSolapas.add(panel);
+        return panel;
+    }
+    private void actualizarSolapas(){
+        for(int i=0;i<panelesSolapas.size();i++){
+            JPanel panel=panelesSolapas.get(i);
+            boolean activa=i==tabs.getSelectedIndex();
+            panel.setBackground(activa?AZUL:new Color(228,235,245));
+            for(Component c:panel.getComponents())if(c instanceof JLabel){
+                c.setForeground(activa?BLANCO:AZUL);
+            }
+            panel.repaint();
+        }
     }
     private JPanel base(){JPanel p=new JPanel(new BorderLayout(12,12));p.setBackground(FONDO);p.setBorder(new EmptyBorder(14,18,16,18));return p;}
     private JLabel titulo(String s){JLabel l=new JLabel(s);l.setForeground(BLANCO);l.setFont(new Font("Segoe UI",Font.BOLD,19));return l;}
@@ -78,6 +111,7 @@ public class DialogoTransferenciasStock extends JDialog {
         };
         b.setFont(new Font("Segoe UI",Font.BOLD,12));b.setForeground(BLANCO);b.setBackground(fondo);
         b.setOpaque(false);b.setContentAreaFilled(false);
+        b.addPropertyChangeListener("enabled",e->b.setForeground(b.isEnabled()?BLANCO:new Color(77,91,113)));
         b.setBorderPainted(false);b.setFocusPainted(false);b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.setPreferredSize(new Dimension(172,39));b.addActionListener(e->accion.run());return b;
     }
@@ -101,8 +135,18 @@ public class DialogoTransferenciasStock extends JDialog {
         seleccion.add(fila("Cantidad a enviar",cant),BorderLayout.SOUTH);contenido.add(seleccion,BorderLayout.NORTH);
         tabla.setRowHeight(31);tabla.setFont(new Font("Segoe UI",Font.PLAIN,12));tabla.setGridColor(new Color(231,237,245));
         tabla.setSelectionBackground(new Color(212,226,247));tabla.setSelectionForeground(TEXTO);
-        tabla.getTableHeader().setBackground(AZUL);tabla.getTableHeader().setForeground(BLANCO);
-        tabla.getTableHeader().setFont(new Font("Segoe UI",Font.BOLD,12));tabla.getTableHeader().setPreferredSize(new Dimension(0,34));
+        JTableHeader encabezado=tabla.getTableHeader();
+        encabezado.setBackground(AZUL);encabezado.setForeground(BLANCO);
+        encabezado.setFont(new Font("Segoe UI",Font.BOLD,12));
+        encabezado.setPreferredSize(new Dimension(0,34));
+        DefaultTableCellRenderer rendererCabecera=new DefaultTableCellRenderer();
+        rendererCabecera.setHorizontalAlignment(SwingConstants.CENTER);
+        rendererCabecera.setOpaque(true);
+        rendererCabecera.setBackground(AZUL);
+        rendererCabecera.setForeground(BLANCO);
+        rendererCabecera.setFont(new Font("Segoe UI",Font.BOLD,12));
+        rendererCabecera.setBorder(BorderFactory.createMatteBorder(0,0,0,1,new Color(48,83,140)));
+        encabezado.setDefaultRenderer(rendererCabecera);
         tabla.setAutoCreateRowSorter(false);
         tabla.getColumnModel().getColumn(0).setMinWidth(0);tabla.getColumnModel().getColumn(0).setMaxWidth(0);tabla.getColumnModel().getColumn(0).setPreferredWidth(0);
         tabla.getColumnModel().getColumn(1).setPreferredWidth(125);
@@ -130,6 +174,17 @@ public class DialogoTransferenciasStock extends JDialog {
         JPanel cuerpo=new JPanel(new BorderLayout(0,12));cuerpo.setOpaque(false);
         JPanel cab=tarjeta("TRANSFERENCIAS EN TRÁNSITO");
         JPanel seleccion=new JPanel(new BorderLayout(10,0));seleccion.setOpaque(false);
+        pendientes.setFont(new Font("Segoe UI",Font.PLAIN,13));
+        pendientes.setPreferredSize(new Dimension(0,39));
+        pendientes.setRenderer(new DefaultListCellRenderer(){
+            @Override public Component getListCellRendererComponent(JList<?> list,Object value,int index,boolean selected,boolean focus){
+                JLabel l=(JLabel)super.getListCellRendererComponent(list,value,index,selected,focus);
+                l.setText(value==null?"Sin transferencias pendientes de recepción":value.toString());
+                l.setBorder(new EmptyBorder(5,9,5,9));
+                if(value==null)l.setForeground(new Color(92,105,123));
+                return l;
+            }
+        });
         seleccion.add(pendientes,BorderLayout.CENTER);
         btnActualizar=boton("ACTUALIZAR",new Color(24,116,156),this::cargarPendientes);seleccion.add(btnActualizar,BorderLayout.EAST);
         cab.add(seleccion,BorderLayout.CENTER);cuerpo.add(cab,BorderLayout.NORTH);

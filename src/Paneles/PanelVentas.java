@@ -161,6 +161,21 @@ public class PanelVentas extends javax.swing.JPanel {
     Color HEADER = new Color(25, 70, 150);
     Color HEADER_BORDE = new Color(15, 55, 120);
 
+    private final javax.swing.JComboBox<model.Deposito> depositoVenta = new javax.swing.JComboBox<>();
+    private JButton recargarDepositos;
+    private void cargarDepositosVenta() {
+        if (!carrito.isEmpty() || ventaPendiente != null) return;
+        model.Deposito anterior = (model.Deposito) depositoVenta.getSelectedItem();
+        depositoVenta.removeAllItems();
+        model.Deposito principal = new Dao.DepositoDao().buscarPrincipal();
+        if (principal != null) depositoVenta.addItem(principal);
+        for (model.Deposito d : new Dao.DepositoDao().listarActivos()) {
+            if (principal == null || d.getIdDeposito() != principal.getIdDeposito()) depositoVenta.addItem(d);
+        }
+        if (anterior != null) for (int i=0;i<depositoVenta.getItemCount();i++) {
+            if (depositoVenta.getItemAt(i).getIdDeposito()==anterior.getIdDeposito()) depositoVenta.setSelectedIndex(i);
+        }
+    }
     public PanelVentas() {
         initComponents();
 
@@ -201,7 +216,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
             Dialogos.DialogoBuscarProducto dialogo
                     = new Dialogos.DialogoBuscarProducto(
-                            ventana
+                            ventana, (model.Deposito) depositoVenta.getSelectedItem()
                     );
 
             dialogo.setVisible(true);
@@ -486,6 +501,9 @@ public class PanelVentas extends javax.swing.JPanel {
         actualizarCarrito();
     }
     private void actualizarCarrito() {
+        boolean libre = carrito.isEmpty() && ventaPendiente == null;
+        depositoVenta.setEnabled(libre);
+        if(recargarDepositos!=null) recargarDepositos.setEnabled(libre);
         if(tabla==null)return;
         DefaultTableModel m=(DefaultTableModel)tabla.getModel();m.setRowCount(0);
         descuentoPromociones=descuentoPromoCarrito();
@@ -562,6 +580,8 @@ public class PanelVentas extends javax.swing.JPanel {
             java.awt.Window ventana=javax.swing.SwingUtilities.getWindowAncestor(this);
             java.math.BigDecimal inicial=java.math.BigDecimal.ZERO;
             try {if(!txtImporteRecibido.getText().trim().isEmpty())inicial=parsearImporte(txtImporteRecibido.getText());}catch(Exception ignored){}
+            model.Deposito elegido = (model.Deposito) depositoVenta.getSelectedItem();
+            if (elegido == null) throw new IllegalArgumentException("Seleccioná el depósito de origen.");
             Dialogos.DialogoConfirmarVenta d=new Dialogos.DialogoConfirmarVenta(ventana,
                 txtCliente.getText(),txtDocumento.getText(),String.valueOf(comboCondicionIVA.getSelectedItem()),
                 String.valueOf(comboComprobante.getSelectedItem()),String.valueOf(comboPago.getSelectedItem()),
@@ -573,7 +593,7 @@ public class PanelVentas extends javax.swing.JPanel {
             // Los IDs se resuelven después de confirmar la ventana, antes de registrar la transacción.
             String comprobanteConfirmado = String.valueOf(comboComprobante.getSelectedItem());
             int medio=medioPagoSeleccionado(d.getFormaPago());
-            int deposito=depositoPrincipalActivo();
+            int deposito=elegido.getIdDeposito();
             java.math.BigDecimal recibido=d.getImporteRecibido();
             services.VentaService.Solicitud solicitud=new services.VentaService.Solicitud();
             solicitud.usuarioId=sesion.SesionUsuario.getIdUsuario();
@@ -655,9 +675,7 @@ public class PanelVentas extends javax.swing.JPanel {
                 )
         );
 
-        subPanelProducto.setPreferredSize(
-                new Dimension(0, 190)
-        );
+        subPanelProducto.setPreferredSize(null);
 
         subPanelProducto.setOpaque(false);
 
@@ -770,9 +788,10 @@ public class PanelVentas extends javax.swing.JPanel {
                 )
         );
 
+        txtCodigo.setMinimumSize(new Dimension(100,40));
         txtCodigo.setMaximumSize(
                 new Dimension(
-                        420,
+                        320,
                         40
                 )
         );
@@ -810,9 +829,7 @@ public class PanelVentas extends javax.swing.JPanel {
 
         filaCodigo.add(btnScan);
 
-        filaCodigo.add(
-                Box.createHorizontalGlue()
-        );
+
 
         subPanelProducto.add(filaCodigo);
 
@@ -847,7 +864,7 @@ public class PanelVentas extends javax.swing.JPanel {
         subPanelProducto.add(lblProducto);
 
         subPanelProducto.add(
-                Box.createVerticalStrut(10)
+                Box.createVerticalStrut(5)
         );
 
         //====================================================
@@ -976,6 +993,84 @@ public class PanelVentas extends javax.swing.JPanel {
                 filaBotones
         );
 
+        JPanel filaDeposito = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        filaDeposito.setOpaque(false);
+        filaDeposito.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createEmptyBorder(),
+                BorderFactory.createEmptyBorder(0,0,0,0)));
+        JLabel etiquetaDeposito = new JLabel("DEPÓSITO");
+        etiquetaDeposito.setFont(new Font("Segoe UI",Font.BOLD,11));
+        etiquetaDeposito.setForeground(TITULO_PANEL);
+        filaDeposito.add(etiquetaDeposito);
+        depositoVenta.setPreferredSize(new Dimension(235,30));
+        depositoVenta.setFont(new Font("Segoe UI",Font.BOLD,12));
+        depositoVenta.setBackground(Color.WHITE);
+        depositoVenta.setForeground(TITULO_PANEL);
+        depositoVenta.putClientProperty("JComponent.roundRect", Boolean.TRUE);
+        depositoVenta.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(javax.swing.JList<?> list,
+                    Object value,int index,boolean selected,boolean focus) {
+                JLabel l=(JLabel)super.getListCellRendererComponent(list,value,index,selected,focus);
+                if(value instanceof model.Deposito) {
+                    model.Deposito d=(model.Deposito)value;
+                    l.setText(d.getCodigo()+" | "+d.getNombre());
+                } else l.setText("Seleccionar depósito");
+                l.setBorder(BorderFactory.createEmptyBorder(4,8,4,8));
+                l.setForeground(selected?Color.WHITE:TITULO_PANEL);
+                l.setBackground(selected?AZUL_PRINCIPAL:Color.WHITE);
+                return l;
+            }
+        });
+        filaDeposito.add(depositoVenta);
+        recargarDepositos = new JButton("") {
+            @Override protected void paintComponent(java.awt.Graphics g) {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                            java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(!isEnabled() ? new Color(211,220,232)
+                            : getModel().isPressed() ? new Color(15,45,90)
+                            : getModel().isRollover() ? new Color(35,95,170) : AZUL_PRINCIPAL);
+                    g2.fillRoundRect(0,0,getWidth(),getHeight(),10,10);
+                    g2.setColor(isEnabled() ? Color.WHITE : new Color(75,90,110));
+                    g2.setFont(getFont());
+                    java.awt.FontMetrics fm = g2.getFontMetrics();
+                    int x = (getWidth()-12)/2;
+                    int y = getHeight()/2;
+                    g2.setStroke(new java.awt.BasicStroke(1.5f));
+                    g2.drawArc(x,y-6,12,12,35,290);
+                    g2.drawLine(x+12,y-6,x+12,y-1);
+                    g2.drawLine(x+12,y-1,x+7,y-1);
+
+                    if (hasFocus()) {
+                        g2.setColor(new Color(100,155,220));
+                        g2.drawRoundRect(1,1,getWidth()-3,getHeight()-3,10,10);
+                    }
+                } finally { g2.dispose(); }
+            }
+        };
+        recargarDepositos.setContentAreaFilled(false);
+        recargarDepositos.setOpaque(false);
+        recargarDepositos.setBorderPainted(false);
+        recargarDepositos.setRolloverEnabled(true);
+        recargarDepositos.setToolTipText("Actualizar depósitos disponibles");
+        recargarDepositos.setFont(new Font("Segoe UI",Font.BOLD,11));
+        recargarDepositos.setForeground(Color.WHITE);
+        recargarDepositos.setBackground(AZUL_PRINCIPAL);
+        recargarDepositos.setFocusPainted(false);
+        recargarDepositos.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        recargarDepositos.setPreferredSize(new Dimension(34,30));
+        recargarDepositos.getAccessibleContext().setAccessibleName("Actualizar depósitos");
+        recargarDepositos.addActionListener(e -> cargarDepositosVenta());
+        filaDeposito.add(recargarDepositos);
+        filaDeposito.setToolTipText("Las ventas descuentan existencias del depósito seleccionado.");
+        filaDeposito.setMaximumSize(filaDeposito.getPreferredSize());
+        filaCodigo.add(Box.createHorizontalStrut(12));
+        filaCodigo.add(filaDeposito);
+        filaCodigo.add(Box.createHorizontalGlue());
+        alinearIzquierda(filaCodigo);
+        subPanelProducto.setPreferredSize(null);
+        cargarDepositosVenta();
         subPanelProducto.revalidate();
         subPanelProducto.repaint();
     }

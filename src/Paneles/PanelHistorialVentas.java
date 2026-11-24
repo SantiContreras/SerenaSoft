@@ -824,7 +824,7 @@ public class PanelHistorialVentas extends javax.swing.JPanel {
                             "Pago",
                             "Comprobante",
                             "Total",
-                            "Estado"
+                            "Estado", "Depósito"
                         },
                         0
                 ) {
@@ -1006,7 +1006,7 @@ public class PanelHistorialVentas extends javax.swing.JPanel {
                     + "COALESCE(NULLIF(TRIM(c.razon_social),''),NULLIF(TRIM(CONCAT_WS(' ',c.nombre,c.apellido)),''),'Consumidor Final') cliente, "
                     + "COALESCE((SELECT GROUP_CONCAT(DISTINCT mp.nombre ORDER BY mp.nombre SEPARATOR ', ') "
                     + "FROM venta_pago vp JOIN medio_pago mp ON mp.id_medio_pago=vp.id_medio_pago WHERE vp.id_venta=v.id_venta),'Sin pago') pago, "
-                    + "v.total,v.estado FROM venta v LEFT JOIN cliente c ON c.id_cliente=v.id_cliente WHERE 1=1");
+                    + "v.total,v.estado,COALESCE(d.nombre,'Sin depósito') deposito FROM venta v LEFT JOIN deposito d ON d.id_deposito=v.id_deposito LEFT JOIN cliente c ON c.id_cliente=v.id_cliente WHERE 1=1");
                 List<Object> args=new ArrayList<>();
                 if (desde!=null) {sql.append(" AND v.fecha >= ?"); args.add(Timestamp.valueOf(desde.atStartOfDay()));}
                 if (hasta!=null) {sql.append(" AND v.fecha < ?"); args.add(Timestamp.valueOf(hasta.plusDays(1).atStartOfDay()));}
@@ -1027,7 +1027,7 @@ public class PanelHistorialVentas extends javax.swing.JPanel {
                         resultado.add(new Registro(rs.getLong("id_venta"),new Object[]{
                             String.format("%08d",rs.getLong("numero_venta")),f.toLocalDateTime().toLocalDate().format(FECHA),
                             f.toLocalDateTime().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
-                            rs.getString("cliente"),rs.getString("pago"),"Ticket",dinero(t),est},t,est));
+                            rs.getString("cliente"),rs.getString("pago"),"Ticket",dinero(t),est,rs.getString("deposito")},t,est));
                     }}
                 }
                 return resultado;
@@ -1057,13 +1057,13 @@ public class PanelHistorialVentas extends javax.swing.JPanel {
     private void verDetalle() {
         long id=seleccion();if(id<0)return;
         StringBuilder sb=new StringBuilder();
-        String q="SELECT v.numero_venta,v.fecha,v.estado,v.subtotal,v.descuento_total,v.recargo_total,v.total,v.motivo_anulacion,u.nombre_completo "
-            + "FROM venta v JOIN usuario u ON u.id_usuario=v.id_usuario WHERE v.id_venta=?";
+        String q="SELECT v.numero_venta,v.fecha,v.estado,v.subtotal,v.descuento_total,v.recargo_total,v.total,v.motivo_anulacion,u.nombre_completo,COALESCE(d.nombre,'Sin depósito') "
+            + "FROM venta v LEFT JOIN deposito d ON d.id_deposito=v.id_deposito JOIN usuario u ON u.id_usuario=v.id_usuario WHERE v.id_venta=?";
         try(Connection c=conexion.getConexion();PreparedStatement ps=c.prepareStatement(q)) {
             ps.setLong(1,id);
             try(ResultSet rs=ps.executeQuery()) {if(rs.next()) {
                 sb.append("Venta N° ").append(rs.getLong(1)).append("  |  ").append(rs.getTimestamp(2)).append("\n")
-                  .append("Estado: ").append(rs.getString(3)).append("  |  Cajero: ").append(rs.getString(9)).append("\n\n");
+                  .append("Estado: ").append(rs.getString(3)).append("  |  Cajero: ").append(rs.getString(9)).append("\nDepósito: ").append(rs.getString(10)).append("\n\n");
                 if(rs.getString(8)!=null) sb.append("Motivo anulación: ").append(rs.getString(8)).append("\n");
                 sb.append("Subtotal: ").append(dinero(rs.getBigDecimal(4))).append("  Descuento: ").append(dinero(rs.getBigDecimal(5)))
                   .append("  Recargo: ").append(dinero(rs.getBigDecimal(6))).append("\nTOTAL: ").append(dinero(rs.getBigDecimal(7))).append("\n\nPRODUCTOS\n");
@@ -1077,7 +1077,7 @@ public class PanelHistorialVentas extends javax.swing.JPanel {
                 pagos.setLong(1,id);try(ResultSet rs=pagos.executeQuery()) {while(rs.next()) sb.append(rs.getString(1)).append(": ").append(dinero(rs.getBigDecimal(2)))
                     .append("  Recibido: ").append(dinero(rs.getBigDecimal(3))).append("  Cambio: ").append(dinero(rs.getBigDecimal(4))).append("\n");}
             }
-            javax.swing.JTextArea area=new javax.swing.JTextArea(sb.toString(),19,65);area.setEditable(false);area.setFont(new Font("Monospaced",Font.PLAIN,12));
+            javax.swing.JTextArea area=new javax.swing.JTextArea(sb.toString(),19,65);area.setEditable(false);area.setFont(new Font("Segoe UI",Font.PLAIN,14));
             JOptionPane.showMessageDialog(this,new JScrollPane(area),"Detalle de venta",JOptionPane.INFORMATION_MESSAGE);
         } catch(Exception ex){JOptionPane.showMessageDialog(this,"Error al ver detalle: "+ex.getMessage());}
     }

@@ -147,7 +147,7 @@ public class PanelStock extends javax.swing.JPanel {
     private RSButtonRound btnModificar;
     private RSButtonRound btnDarBaja;
     private RSButtonRound btnActualizar;
-    private RSButtonRound btnTransferir;
+    private RSButtonRound btnTransferir, btnDepositos;
     private javax.swing.JComboBox<String> comboDeposito;
 
     //==========================================================
@@ -312,6 +312,7 @@ public class PanelStock extends javax.swing.JPanel {
                         165
                 );
 
+        btnDepositos = crearBotonPrimario("DEPÓSITOS", 130);
         btnTransferir = crearBotonPrimario("TRANSFERIR", 155);
         btnTransferir.setIcon(icono("refresh", Color.WHITE));
         comboDeposito = new javax.swing.JComboBox<>();
@@ -773,11 +774,11 @@ public class PanelStock extends javax.swing.JPanel {
     private JPanel crearPanelAcciones() {
         JPanel panel = crearTarjeta();
         panel.setLayout(new BorderLayout());
-        JPanel botones = new JPanel(new GridLayout(1, 7, 9, 0));
+        JPanel botones = new JPanel(new GridLayout(1, 0, 6, 0));
         botones.setOpaque(false);
         botones.setBorder(new EmptyBorder(8, 10, 8, 10));
         for (RSButtonRound boton : new RSButtonRound[]{btnEntrada, btnSalida,
-                btnAjuste, btnTransferir, btnModificar, btnDarBaja, btnActualizar}) {
+                btnAjuste, btnTransferir, btnModificar, btnDarBaja, btnActualizar, btnDepositos}) {
             boton.setPreferredSize(new Dimension(100, 39));
             botones.add(boton);
         }
@@ -1101,7 +1102,7 @@ public class PanelStock extends javax.swing.JPanel {
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal valor = BigDecimal.ZERO;
         int activos = 0;
-        java.util.Set<Integer> productosConFila = new java.util.HashSet<>();
+        java.util.Set<String> productosConFila = new java.util.HashSet<>();
         for (Producto p : productos) {
             if (p != null) {
                 idsPorCodigo.put(p.getCodigo(), p.getIdProducto());
@@ -1112,16 +1113,18 @@ public class PanelStock extends javax.swing.JPanel {
             if (stock == null || stock.getProducto() == null) continue;
             Producto p = stock.getProducto();
             Deposito d = stock.getDeposito();
-            productosConFila.add(p.getIdProducto());
+            if (d == null || !d.isActivo()) continue;
+            productosConFila.add(p.getIdProducto()+":"+d.getIdDeposito());
             BigDecimal cantidad = stock.getCantidad() == null ? BigDecimal.ZERO : stock.getCantidad();
             total = total.add(cantidad);
             valor = valor.add(cantidad.multiply(p.getPrecioCompra() == null ? BigDecimal.ZERO : p.getPrecioCompra()));
             agregarFilaStock(p, d == null ? "Sin depósito" : d.getNombre(), cantidad);
         }
         // Productos sin registro de stock también deben aparecer.
+        List<Deposito> depositosActivos = new DepositoDao().listarActivos();
         for (Producto p : productos) {
-            if (p != null && !productosConFila.contains(p.getIdProducto())) {
-                agregarFilaStock(p, "Sin depósito", BigDecimal.ZERO);
+            if (p != null) for (Deposito d : depositosActivos) {
+                if (!productosConFila.contains(p.getIdProducto()+":"+d.getIdDeposito())) agregarFilaStock(p,d.getNombre(),BigDecimal.ZERO);
             }
         }
         lblTotalArticulos.setText(String.valueOf(productos.size()));
@@ -1267,6 +1270,7 @@ public class PanelStock extends javax.swing.JPanel {
     }
 
     private void aplicarPermisosStock() {
+        btnDepositos.setVisible(SesionUsuario.esAdministrador());
         btnEntrada.setVisible(SesionUsuario.tienePermiso("STOCK_INGRESAR"));
         btnSalida.setVisible(SesionUsuario.tienePermiso("STOCK_EGRESAR"));
         btnTransferir.setVisible(SesionUsuario.tienePermiso("STOCK_EGRESAR"));
@@ -1381,8 +1385,9 @@ public class PanelStock extends javax.swing.JPanel {
                 JOptionPane.showMessageDialog(this, "No se encontró la ventana principal.");
                 return;
             }
+            Deposito elegido = elegirDepositoOperacion(); if (elegido == null) return;
             DialogoAjusteStock dialogo
-                    = new DialogoAjusteStock(ventana);
+                    = new DialogoAjusteStock(ventana, elegido);
 
             dialogo.setVisible(true);
             actualizarStock();
@@ -1410,7 +1415,8 @@ public class PanelStock extends javax.swing.JPanel {
         // ACTUALIZAR
         //======================================================
         btnActualizar.addActionListener(e -> actualizarStock());
-        comboDeposito.addActionListener(e -> filtrarTabla());
+        comboDeposito.addActionListener(e -> { filtrarTabla(); actualizarResumenDeposito(); });
+        btnDepositos.addActionListener(e -> { if (!SesionUsuario.esAdministrador()) return; new Dialogos.DialogoAdministrarDepositos(SwingUtilities.getWindowAncestor(this)).setVisible(true); actualizarStock(); });
         btnTransferir.addActionListener(e -> {
             if (!autorizadoStock("STOCK_EGRESAR")) return;
             DialogoTransferenciasStock dialogo = new DialogoTransferenciasStock(SwingUtilities.getWindowAncestor(this));
@@ -1474,6 +1480,16 @@ public class PanelStock extends javax.swing.JPanel {
     //==========================================================
 // SALIDA DE STOCK
 //==========================================================
+    private Deposito elegirDepositoOperacion() {
+        List<Deposito> ds=new DepositoDao().listarActivos();
+        if(ds.isEmpty()){JOptionPane.showMessageDialog(this,"No hay depósitos activos.");return null;}
+        if(ds.size()==1)return ds.get(0);
+        String[] nombres=ds.stream().map(Deposito::getNombre).toArray(String[]::new);
+        Object actual=comboDeposito.getSelectedItem();
+        Object elegido=JOptionPane.showInputDialog(this,"Seleccioná el depósito de la operación", "Depósito", JOptionPane.QUESTION_MESSAGE,null,nombres,java.util.Arrays.asList(nombres).contains(actual)?actual:nombres[0]);
+        for(Deposito d:ds)if(d.getNombre().equals(elegido))return d;
+        return null;
+    }
     private void abrirSalida() {
         if (!autorizadoStock("STOCK_EGRESAR")) return;
 
@@ -1482,8 +1498,9 @@ public class PanelStock extends javax.swing.JPanel {
             JOptionPane.showMessageDialog(this, "No se encontró la ventana principal.");
             return;
         }
+        Deposito elegido = elegirDepositoOperacion(); if (elegido == null) return;
         DialogoSalidaStock dialogo
-                = new DialogoSalidaStock(ventana);
+                = new DialogoSalidaStock(ventana, elegido);
 
         dialogo.setLocationRelativeTo(
                 ventana
@@ -1747,6 +1764,27 @@ public class PanelStock extends javax.swing.JPanel {
         });
     }
 
+    private void actualizarResumenDeposito() {
+        if (stockCargado == null) return;
+        String elegido = comboDeposito.getSelectedIndex() <= 0 ? null : (String) comboDeposito.getSelectedItem();
+        BigDecimal cantidad = BigDecimal.ZERO, valor = BigDecimal.ZERO;
+        for (StockProducto st : stockCargado) {
+            if (st == null || st.getDeposito()==null || !st.getDeposito().isActivo() || st.getProducto()==null) continue;
+            if (elegido != null && !elegido.equals(st.getDeposito().getNombre())) continue;
+            BigDecimal n=st.getCantidad()==null?BigDecimal.ZERO:st.getCantidad();
+            cantidad=cantidad.add(n); BigDecimal costo=st.getProducto().getPrecioCompra();
+            valor=valor.add(n.multiply(costo==null?BigDecimal.ZERO:costo));
+        }
+        lblTotalStock.setText(formatearCantidad(cantidad)); lblValorInventario.setText(formatearDinero(valor));
+    }
+    private void refrescarDepositos() {
+        Object anterior=comboDeposito.getSelectedItem();
+        comboDeposito.removeAllItems(); comboDeposito.addItem("Todos los depósitos");
+        for (Deposito d:new DepositoDao().listarActivos()) comboDeposito.addItem(d.getNombre());
+        comboDeposito.setSelectedItem(anterior);
+        if(comboDeposito.getItemCount()==2) comboDeposito.setSelectedIndex(1);
+        if(comboDeposito.getSelectedIndex()<0) comboDeposito.setSelectedIndex(0);
+    }
     private void actualizarStock() {
         String codigoSeleccionado = null;
         String depositoSeleccionado = null;
@@ -1756,8 +1794,10 @@ public class PanelStock extends javax.swing.JPanel {
             depositoSeleccionado = valorTabla(fila, 4);
         }
         try {
+            refrescarDepositos();
             cargarStock();
             filtrarTabla();
+            actualizarResumenDeposito();
             if (codigoSeleccionado != null) {
                 for (int i = 0; i < tablaStock.getRowCount(); i++) {
                     if (codigoSeleccionado.equals(valorTabla(i, 0))
@@ -2209,11 +2249,7 @@ public class PanelStock extends javax.swing.JPanel {
                 case "Disponible":
 
                     label.setBackground(
-                            new Color(
-                                    226,
-                                    243,
-                                    233
-                            )
+                            new Color(134, 207, 160)
                     );
 
                     label.setForeground(
@@ -2225,11 +2261,7 @@ public class PanelStock extends javax.swing.JPanel {
                 case "Bajo Stock":
 
                     label.setBackground(
-                            new Color(
-                                    255,
-                                    244,
-                                    213
-                            )
+                            new Color(243, 203, 114)
                     );
 
                     label.setForeground(
@@ -2242,11 +2274,7 @@ public class PanelStock extends javax.swing.JPanel {
                 case "Sin Stock":
 
                     label.setBackground(
-                            new Color(
-                                    250,
-                                    226,
-                                    226
-                            )
+                            new Color(237, 160, 160)
                     );
 
                     label.setForeground(

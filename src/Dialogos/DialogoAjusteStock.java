@@ -120,7 +120,9 @@ public class DialogoAjusteStock extends JDialog {
     //==========================================================
     // CONSTRUCTOR
     //==========================================================
-    public DialogoAjusteStock(Window parent) {
+    public DialogoAjusteStock(Window parent) { this(parent, null); }
+
+    public DialogoAjusteStock(Window parent, Deposito elegido) {
 
         super(parent);
 
@@ -132,7 +134,8 @@ public class DialogoAjusteStock extends JDialog {
         // Mismo depósito central validado que utiliza Entrada Manual.
         // Nunca elegir otro depósito silenciosamente si la configuración es inválida.
         try {
-            depositoPrincipal = depositoDao.asegurarCentralOperativo();
+            depositoPrincipal = elegido == null ? depositoDao.asegurarCentralOperativo() : depositoDao.buscarPorId(elegido.getIdDeposito());
+            if (depositoPrincipal == null || !depositoPrincipal.isActivo()) throw new java.sql.SQLException("Depósito no disponible");
         } catch (java.sql.SQLException ex) {
             depositoPrincipal = null;
             SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
@@ -144,7 +147,7 @@ public class DialogoAjusteStock extends JDialog {
         configurarEventos();
 
         setTitle(
-                "Ajuste de Stock"
+                "Ajuste de Stock" + (depositoPrincipal == null ? "" : " | " + depositoPrincipal.getNombre())
         );
 
         setModal(

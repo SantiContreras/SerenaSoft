@@ -131,7 +131,9 @@ public class DialogoSalidaStock extends JDialog {
     //==========================================================
     // CONSTRUCTOR
     //==========================================================
-    public DialogoSalidaStock(Window parent) {
+    public DialogoSalidaStock(Window parent) { this(parent, null); }
+
+    public DialogoSalidaStock(Window parent, Deposito elegido) {
 
         super(parent);
 
@@ -143,7 +145,8 @@ public class DialogoSalidaStock extends JDialog {
         // Mismo depósito central validado que utiliza Entrada Manual.
         // Nunca elegir otro depósito silenciosamente si la configuración es inválida.
         try {
-            depositoPrincipal = depositoDao.asegurarCentralOperativo();
+            depositoPrincipal = elegido == null ? depositoDao.asegurarCentralOperativo() : depositoDao.buscarPorId(elegido.getIdDeposito());
+            if (depositoPrincipal == null || !depositoPrincipal.isActivo()) throw new java.sql.SQLException("Depósito no disponible");
         } catch (java.sql.SQLException ex) {
             depositoPrincipal = null;
             SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
@@ -155,7 +158,7 @@ public class DialogoSalidaStock extends JDialog {
         configurarEventos();
 
         setTitle(
-                "Salida de Stock"
+                "Salida de Stock" + (depositoPrincipal == null ? "" : " | " + depositoPrincipal.getNombre())
         );
 
         setModal(true);

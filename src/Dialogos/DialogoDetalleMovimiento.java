@@ -306,7 +306,9 @@ public class DialogoDetalleMovimiento extends JDialog {
                     BigDecimal diferencia=rs.getBigDecimal("diferencia");
                     BigDecimal anterior=rs.getBigDecimal("anterior");
                     BigDecimal posterior=rs.getBigDecimal("posterior");
-                    String etiqueta="COMPRA".equals(tipo)?"COMPRA / ENTRADA":tipo;
+                    String etiqueta="COMPRA".equals(tipo)?"COMPRA / ENTRADA":
+                        "TRANSFER_IN".equals(tipo)?"RECEPCIÓN":
+                        "TRANSFER_OUT".equals(tipo)?"DESPACHO":tipo;
                     String motivo=rs.getString("motivo");
                     modeloMovimientos.addRow(new Object[]{
                         fecha(rs.getTimestamp("fecha")), etiqueta, cantidadConSigno(diferencia),
@@ -363,9 +365,9 @@ public class DialogoDetalleMovimiento extends JDialog {
             l.setHorizontalAlignment(SwingConstants.CENTER);
             l.setFont(new Font("Segoe UI",Font.BOLD,11));
             if(!selected) {
-                boolean mas=String.valueOf(v).contains("COMPRA");
-                boolean menos=String.valueOf(v).contains("SALIDA");
-                l.setBackground(mas?new Color(225,243,232):menos?new Color(252,231,231):new Color(229,239,251));
+                boolean mas=String.valueOf(v).contains("COMPRA") || "RECEPCIÓN".equals(v);
+                boolean menos=String.valueOf(v).contains("SALIDA") || "VENTA".equals(v) || "DESPACHO".equals(v);
+                l.setBackground(mas?new Color(134,207,160):menos?new Color(237,160,160):new Color(229,239,251));
                 l.setForeground(mas?GREEN:menos?RED:BLUE);
             }
             return l;

@@ -9,19 +9,19 @@ public class HistorialComprasDao {
     public static class CompraFila {
         public long id;
         public Timestamp fecha;
-        public String proveedor, comprobante, estado, letra;
+        public String proveedor, comprobante, estado, letra, deposito;
         public int idProveedor;
         public BigDecimal total;
         public CompraFila(ResultSet r) throws SQLException {
             id=r.getLong("id_compra"); idProveedor=r.getInt("id_proveedor"); fecha=r.getTimestamp("fecha");
             proveedor=r.getString("proveedor"); comprobante=r.getString("comprobante");
-            estado=r.getString("estado"); letra=r.getString("letra"); total=r.getBigDecimal("total");
+            estado=r.getString("estado"); letra=r.getString("letra"); total=r.getBigDecimal("total"); deposito=r.getString("deposito");
         }
     }
     public List<CompraFila> listar(String filtro, boolean soloConfirmadas) throws SQLException {
         List<CompraFila> lista=new ArrayList<>();
-        String sql="SELECT c.id_compra,c.id_proveedor,c.fecha,p.razon_social proveedor,c.numero_comprobante comprobante,c.estado,c.total,COALESCE(cf.letra,'-') letra "
-          +"FROM compra c JOIN proveedor p ON p.id_proveedor=c.id_proveedor "
+        String sql="SELECT c.id_compra,c.id_proveedor,c.fecha,p.razon_social proveedor,c.numero_comprobante comprobante,c.estado,c.total,COALESCE(cf.letra,'-') letra,COALESCE(d.nombre,'Sin depósito') deposito "
+          +"FROM compra c LEFT JOIN deposito d ON d.id_deposito=c.id_deposito JOIN proveedor p ON p.id_proveedor=c.id_proveedor "
           +"LEFT JOIN compra_fiscal cf ON cf.id_compra=c.id_compra "
           +"WHERE (?=0 OR c.estado='CONFIRMADA') AND (CAST(c.id_compra AS CHAR) LIKE ? OR p.razon_social LIKE ? OR COALESCE(c.numero_comprobante,'') LIKE ?) "
           +"ORDER BY c.fecha DESC,c.id_compra DESC LIMIT 500";
@@ -37,8 +37,8 @@ public class HistorialComprasDao {
     public List<CompraFila> listarReporte(String filtro, boolean soloConfirmadas, int proveedorId,
             java.time.LocalDate desde, java.time.LocalDate hasta) throws SQLException {
         StringBuilder sql=new StringBuilder("SELECT c.id_compra,c.id_proveedor,c.fecha,p.razon_social proveedor,"
-          +"c.numero_comprobante comprobante,c.estado,c.total,COALESCE(cf.letra,'-') letra "
-          +"FROM compra c JOIN proveedor p ON p.id_proveedor=c.id_proveedor "
+          +"c.numero_comprobante comprobante,c.estado,c.total,COALESCE(cf.letra,'-') letra,COALESCE(d.nombre,'Sin depósito') deposito "
+          +"FROM compra c LEFT JOIN deposito d ON d.id_deposito=c.id_deposito JOIN proveedor p ON p.id_proveedor=c.id_proveedor "
           +"LEFT JOIN compra_fiscal cf ON cf.id_compra=c.id_compra WHERE 1=1 ");
         if(soloConfirmadas)sql.append("AND c.estado='CONFIRMADA' ");
         if(proveedorId>0)sql.append("AND c.id_proveedor=? ");

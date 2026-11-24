@@ -987,11 +987,11 @@ public class DialogoEntradaManual extends JDialog {
 
         // Fila 2: número completo, fecha y botón de conciliación.
         c.gridy = 1; c.gridx = 0;
-        filas.add(crearLabel("Comprobante N°"), c);
+        filas.add(crearLabel("<html>Comprobante N°<br><small>Ej.: 00003-00001258</small></html>"), c);
         c.gridx = 1; c.weightx = 1; c.fill = GridBagConstraints.HORIZONTAL;
         txtNumeroFactura.setPreferredSize(new Dimension(280, 38));
         txtNumeroFactura.setMinimumSize(new Dimension(120, 38));
-        txtNumeroFactura.setToolTipText("Ejemplo: 0003-00001258");
+        txtNumeroFactura.setToolTipText("Copiá el número de la factura: 00003-00001258. También podés ingresar 3-1258.");
         filas.add(txtNumeroFactura, c);
         c.gridx = 2; c.weightx = 0; c.fill = GridBagConstraints.NONE;
         filas.add(crearLabel("Fecha"), c);
@@ -1054,9 +1054,17 @@ public class DialogoEntradaManual extends JDialog {
         try {
             Deposito principal = depositoDao.asegurarCentralOperativo();
             cmbDeposito.addItem(principal);
+            for (Deposito d : depositoDao.listarActivos()) if(d.getIdDeposito()!=principal.getIdDeposito()) cmbDeposito.addItem(d);
             cmbDeposito.setSelectedIndex(0);
             // Versión de depósito único: no permitir cambiarlo por error.
-            cmbDeposito.setEnabled(false);
+            cmbDeposito.setEnabled(cmbDeposito.getItemCount()>1);
+            cmbDeposito.addActionListener(e -> {
+                Deposito d=(Deposito)cmbDeposito.getSelectedItem();
+                if(d!=null && productoSeleccionado!=null){
+                    BigDecimal n=stockProductoDao.obtenerCantidad(productoSeleccionado.getIdProducto(),d.getIdDeposito());
+                    lblStockActual.setText(formatearCantidad(n==null?BigDecimal.ZERO:n)+" "+codigoUnidad(productoSeleccionado.getUnidadVenta()));
+                }
+            });
         } catch (SQLException ex) {
             btnConfirmar.setEnabled(false);
             JOptionPane.showMessageDialog(this,
@@ -1127,13 +1135,52 @@ public class DialogoEntradaManual extends JDialog {
         return numero;
     }
 
+    private static String normalizarNumeroFactura(String texto) {
+        String valor = texto.trim();
+        if (!valor.matches("[0-9]{1,5}\\s*-\\s*[0-9]{1,8}")) {
+            throw new IllegalArgumentException("Copiá el número de la factura del proveedor.\n"
+                    + "Ejemplo: 00003-00001258 (también 3-1258).\n"
+                    + "Antes del guion: hasta 5 dígitos. Después: hasta 8.\n"
+                    + "No se creó ninguna compra nueva.");
+        }
+        String[] partes = valor.split("-", 2);
+        int punto = Integer.parseInt(partes[0].trim());
+        int numero = Integer.parseInt(partes[1].trim());
+        if (punto == 0 || numero == 0) {
+            throw new IllegalArgumentException("El punto de venta y el número deben ser mayores que cero.\n"
+                    + "Revisá la factura original. No se creó ninguna compra nueva.");
+        }
+        return String.format(java.util.Locale.ROOT, "%05d-%08d", punto, numero);
+    }
+
+    private void avisarComprobanteInvalido(String mensaje) {
+        JOptionPane.showMessageDialog(this, mensaje, "Comprobante inválido", JOptionPane.WARNING_MESSAGE);
+        java.awt.Container padre = txtNumeroFactura.getParent();
+        while (padre != null && !(padre instanceof javax.swing.JTabbedPane)) {
+            padre = padre.getParent();
+        }
+        if (padre instanceof javax.swing.JTabbedPane) {
+            ((javax.swing.JTabbedPane) padre).setSelectedIndex(1);
+        }
+        txtNumeroFactura.requestFocusInWindow();
+        txtNumeroFactura.selectAll();
+    }
+
     private boolean validarConciliacionFactura() {
         String tipo = (String) cmbTipoFactura.getSelectedItem();
-        if ("Sin comprobante".equals(tipo) || "Remito".equals(tipo)) return true;
-        if (txtNumeroFactura.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Ingresá el número de la factura del proveedor.",
-                    "Comprobante", JOptionPane.WARNING_MESSAGE);
-            txtNumeroFactura.requestFocusInWindow();
+        if ("Sin comprobante".equals(tipo)) return true;
+        String numero = txtNumeroFactura.getText().trim();
+        if ("Remito".equals(tipo)) {
+            if (numero.length() > 50) {
+                avisarComprobanteInvalido("El número de remito admite hasta 50 caracteres.");
+                return false;
+            }
+            return true;
+        }
+        try {
+            txtNumeroFactura.setText(normalizarNumeroFactura(numero));
+        } catch (IllegalArgumentException ex) {
+            avisarComprobanteInvalido(ex.getMessage());
             return false;
         }
         if (txtTotalFactura == null) {
@@ -2521,7 +2568,7 @@ public class DialogoEntradaManual extends JDialog {
             // ABRIR DIÁLOGO DE BÚSQUEDA
             // -------------------------------------------------
             DialogoBuscarProducto dialogo
-                    = new DialogoBuscarProducto(this);
+                    = new DialogoBuscarProducto(this, (Deposito) cmbDeposito.getSelectedItem());
 
             dialogo.setVisible(true);
 
@@ -2776,7 +2823,7 @@ public class DialogoEntradaManual extends JDialog {
         BigDecimal stockActual = BigDecimal.ZERO;
 
         Deposito depositoPrincipal
-                = depositoDao.buscarPrincipal();
+                = (Deposito) cmbDeposito.getSelectedItem();
 
         if (depositoPrincipal != null) {
 
@@ -3446,6 +3493,7 @@ public class DialogoEntradaManual extends JDialog {
         int respuesta = JOptionPane.showConfirmDialog(this,
                 "Proveedor: " + txtProveedor.getText().trim()
                 + "\nDepósito destino: " + depositoVigente.getNombre()
+                + "\nComprobante: " + cmbTipoFactura.getSelectedItem() + " " + txtNumeroFactura.getText().trim()
                 + "\nProductos: " + detalles.size()
                 + "\nTotal: " + lblTotalCompra.getText()
                 + "\n\n¿Confirmar entrada de mercadería?",
@@ -3730,7 +3778,7 @@ public class DialogoEntradaManual extends JDialog {
         f.idCompra = idCompra;
         f.tipoComprobante = "FACTURA";
         f.letra = "A";
-        String nro = txtNumeroFactura.getText().trim();
+        String nro = normalizarNumeroFactura(txtNumeroFactura.getText());
         String[] partes = nro.split("-", 2);
         f.puntoVenta = partes.length == 2 ? partes[0].trim() : null;
         f.numero = partes.length == 2 ? partes[1].trim() : nro;

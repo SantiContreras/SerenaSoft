@@ -80,6 +80,10 @@ public final class VentaService {
         try(Connection c=conexion.getConexion()){
             c.setAutoCommit(false);
             try {
+                try (PreparedStatement ps=c.prepareStatement("SELECT activo FROM deposito WHERE id_deposito=? FOR UPDATE")) {
+                    ps.setInt(1,s.depositoId);
+                    try(ResultSet rs=ps.executeQuery()) { validar(rs.next() && rs.getBoolean(1),"Depósito inexistente o inactivo"); }
+                }
                 List<Linea> lineas=new ArrayList<>();
                 BigDecimal bruto=BigDecimal.ZERO;
                 for(Item item:s.items){

@@ -75,7 +75,12 @@ public class DialogoBuscarProducto extends JDialog {
 
     public DialogoBuscarProducto(Window parent) {
 
+        this(parent, new DepositoDao().buscarPrincipal());
+    }
+
+    public DialogoBuscarProducto(Window parent, Deposito deposito) {
         super(parent);
+        this.depositoPrincipal = deposito;
 
         inicializarComponentes();
         construirDialogo();
@@ -145,14 +150,13 @@ private void cargarProductos() {
     // -----------------------------------------------------
     // Depósito utilizado por Entrada Manual
     // -----------------------------------------------------
-    depositoPrincipal
-            = depositoDao.buscarPrincipal();
+    // El depósito lo determina el circuito que abre el buscador.
 
     if (depositoPrincipal == null) {
 
         JOptionPane.showMessageDialog(
                 this,
-                "No existe un depósito principal activo.\n"
+                "No se seleccionó un depósito.\n"
                 + "No se podrá consultar el stock actual.",
                 "Depósito",
                 JOptionPane.WARNING_MESSAGE
