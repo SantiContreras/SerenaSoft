@@ -570,7 +570,10 @@ public class CompraService {
                         .divide(factorConversion, 2, RoundingMode.HALF_UP);
                 BigDecimal precioVentaNuevo = preciosVentaPendientes.get(idProducto);
                 String sqlPrecio = "UPDATE producto SET precio_compra = ?, "
-                        + "precio_venta = COALESCE(?, precio_venta) WHERE id_producto = ?";
+                        + "precio_venta = COALESCE(?, precio_venta), "
+                        + "margen_porcentaje = CASE WHEN ? > 0 THEN "
+                        + "ROUND((COALESCE(?, precio_venta) - ?) / ? * 100, 2) "
+                        + "ELSE 0 END WHERE id_producto = ?";
                 try (java.sql.PreparedStatement psPrecio = cn.prepareStatement(sqlPrecio)) {
                     psPrecio.setBigDecimal(1, costoPorUnidadStock);
                     if (precioVentaNuevo == null) {
@@ -578,7 +581,15 @@ public class CompraService {
                     } else {
                         psPrecio.setBigDecimal(2, precioVentaNuevo);
                     }
-                    psPrecio.setInt(3, idProducto);
+                    psPrecio.setBigDecimal(3, costoPorUnidadStock);
+                    if (precioVentaNuevo == null) {
+                        psPrecio.setNull(4, java.sql.Types.DECIMAL);
+                    } else {
+                        psPrecio.setBigDecimal(4, precioVentaNuevo);
+                    }
+                    psPrecio.setBigDecimal(5, costoPorUnidadStock);
+                    psPrecio.setBigDecimal(6, costoPorUnidadStock);
+                    psPrecio.setInt(7, idProducto);
                     if (psPrecio.executeUpdate() != 1) {
                         throw new SQLException("No se pudieron actualizar los precios de "
                                 + producto.getNombre());

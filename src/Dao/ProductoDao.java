@@ -210,10 +210,16 @@ public class ProductoDao {
                 || nuevoCosto.precision() - nuevoCosto.scale() > 13) {
             throw new SQLException("Costo de compra invalido.");
         }
-        String sql = "UPDATE producto SET precio_compra = ? WHERE id_producto = ?";
+        String sql = "UPDATE producto SET precio_compra = ?, "
+                + "margen_porcentaje = CASE WHEN ? > 0 THEN "
+                + "ROUND((precio_venta - ?) / ? * 100, 2) "
+                + "ELSE 0 END WHERE id_producto = ?";
         try (PreparedStatement ps = cn.prepareStatement(sql)) {
             ps.setBigDecimal(1, nuevoCosto);
-            ps.setInt(2, idProducto);
+            ps.setBigDecimal(2, nuevoCosto);
+            ps.setBigDecimal(3, nuevoCosto);
+            ps.setBigDecimal(4, nuevoCosto);
+            ps.setInt(5, idProducto);
             return ps.executeUpdate() == 1;
         }
     }
